@@ -127,8 +127,17 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         final sourceDoc = PdfDocument(inputBytes: item.bytes);
         for (int i = 0; i < sourceDoc.pages.count; i++) {
           final page = sourceDoc.pages[i];
+          final section = destinationDoc.sections!.add();
+          section.pageSettings.size = page.size;
+          section.pageSettings.margins.all = 0;
+          if (page.size.width > page.size.height) {
+            section.pageSettings.orientation = PdfPageOrientation.landscape;
+          } else {
+            section.pageSettings.orientation = PdfPageOrientation.portrait;
+          }
+
           final template = page.createTemplate();
-          final newPage = destinationDoc.pages.add();
+          final newPage = section.pages.add();
           newPage.graphics.drawPdfTemplate(template, const Offset(0, 0), page.size);
         }
         sourceDoc.dispose();

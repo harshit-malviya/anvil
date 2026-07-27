@@ -1,12 +1,22 @@
 import 'dart:io';
+import 'dart:ui';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:anvil/tools/pdf_merge/pdf_merge_controller.dart';
 
-Future<Uint8List> createValidPdf({int pagesCount = 1}) async {
+Future<Uint8List> createValidPdf({
+  int pagesCount = 1,
+  Size? pageSize,
+  PdfPageOrientation orientation = PdfPageOrientation.portrait,
+}) async {
   final document = PdfDocument();
+  if (pageSize != null) {
+    document.pageSettings.size = pageSize;
+    document.pageSettings.orientation = orientation;
+    document.pageSettings.margins.all = 0;
+  }
   for (int i = 0; i < pagesCount; i++) {
     final page = document.pages.add();
     page.graphics.drawString(
@@ -164,6 +174,41 @@ void main() {
       expect(doc.pages.count, equals(3)); // 1 + 2 pages
       doc.dispose();
 
+      tempDir.deleteSync(recursive: true);
+    });
+
+    test('Regression test: Merging mixed page sizes (A4 portrait and Letter landscape) preserves exact per-page dimensions', () async {
+      final a4Pdf = await createValidPdf(pagesCount: 1, pageSize: PdfPageSize.a4, orientation: PdfPageOrientation.portrait);
+      final letterLandscapePdf = await createValidPdf(pagesCount: 1, pageSize: PdfPageSize.letter, orientation: PdfPageOrientation.landscape);
+
+      final pfA4 = PlatformFile(name: 'a4.pdf', size: a4Pdf.length, bytes: a4Pdf);
+      final pfLetter = PlatformFile(name: 'letter_landscape.pdf', size: letterLandscapePdf.length, bytes: letterLandscapePdf);
+
+      await controller.addFiles([pfA4, pfLetter]);
+
+      final tempDir = Directory.systemTemp.createTempSync('anvil_merge_mixed_size');
+      final targetPath = '${tempDir.path}${Platform.pathSeparator}mixed_output.pdf';
+
+      final resultPath = await controller.merge(customOutputPath: targetPath);
+      expect(resultPath, isNotNull);
+
+      final outputFile = File(targetPath);
+      final mergedDoc = PdfDocument(inputBytes: outputFile.readAsBytesSync());
+
+      expect(mergedDoc.pages.count, equals(2));
+
+      final srcA4Doc = PdfDocument(inputBytes: a4Pdf);
+      final srcLetterDoc = PdfDocument(inputBytes: letterLandscapePdf);
+
+      expect(mergedDoc.pages[0].size.width, equals(srcA4Doc.pages[0].size.width));
+      expect(mergedDoc.pages[0].size.height, equals(srcA4Doc.pages[0].size.height));
+
+      expect(mergedDoc.pages[1].size.width, equals(srcLetterDoc.pages[0].size.width));
+      expect(mergedDoc.pages[1].size.height, equals(srcLetterDoc.pages[0].size.height));
+
+      srcA4Doc.dispose();
+      srcLetterDoc.dispose();
+      mergedDoc.dispose();
       tempDir.deleteSync(recursive: true);
     });
   });

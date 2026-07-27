@@ -59,17 +59,13 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 ## 2026-07-27
 - Decision: Used `google_fonts` to resolve `Space Grotesk`, `Inter`, and `IBM Plex Mono` dynamically for desktop and mobile targets.
 - Decision: Built reusable custom painter `_DashedBorderPainter` inside `file_drop_zone.dart` for cross-platform drag-and-drop feedback.
-- Decision: Used `sourcePage.createTemplate()` and `destinationPage.graphics.drawPdfTemplate` during PDF merge to preserve exact original page sizes and orientations across mixed-format PDFs.
+- Decision: Used `sourcePage.createTemplate()` and `destinationPage.graphics.drawPdfTemplate` during PDF merge to preserve exact original page content.
+- Decision: Root cause of PDF Merge cropping bug identified — `destinationDoc.pages.add()` inherits default section settings with 40pt margins and default A4 size, causing clipping of non-A4 or landscape pages. Fixed by adding a dedicated `destinationDoc.sections.add()` per page with `section.pageSettings.size = sourcePage.size`, `section.pageSettings.margins.all = 0`, and explicit orientation matching.
 - Decision: Catches password protection via `PdfDocument(inputBytes: bytes)` exception string analysis ("encrypted" / "password") to reject encrypted files at add-time with user-actionable instructions.
 
 ## 6. Known issues / tech debt
 
-> Anything shipped with a known gap, a workaround, or a "fix this properly later" note goes here
-> so it doesn't get silently forgotten.
-
-```
-(none yet)
-```
+- **[FIXED] PDF Merge page content cropping:** Non-A4 pages and landscape pages were previously cropped due to default canvas margins and page sizes. Resolved by configuring section-level page dimensions (`pageSettings.size`) and zero margins per page. Verified via mixed-format regression tests (`test/tools/pdf_merge/pdf_merge_controller_test.dart` and `test/tools/pdf_merge/size_preservation_test.dart`).
 
 ## 7. Archiving old entries (keep this file lean)
 
