@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/file_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -103,19 +102,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
   }
 
   Future<void> _openOutputFolder(String folderPath) async {
-    final uri = Uri.directory(folderPath);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      // Fallback on Windows if Uri fails
-      if (Platform.isWindows) {
-        Process.run('explorer.exe', [folderPath]);
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Folder path: $folderPath')),
-        );
-      }
-    }
+    await _fileService.openFolder(folderPath);
   }
 
   @override

@@ -51,4 +51,17 @@ class FileService {
   Future<Directory> getTempDirectory() async {
     return await getTemporaryDirectory();
   }
+
+  /// Open directory in default system file manager.
+  Future<void> openFolder(String folderPath) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('explorer.exe', [folderPath]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [folderPath]);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [folderPath]);
+      }
+    } catch (_) {}
+  }
 }

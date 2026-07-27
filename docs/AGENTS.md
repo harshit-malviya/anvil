@@ -53,6 +53,16 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Registered route `/pdf-page-manager` in `lib/core/router.dart`
   - Created comprehensive unit test suite `test/tools/pdf_page_manager/pdf_page_manager_controller_test.dart` testing load, delete/undo, rotate cycle, reorder, zero-page guard, and PDF export with applied page transformations
 
+## 2026-07-27 — Session 6
+- Implemented PDF Split feature (`FEATURE_pdf_split.md`):
+  - Extracted shared `PdfThumbnailService` in `lib/core/services/pdf_thumbnail_service.dart` and refactored `PdfPageManagerController` to use it
+  - Created `lib/tools/pdf_split/pdf_split_state.dart` with 3 split modes (`everyPage`, `customRanges`, `equalParts`), split markers, typed custom range string parser, overlap validation, gap detection, and live summary
+  - Created `lib/tools/pdf_split/pdf_split_controller.dart` supporting split modes, equal parts calculations, batch PDF creation, and rollback cleanup on write failure
+  - Created `lib/tools/pdf_split/pdf_split_screen.dart` with drop zone, mode selector, thumbnail grid with interactive split markers, confirmation prompts for gaps/high file counts, and success stamp view
+  - Added `openFolder` in `FileService` using native system processes
+  - Registered route `/pdf-split` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`
+  - Created unit test suite `test/tools/pdf_split/pdf_split_controller_test.dart` testing multi-page loading, single-page flag, protected PDF rejection, mode switching, visual range markers, text range parsing, overlap detection, gap warning & override, equal parts logic, batch PDF creation, and page orientation preservation
+
 ## 4. Feature status tracker
 
 | Feature | Spec file | Status | Notes |
@@ -61,7 +71,8 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | App Icon / Branding | `DESIGN_SYSTEM.md` | Done | Master source icon, Android adaptive icons, Windows `.ico`, and in-app assets generated |
 | PDF Merge | `FEATURE_pdf_merge.md` | Done | PDF Merge controller, UI, and test suite passing |
 | PDF Page Manager | `FEATURE_pdf_page_manager.md` | Done | PDF Page Manager controller, UI, and test suite passing |
-| PDF Split | *(spec pending)* | Not started | |
+| PDF Split | `FEATURE_pdf_split.md` | Done | PDF Split controller, UI, thumbnail service extraction, and test suite passing |
+| Image tools (v2) | *(spec pending)* | Not started | |
 | Image tools (v2) | *(spec pending)* | Not started | |
 
 ## 5. Decisions log
