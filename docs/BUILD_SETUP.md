@@ -1,10 +1,10 @@
-# FileForge — Build & Distribution Setup
+# Anvil — Build & Distribution Setup
 
 ## 1. Scaffold the project
 
 ```
-flutter create --org com.fileforge --platforms windows,android fileforge
-cd fileforge
+flutter create --org com.anvil --platforms windows,android anvil
+cd anvil
 flutter config --enable-windows-desktop
 ```
 
@@ -73,7 +73,7 @@ jobs:
       - run: flutter build windows --release
       - uses: actions/upload-artifact@v4
         with:
-          name: fileforge-windows
+          name: anvil-windows
           path: build/windows/x64/runner/Release/
 
   build-android:
@@ -87,7 +87,7 @@ jobs:
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
-          name: fileforge-android
+          name: anvil-android
           path: build/app/outputs/flutter-apk/app-release.apk
 ```
 

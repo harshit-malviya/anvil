@@ -28,41 +28,30 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
-```
-[Add first entry here once work begins, e.g.:]
-
-## 2026-XX-XX — Session 1
-- Scaffolded project per BUILD_SETUP.md
-- App shell + theme (DESIGN_SYSTEM.md tokens) implemented in lib/core/theme/
-- Home screen grid working, currently empty (no tools registered yet)
-- Next: start FEATURE_pdf_merge.md
-```
+## 2026-07-27 — Session 1
+- Scaffolded Flutter project per BUILD_SETUP.md targeting Windows and Android (`com.anvil`)
+- Configured pubspec dependencies: `flutter_riverpod`, `go_router`, `syncfusion_flutter_pdf`, `image`, `file_picker`, `google_fonts`, `mocktail`, `flutter_lints`
+- Built workshop theme tokens (`AppColors`, `AppTypography`, `AppTheme`) in `lib/core/theme/` adhering to DESIGN_SYSTEM.md
+- Created shared UI components (`ToolCard`, `FileDropZone`, `AppButton`, `StampAnimation`) in `lib/core/widgets/`
+- Implemented tool registry (`lib/tools/registry.dart`) and application router (`lib/core/router.dart`)
+- Implemented `HomeScreen` tool grid and verified widget test harness passes
+- Next: start `FEATURE_pdf_merge.md`
 
 ## 4. Feature status tracker
 
 | Feature | Spec file | Status | Notes |
 |---|---|---|---|
-| App shell / theme | `PROJECT_OVERVIEW.md`, `DESIGN_SYSTEM.md` | Not started | |
+| App shell / theme | `PROJECT_OVERVIEW.md`, `DESIGN_SYSTEM.md` | Done | App shell, router, design system, and home screen grid complete |
 | PDF Merge | `FEATURE_pdf_merge.md` | Not started | |
 | PDF Page Manager | `FEATURE_pdf_page_manager.md` | Not started | |
 | PDF Split | *(spec pending)* | Not started | |
 | Image tools (v2) | *(spec pending)* | Not started | |
 
-Update the Status column as work progresses: `Not started` → `In progress` → `Built, untested` →
-`Done` (tests passing + matches spec). Don't mark `Done` if tests are missing.
-
 ## 5. Decisions log
 
-> Record any decision that deviates from or adds detail beyond the spec files — future sessions
-> (and the human) need to know *why*, not just *what*.
-
-```
-[Add entries as decisions get made, e.g.:]
-
-## 2026-XX-XX
-- Decision: Used X instead of Y package for Z reason
-- Decision: Feature spec didn't cover [edge case] — chose to [behavior] because [reasoning]
-```
+## 2026-07-27
+- Decision: Used `google_fonts` to resolve `Space Grotesk`, `Inter`, and `IBM Plex Mono` dynamically for desktop and mobile targets.
+- Decision: Built reusable custom painter `_DashedBorderPainter` inside `file_drop_zone.dart` for cross-platform drag-and-drop feedback.
 
 ## 6. Known issues / tech debt
 

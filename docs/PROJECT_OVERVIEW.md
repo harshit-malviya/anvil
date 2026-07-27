@@ -1,11 +1,11 @@
-# FileForge — Project Overview
+# Anvil — Project Overview
 
 > Read this file first, and keep it as standing context for every task in this repo.
 > Feature-specific instructions live in separate `FEATURE_*.md` files — implement one at a time.
 
 ## 1. What this is
 
-FileForge is a free, open-source, offline-first desktop/mobile utility app. It bundles small
+Anvil is a free, open-source, offline-first desktop/mobile utility app. It bundles small
 everyday file-manipulation tools (PDF merging, page management, image compression, resizing,
 format conversion) into a single app, so users never have to upload personal files to a random
 web tool. Everything runs **locally on the user's machine** — no server, no accounts, no
@@ -46,7 +46,7 @@ Bake these into every feature, not just as an afterthought:
 ## 4. Repository / folder structure
 
 ```
-fileforge/
+Anvil/
   lib/
     core/
       theme/              # design tokens as Dart constants — see DESIGN_SYSTEM.md

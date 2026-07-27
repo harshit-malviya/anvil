@@ -1,11 +1,11 @@
-# FileForge — Design System
+# Anvil — Design System
 
 > Implement this as `lib/core/theme/` (a `ThemeData` builder + constants file). Every screen must
 > pull colors/type/spacing from here — no hardcoded hex values or font sizes in widget files.
 
 ## 1. Concept
 
-FileForge takes raw, messy files and shapes them into what you need — the visual identity leans
+Anvil takes raw, messy files and shapes them into what you need — the visual identity leans
 into a **workshop / forge** metaphor: tools hung on a pegboard, work getting stamped as "done."
 This is deliberately *not* the generic cream-background/serif-hero AI-app look, and *not* a
 neon-on-black tech look. It should feel like a well-organized physical workshop: warm, sturdy,
