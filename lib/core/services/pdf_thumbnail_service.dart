@@ -38,4 +38,78 @@ class PdfThumbnailService {
     }
     return thumbnails;
   }
+
+  /// Render a single page of a PDF at specified [targetDpi] and image [format].
+  Future<Uint8List?> renderPage(
+    Uint8List bytes,
+    int pageIndex, {
+    required int targetDpi,
+    required pdfx.PdfPageImageFormat format,
+  }) async {
+    try {
+      final pdfxDoc = await pdfx.PdfDocument.openData(bytes);
+      if (pageIndex < 0 || pageIndex >= pdfxDoc.pagesCount) {
+        await pdfxDoc.close();
+        return null;
+      }
+      final page = await pdfxDoc.getPage(pageIndex + 1);
+      final double scale = targetDpi / 72.0;
+      final double targetWidth = page.width * scale;
+      final double targetHeight = page.height * scale;
+
+      final pageImage = await page.render(
+        width: targetWidth,
+        height: targetHeight,
+        format: format,
+      );
+      await page.close();
+      await pdfxDoc.close();
+      return pageImage?.bytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Render multiple [pageIndexes] of a PDF at specified [targetDpi] and image [format].
+  /// Calls optional [onProgress] as pages are rendered.
+  Future<Map<int, Uint8List>> renderPages(
+    Uint8List bytes,
+    List<int> pageIndexes, {
+    required int targetDpi,
+    required pdfx.PdfPageImageFormat format,
+    void Function(int current, int total)? onProgress,
+  }) async {
+    final Map<int, Uint8List> results = {};
+    try {
+      final pdfxDoc = await pdfx.PdfDocument.openData(bytes);
+      for (int i = 0; i < pageIndexes.length; i++) {
+        final idx = pageIndexes[i];
+        onProgress?.call(i + 1, pageIndexes.length);
+        try {
+          if (idx >= 0 && idx < pdfxDoc.pagesCount) {
+            final page = await pdfxDoc.getPage(idx + 1);
+            final double scale = targetDpi / 72.0;
+            final double targetWidth = page.width * scale;
+            final double targetHeight = page.height * scale;
+
+            final pageImage = await page.render(
+              width: targetWidth,
+              height: targetHeight,
+              format: format,
+            );
+            await page.close();
+            if (pageImage?.bytes != null) {
+              results[idx] = pageImage!.bytes;
+            }
+          }
+        } catch (_) {
+          // Skip page if individual page rendering fails
+        }
+      }
+      await pdfxDoc.close();
+    } catch (_) {
+      // Gracefully handle native errors
+    }
+    return results;
+  }
 }

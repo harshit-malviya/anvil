@@ -5,6 +5,7 @@ import '../tools/pdf_merge/pdf_merge_screen.dart';
 import '../tools/pdf_page_manager/pdf_page_manager_screen.dart';
 import '../tools/pdf_split/pdf_split_screen.dart';
 import '../tools/pdf_compress/pdf_compress_screen.dart';
+import '../tools/pdf_to_image/pdf_to_image_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -28,6 +29,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/pdf-compress',
       builder: (context, state) => const PdfCompressScreen(),
+    ),
+    GoRoute(
+      path: '/pdf-to-image',
+      builder: (context, state) => const PdfToImageScreen(),
     ),
   ],
 );

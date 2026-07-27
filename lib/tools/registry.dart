@@ -54,5 +54,13 @@ class ToolRegistry {
       route: '/pdf-compress',
       isAvailable: true,
     ),
+    ToolMetadata(
+      id: 'pdf_to_image',
+      title: 'PDF to Image',
+      description: 'Convert PDF pages into PNG or JPEG image files with customizable resolution.',
+      icon: Icons.image_outlined,
+      route: '/pdf-to-image',
+      isAvailable: true,
+    ),
   ];
 }

@@ -71,6 +71,15 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Registered route `/pdf-compress` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`
   - Created unit test suite `test/tools/pdf_compress/pdf_compress_controller_test.dart` testing document loading, password rejection, level configuration, minimal reduction handling, and larger file protection
 
+## 2026-07-27 — Session 8
+- Implemented PDF to Image feature (`FEATURE_pdf_to_image.md`):
+  - Refactored `PdfThumbnailService` in `lib/core/services/pdf_thumbnail_service.dart` adding `renderPage` and `renderPages` methods for high-resolution page rendering at target DPI/format.
+  - Created `lib/tools/pdf_to_image/pdf_to_image_state.dart` with `ImageFormat` (PNG/JPEG) and `ExportResolution` (72/150/300 DPI) enums, state getters, and live pixel dimension estimates.
+  - Created `lib/tools/pdf_to_image/pdf_to_image_controller.dart` supporting document loading, default all-pages selected, selection toggles (`selectAll`, `selectNone`, `togglePageSelected`), single-page vs multi-page export paths, folder collision avoidance (`report_images_2`), and per-page failure recovery with skipped page tracking.
+  - Created `lib/tools/pdf_to_image/pdf_to_image_screen.dart` with drop zone, controls panel (format pills with JPEG transparency warning, resolution cards with pixel estimates), page thumbnail grid with checkboxes, live summary bar, stamp animation (`EXPORTED`), and output file/folder actions.
+  - Registered route `/pdf-to-image` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
+  - Created comprehensive unit test suite `test/tools/pdf_to_image/pdf_to_image_controller_test.dart` testing document parsing, password rejection, selection quick actions, format/resolution updates, single-page export, multi-page document order export, directory collision handling, and per-page failure recovery.
+
 ## 4. Feature status tracker
 
 | Feature | Spec file | Status | Notes |
@@ -81,6 +90,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | PDF Page Manager | `FEATURE_pdf_page_manager.md` | Done | PDF Page Manager controller, UI, and test suite passing |
 | PDF Split | `FEATURE_pdf_split.md` | Done | PDF Split controller, UI, thumbnail service extraction, and test suite passing |
 | PDF Compress | `FEATURE_pdf_compress.md` | Done | PDF Compress controller, UI, before/after size badge, and test suite passing |
+| PDF to Image | `FEATURE_pdf_to_image.md` | Done | PDF to Image controller, UI, DPI estimates, and test suite passing |
 | Image tools (v2) | *(spec pending)* | Not started | |
 
 ## 5. Decisions log
