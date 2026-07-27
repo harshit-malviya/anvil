@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -33,35 +32,90 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
   Future<void> _handleSaveAs(PdfToImageState state) async {
     if (state.outputPath == null) return;
     final sourcePath = state.outputPath!;
-    final sourceFile = File(sourcePath);
 
-    if (state.isSingleFileExport && sourceFile.existsSync()) {
-      final ext = state.format.fileExtension;
-      final bytes = await sourceFile.readAsBytes();
-      final defaultName = p.basename(sourcePath);
-      final savedPath = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Exported Image',
-        fileName: defaultName,
-        type: FileType.custom,
-        allowedExtensions: [ext],
-      );
-      if (savedPath != null) {
-        final targetFile = File(savedPath);
-        await targetFile.writeAsBytes(bytes, flush: true);
+    if (state.isSingleFileExport) {
+      final sourceFile = File(sourcePath);
+      if (sourceFile.existsSync()) {
+        final bytes = await sourceFile.readAsBytes();
+        final defaultName = p.basename(sourcePath);
+        final savedPath = await _fileService.saveFile(
+          defaultFileName: defaultName,
+          bytes: bytes,
+        );
+        if (savedPath != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Saved to $savedPath'),
+              backgroundColor: AppColors.anvilTeal,
+            ),
+          );
+        }
       }
     } else {
-      final targetDir = await _fileService.pickDirectory(dialogTitle: 'Select Output Directory');
-      if (targetDir != null && Directory(sourcePath).existsSync()) {
-        final sourceDir = Directory(sourcePath);
-        final files = sourceDir.listSync();
-        final destFolder = Directory(p.join(targetDir, p.basename(sourcePath)));
-        await destFolder.create(recursive: true);
-
-        for (final entity in files) {
-          if (entity is File) {
-            final destFile = File(p.join(destFolder.path, p.basename(entity.path)));
-            await destFile.writeAsBytes(await entity.readAsBytes());
+      final targetDir = await _fileService.pickDirectory(
+        dialogTitle: 'Select destination folder for exported images',
+      );
+      if (targetDir != null && targetDir.isNotEmpty && mounted) {
+        try {
+          final srcDir = Directory(sourcePath);
+          if (srcDir.existsSync()) {
+            final destDir = Directory(targetDir);
+            if (!destDir.existsSync()) {
+              destDir.createSync(recursive: true);
+            }
+            final files = srcDir.listSync().whereType<File>().toList();
+            int copiedCount = 0;
+            for (final f in files) {
+              final targetPath = p.join(destDir.path, p.basename(f.path));
+              f.copySync(targetPath);
+              copiedCount++;
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Saved $copiedCount image files to $targetDir'),
+                  backgroundColor: AppColors.anvilTeal,
+                ),
+              );
+            }
           }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Could not save files: $e'),
+                backgroundColor: AppColors.rustRed,
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  Future<void> _handleShare(PdfToImageState state) async {
+    if (state.outputPath == null) return;
+    final outputPath = state.outputPath!;
+
+    if (state.isSingleFileExport) {
+      if (File(outputPath).existsSync()) {
+        await _fileService.shareFile(outputPath);
+      }
+    } else {
+      final dir = Directory(outputPath);
+      if (dir.existsSync()) {
+        final imgPaths = dir
+            .listSync()
+            .whereType<File>()
+            .where((f) {
+              final ext = p.extension(f.path).toLowerCase();
+              return ext == '.png' || ext == '.jpeg' || ext == '.jpg';
+            })
+            .map((f) => f.path)
+            .toList();
+
+        if (imgPaths.isNotEmpty) {
+          await _fileService.shareMultipleFiles(imgPaths);
         }
       }
     }
@@ -69,331 +123,346 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final state = ref.watch(pdfToImageControllerProvider);
     final controller = ref.read(pdfToImageControllerProvider.notifier);
-    final brightness = Theme.of(context).brightness;
 
     return Scaffold(
       backgroundColor: AppColors.background(brightness),
       appBar: AppBar(
-        backgroundColor: AppColors.cardBackground(brightness),
+        title: Text(
+          'PDF to Image',
+          style: AppTypography.displayMedium(brightness),
+        ),
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: AppColors.text(brightness)),
           onPressed: () => context.pop(),
         ),
-        title: Text(
-          'PDF to Image',
-          style: AppTypography.displayMedium(brightness),
+        actions: [
+          if (state.isLoaded)
+            IconButton(
+              tooltip: 'Reset',
+              icon: const Icon(Icons.refresh),
+              onPressed: controller.reset,
+            ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (state.errorMessage != null)
+              _buildErrorBanner(context, state.errorMessage!, brightness, controller),
+            Expanded(
+              child: !state.isLoaded
+                  ? _buildEmptyDropZone(brightness)
+                  : state.outputPath != null
+                      ? _buildSuccessView(context, state, brightness, controller)
+                      : _buildMainContent(context, state, brightness, controller),
+            ),
+            if (state.isLoaded && state.outputPath == null)
+              _buildBottomSummaryBar(context, state, brightness, controller),
+          ],
         ),
       ),
-      body: Column(
+    );
+  }
+
+  Widget _buildErrorBanner(
+    BuildContext context,
+    String message,
+    Brightness brightness,
+    PdfToImageController controller,
+  ) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.rustRed.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: const Border(
+          left: BorderSide(color: AppColors.rustRed, width: 4),
+        ),
+      ),
+      child: Row(
         children: [
+          const Icon(Icons.error_outline, color: AppColors.rustRed),
+          const SizedBox(width: 12),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1000),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Subtitle
-                      Text(
-                        'Convert PDF pages into high-resolution PNG or JPEG images.',
-                        style: AppTypography.bodyMedium(brightness),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Error banner
-                      if (state.errorMessage != null) ...[
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: AppColors.rustRed.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppColors.rustRed.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.error_outline, color: AppColors.rustRed, size: 20),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  state.errorMessage!,
-                                  style: AppTypography.labelSmall(brightness).copyWith(color: AppColors.rustRed),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.close, color: AppColors.rustRed, size: 18),
-                                onPressed: () => controller.clearError(),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // SUCCESS VIEW
-                      if (state.outputPath != null) ...[
-                        _buildSuccessCard(context, state, controller),
-                      ]
-                      // NO FILE LOADED: Drop Zone
-                      else if (!state.isLoaded) ...[
-                        FileDropZone(
-                          onTap: _pickFile,
-                          label: 'Drop PDF file here or click to browse',
-                          sublabel: 'Supports PDF document files',
-                        ),
-                      ]
-                      // FILE LOADED VIEW
-                      else ...[
-                        _buildLoadedView(context, state, controller),
-                      ],
-                    ],
-                  ),
-                ),
+            child: Text(
+              message,
+              style: AppTypography.bodyMedium(brightness).copyWith(
+                color: AppColors.text(brightness),
               ),
             ),
           ),
-
-          // Bottom summary bar when file loaded and not success state
-          if (state.isLoaded && state.outputPath == null)
-            _buildBottomBar(context, state, controller),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: controller.clearError,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildLoadedView(
+  Widget _buildEmptyDropZone(Brightness brightness) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 400),
+        child: FileDropZone(
+          onTap: _pickFile,
+          label: 'Drop PDF file here or click to browse',
+          sublabel: 'Select a PDF document to convert to images',
+          icon: Icons.image_outlined,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainContent(
     BuildContext context,
     PdfToImageState state,
+    Brightness brightness,
     PdfToImageController controller,
   ) {
-    final brightness = Theme.of(context).brightness;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // File Summary Card
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.cardBackground(brightness),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.5)),
-          ),
-          child: Row(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1000),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // File Summary Card
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.primary(brightness).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.cardBackground(brightness),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.5)),
                 ),
-                child: Icon(Icons.picture_as_pdf, color: AppColors.primary(brightness), size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      state.file?.name ?? 'Document.pdf',
-                      style: AppTypography.titleMedium(brightness),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary(brightness).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.picture_as_pdf, color: AppColors.primary(brightness), size: 24),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${state.totalPageCount} ${state.totalPageCount == 1 ? 'page' : 'pages'}',
-                      style: AppTypography.labelSmall(brightness),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            state.file?.name ?? 'Document.pdf',
+                            style: AppTypography.titleMedium(brightness),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${state.totalPageCount} ${state.totalPageCount == 1 ? 'page' : 'pages'}',
+                            style: AppTypography.labelSmall(brightness),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: state.isProcessing ? null : _pickFile,
+                      icon: Icon(Icons.swap_horiz, size: 18, color: AppColors.primary(brightness)),
+                      label: Text(
+                        'Change file',
+                        style: AppTypography.labelSmall(brightness).copyWith(color: AppColors.primary(brightness)),
+                      ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(height: 20),
 
-              // Change file button
-              TextButton.icon(
-                onPressed: state.isProcessing ? null : _pickFile,
-                icon: Icon(Icons.swap_horiz, size: 18, color: AppColors.primary(brightness)),
-                label: Text('Change file', style: AppTypography.labelSmall(brightness).copyWith(color: AppColors.primary(brightness))),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
+              // Controls Panel (Format & Resolution options)
+              _buildControlsPanel(context, state, controller),
+              const SizedBox(height: 24),
 
-        // Controls Panel (Format & Resolution options)
-        _buildControlsPanel(context, state, controller),
-        const SizedBox(height: 24),
-
-        // Page Selection Header & Actions
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Select Pages',
-                  style: AppTypography.titleMedium(brightness),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary(brightness).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${state.selectedCount} / ${state.totalPageCount} selected',
-                    style: AppTypography.labelSmall(brightness).copyWith(
-                      color: AppColors.primary(brightness),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: state.isProcessing ? null : controller.selectAll,
-                  child: Text('Select All', style: AppTypography.labelSmall(brightness).copyWith(color: AppColors.primary(brightness))),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: state.isProcessing ? null : controller.selectNone,
-                  child: Text('Select None', style: AppTypography.labelSmall(brightness)),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // Page Thumbnail Grid
-        if (state.isLoadingThumbnails && state.thumbnails.isEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: Center(
-              child: CircularProgressIndicator(color: AppColors.primary(brightness)),
-            ),
-          ),
-        ] else ...[
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 180,
-              childAspectRatio: 0.72,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-            ),
-            itemCount: state.totalPageCount,
-            itemBuilder: (context, index) {
-              final isSelected = state.selectedPages.contains(index);
-              final thumbBytes = state.thumbnails[index];
-
-              return InkWell(
-                onTap: state.isProcessing ? null : () => controller.togglePageSelected(index),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.cardBackground(brightness),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected ? AppColors.primary(brightness) : AppColors.pegGrey.withValues(alpha: 0.5),
-                      width: isSelected ? 2.5 : 1,
-                    ),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: AppColors.primary(brightness).withValues(alpha: 0.2),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Stack(
+              // Page Selection Header & Actions
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
                     children: [
-                      // Thumbnail Content
-                      Positioned.fill(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: thumbBytes != null
-                              ? Image.memory(thumbBytes, fit: BoxFit.cover)
-                              : Container(
-                                  color: AppColors.pegGrey.withValues(alpha: 0.2),
-                                  child: Icon(
-                                    Icons.image_outlined,
-                                    color: AppColors.text(brightness).withValues(alpha: 0.5),
-                                    size: 32,
-                                  ),
-                                ),
-                        ),
+                      Text(
+                        'Select Pages',
+                        style: AppTypography.titleMedium(brightness),
                       ),
-
-                      // Selection overlay dimmer if unselected
-                      if (!isSelected)
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.background(brightness).withValues(alpha: 0.4),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary(brightness).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-
-                      // Checkbox overlay at top left
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: Container(
-                          width: 26,
-                          height: 26,
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primary(brightness) : AppColors.cardBackground(brightness).withValues(alpha: 0.9),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isSelected ? AppColors.primary(brightness) : AppColors.pegGrey,
-                              width: 2,
-                            ),
-                          ),
-                          child: isSelected
-                              ? const Icon(Icons.check, color: Colors.white, size: 16)
-                              : null,
-                        ),
-                      ),
-
-                      // Page label badge at bottom
-                      Positioned(
-                        bottom: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.cardBackground(brightness).withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.5)),
-                          ),
-                          child: Text(
-                            'Page ${index + 1}',
-                            style: AppTypography.labelSmall(brightness).copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                        child: Text(
+                          '${state.selectedCount} / ${state.totalPageCount} selected',
+                          style: AppTypography.labelSmall(brightness).copyWith(
+                            color: AppColors.primary(brightness),
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                     ],
                   ),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: state.isProcessing ? null : controller.selectAll,
+                        child: Text(
+                          'Select All',
+                          style: AppTypography.labelSmall(brightness).copyWith(color: AppColors.primary(brightness)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: state.isProcessing ? null : controller.selectNone,
+                        child: Text('Select None', style: AppTypography.labelSmall(brightness)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Page Thumbnail Grid
+              if (state.isLoadingThumbnails && state.thumbnails.isEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.primary(brightness)),
+                  ),
                 ),
-              );
-            },
+              ] else ...[
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 180,
+                    childAspectRatio: 0.72,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  itemCount: state.totalPageCount,
+                  itemBuilder: (context, index) {
+                    final isSelected = state.selectedPages.contains(index);
+                    final thumbBytes = state.thumbnails[index];
+
+                    return InkWell(
+                      onTap: state.isProcessing ? null : () => controller.togglePageSelected(index),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBackground(brightness),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected ? AppColors.primary(brightness) : AppColors.pegGrey.withValues(alpha: 0.5),
+                            width: isSelected ? 2.5 : 1,
+                          ),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.primary(brightness).withValues(alpha: 0.2),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Stack(
+                          children: [
+                            // Thumbnail Content
+                            Positioned.fill(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: thumbBytes != null
+                                    ? Image.memory(thumbBytes, fit: BoxFit.cover)
+                                    : Container(
+                                        color: AppColors.pegGrey.withValues(alpha: 0.2),
+                                        child: Icon(
+                                          Icons.image_outlined,
+                                          color: AppColors.text(brightness).withValues(alpha: 0.5),
+                                          size: 32,
+                                        ),
+                                      ),
+                              ),
+                            ),
+
+                            // Selection overlay dimmer if unselected
+                            if (!isSelected)
+                              Positioned.fill(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.background(brightness).withValues(alpha: 0.4),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+
+                            // Checkbox overlay at top left
+                            Positioned(
+                              top: 8,
+                              left: 8,
+                              child: Container(
+                                width: 26,
+                                height: 26,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? AppColors.primary(brightness)
+                                      : AppColors.cardBackground(brightness).withValues(alpha: 0.9),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isSelected ? AppColors.primary(brightness) : AppColors.pegGrey,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: isSelected
+                                    ? const Icon(Icons.check, color: Colors.white, size: 16)
+                                    : null,
+                              ),
+                            ),
+
+                            // Page label badge at bottom
+                            Positioned(
+                              bottom: 8,
+                              right: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.cardBackground(brightness).withValues(alpha: 0.9),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.5)),
+                                ),
+                                child: Text(
+                                  'Page ${index + 1}',
+                                  style: AppTypography.labelSmall(brightness).copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ],
           ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 
@@ -568,18 +637,23 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
     );
   }
 
-  Widget _buildBottomBar(
+  Widget _buildBottomSummaryBar(
     BuildContext context,
     PdfToImageState state,
+    Brightness brightness,
     PdfToImageController controller,
   ) {
-    final brightness = Theme.of(context).brightness;
-
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.cardBackground(brightness),
-        border: Border(top: BorderSide(color: AppColors.pegGrey.withValues(alpha: 0.5))),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
@@ -588,12 +662,16 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
             constraints: const BoxConstraints(maxWidth: 1000),
             child: Row(
               children: [
-                // Live summary text
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Text(
+                        'SUMMARY',
+                        style: AppTypography.labelSmall(brightness),
+                      ),
+                      const SizedBox(height: 2),
                       Text(
                         state.summaryText,
                         style: AppTypography.bodyMedium(brightness).copyWith(
@@ -612,11 +690,10 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                   ),
                 ),
                 const SizedBox(width: 16),
-
-                // Primary Export Button
                 AppButton(
-                  label: state.isProcessing ? 'Exporting…' : 'Export',
+                  label: state.isProcessing ? 'Exporting…' : 'Export Images',
                   icon: state.isProcessing ? null : Icons.download_rounded,
+                  variant: AppButtonVariant.primary,
                   isLoading: state.isProcessing,
                   onPressed: state.canExport ? () => controller.export() : null,
                 ),
@@ -628,12 +705,12 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
     );
   }
 
-  Widget _buildSuccessCard(
+  Widget _buildSuccessView(
     BuildContext context,
     PdfToImageState state,
+    Brightness brightness,
     PdfToImageController controller,
   ) {
-    final brightness = Theme.of(context).brightness;
     final outputPath = state.outputPath!;
     final dirOrFileName = p.basename(outputPath);
 
@@ -655,67 +732,72 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
       }
     }
 
-    return Container(
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground(brightness),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        children: [
-          const StampAnimation(label: 'EXPORTED'),
-          const SizedBox(height: 24),
-          Text(
-            'Export Complete',
-            style: AppTypography.displayMedium(brightness),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            successMessage,
-            style: AppTypography.bodyMedium(brightness),
-            textAlign: TextAlign.center,
-          ),
-          if (skippedNote != null) ...[
-            const SizedBox(height: 8),
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const StampAnimation(label: 'EXPORTED'),
+            const SizedBox(height: 24),
             Text(
-              skippedNote,
-              style: AppTypography.labelSmall(brightness).copyWith(color: AppColors.sparkYellow),
+              'Export Complete',
+              style: AppTypography.displayMedium(brightness),
               textAlign: TextAlign.center,
             ),
-          ],
-          const SizedBox(height: 32),
-
-          // Primary & Secondary Actions
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.center,
-            children: [
-              AppButton(
-                label: 'Open Folder',
-                icon: Icons.folder_open_rounded,
-                onPressed: () {
-                  final folder = state.isSingleFileExport ? p.dirname(outputPath) : outputPath;
-                  _fileService.openFolder(folder);
-                },
-              ),
-              AppButton(
-                label: 'Save As…',
-                icon: Icons.save_alt_rounded,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => _handleSaveAs(state),
-              ),
-              AppButton(
-                label: 'Convert Another PDF',
-                icon: Icons.refresh_rounded,
-                variant: AppButtonVariant.secondary,
-                onPressed: controller.reset,
+            const SizedBox(height: 8),
+            Text(
+              successMessage,
+              style: AppTypography.bodyMedium(brightness),
+              textAlign: TextAlign.center,
+            ),
+            if (skippedNote != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                skippedNote,
+                style: AppTypography.labelSmall(brightness).copyWith(color: AppColors.sparkYellow),
+                textAlign: TextAlign.center,
               ),
             ],
-          ),
-        ],
+            const SizedBox(height: 28),
+
+            // Final Action Buttons matching all other tools (Open Folder, Save As..., Share, Convert Another PDF)
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: [
+                AppButton(
+                  label: 'Open Folder',
+                  icon: Icons.folder_open_rounded,
+                  variant: AppButtonVariant.primary,
+                  onPressed: () {
+                    final folder = state.isSingleFileExport ? p.dirname(outputPath) : outputPath;
+                    _fileService.openFolder(folder);
+                  },
+                ),
+                AppButton(
+                  label: 'Save As…',
+                  icon: Icons.save_alt_rounded,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => _handleSaveAs(state),
+                ),
+                AppButton(
+                  label: 'Share',
+                  icon: Icons.share_rounded,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => _handleShare(state),
+                ),
+                AppButton(
+                  label: 'Convert Another PDF',
+                  icon: Icons.refresh,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: controller.reset,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
