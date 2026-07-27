@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import '../../core/services/pdf_thumbnail_service.dart';
 import 'pdf_page_manager_state.dart';
 
 final pdfPageManagerControllerProvider =
@@ -102,55 +103,38 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
     _generateThumbnails(bytes);
   }
 
+  final PdfThumbnailService _thumbnailService = PdfThumbnailService();
+
   /// Generate thumbnails for all pages asynchronously.
   Future<void> _generateThumbnails(Uint8List bytes) async {
-    try {
-      final pdfxDoc = await pdfx.PdfDocument.openData(bytes);
-      final totalPages = pdfxDoc.pagesCount;
-      List<PageItem> updatedPages = List<PageItem>.from(state.pages);
+    List<PageItem> updatedPages = List<PageItem>.from(state.pages);
 
-      for (int i = 0; i < totalPages; i++) {
-        if (state.fileBytes != bytes) return; // Discard if new file loaded
-        try {
-          final page = await pdfxDoc.getPage(i + 1);
-          final pageImage = await page.render(
-            width: page.width / 2 > 300 ? 300 : (page.width / 2 < 100 ? 150 : page.width / 2),
-            height: page.height / 2 > 400 ? 400 : (page.height / 2 < 120 ? 200 : page.height / 2),
-            format: pdfx.PdfPageImageFormat.jpeg,
+    await _thumbnailService.generateThumbnails(
+      bytes,
+      onPageRendered: (pageIndex, thumbnailBytes) {
+        if (state.fileBytes != bytes) return;
+        if (pageIndex < updatedPages.length) {
+          updatedPages[pageIndex] = updatedPages[pageIndex].copyWith(
+            thumbnailBytes: thumbnailBytes,
+            hasThumbnailError: thumbnailBytes == null,
           );
-          await page.close();
-
-          if (i < updatedPages.length) {
-            updatedPages[i] = updatedPages[i].copyWith(
-              thumbnailBytes: pageImage?.bytes,
-              hasThumbnailError: pageImage == null,
-            );
-          }
-        } catch (_) {
-          if (i < updatedPages.length) {
-            updatedPages[i] = updatedPages[i].copyWith(hasThumbnailError: true);
-          }
         }
-      }
+      },
+    );
 
-      await pdfxDoc.close();
+    if (state.fileBytes == bytes) {
+      // Mark any remaining unrendered thumbnails as errors
+      final finalPages = updatedPages.map((p) {
+        if (p.thumbnailBytes == null) {
+          return p.copyWith(hasThumbnailError: true);
+        }
+        return p;
+      }).toList();
 
-      if (state.fileBytes == bytes) {
-        state = state.copyWith(
-          pages: updatedPages,
-          isLoadingThumbnails: false,
-        );
-      }
-    } catch (_) {
-      // In environments where pdfx native rendering fails (e.g. headless unit tests),
-      // mark thumbnails as having thumbnail errors so placeholder UI renders cleanly without breaking logic.
-      if (state.fileBytes == bytes) {
-        final fallbackPages = state.pages.map((p) => p.copyWith(hasThumbnailError: true)).toList();
-        state = state.copyWith(
-          pages: fallbackPages,
-          isLoadingThumbnails: false,
-        );
-      }
+      state = state.copyWith(
+        pages: finalPages,
+        isLoadingThumbnails: false,
+      );
     }
   }
 

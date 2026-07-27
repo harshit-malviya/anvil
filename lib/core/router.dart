@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../home/home_screen.dart';
 import '../tools/pdf_merge/pdf_merge_screen.dart';
 import '../tools/pdf_page_manager/pdf_page_manager_screen.dart';
+import '../tools/pdf_split/pdf_split_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -18,6 +19,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/pdf-page-manager',
       builder: (context, state) => const PdfPageManagerScreen(),
+    ),
+    GoRoute(
+      path: '/pdf-split',
+      builder: (context, state) => const PdfSplitScreen(),
     ),
   ],
 );

@@ -38,5 +38,13 @@ class ToolRegistry {
       route: '/pdf-page-manager',
       isAvailable: true,
     ),
+    ToolMetadata(
+      id: 'pdf_split',
+      title: 'Split PDF',
+      description: 'Break a PDF into smaller files by pages, custom ranges, or equal parts.',
+      icon: Icons.call_split_rounded,
+      route: '/pdf-split',
+      isAvailable: true,
+    ),
   ];
 }
