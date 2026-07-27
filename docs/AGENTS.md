@@ -35,13 +35,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 - Created shared UI components (`ToolCard`, `FileDropZone`, `AppButton`, `StampAnimation`) in `lib/core/widgets/`
 - Implemented tool registry (`lib/tools/registry.dart`) and application router (`lib/core/router.dart`)
 - Implemented `HomeScreen` tool grid and verified widget test harness passes
-## 2026-07-27 — Session 2
-- Implemented Feature 1: PDF Merge (`lib/tools/pdf_merge/`)
-- Built `FileService` abstraction (`lib/core/services/file_service.dart`)
-- Implemented `PdfMergeController` StateNotifier handling validation, rejection of password-protected/corrupted files, reordering, and Syncfusion PDF page template merging preserving original page sizes and orientation
-- Implemented `PdfMergeScreen` UI with empty drop zone, reorderable file list with `mono` metadata text, bottom action bar, progress state, error banner, and `StampAnimation` success view
-- Connected `/pdf-merge` route in `lib/core/router.dart`
-- Written 9 comprehensive unit tests in `test/tools/pdf_merge/pdf_merge_controller_test.dart` covering all edge cases
+## 2026-07-27 — Session 3
+- Finalized app icon selection: `anvil_icon_07.png` (Stamp Ring Impact concept) saved to `assets/icons/source/anvil_icon_master.png`
+- Built generation tool (`tool/generate_icons.dart`) to produce full multi-platform asset set:
+  - Android adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml` with solid `workshopGrey` `#ECEAE4` background color and keyed transparent foreground assets across mdpi, hdpi, xhdpi, xxhdpi, xxxhdpi)
+  - Android legacy launcher PNG fallbacks (48px - 192px)
+  - Play Store 512x512px icon asset
+  - Windows multi-resolution `.ico` saved to `windows/runner/resources/app_icon.ico` (verified in `Runner.rc` and tested in clean Windows release build)
+  - In-app 128x128px transparent mark saved to `assets/icons/anvil_mark.png` registered in `pubspec.yaml`
 - Next: start `FEATURE_pdf_page_manager.md`
 
 ## 4. Feature status tracker
@@ -49,6 +50,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | Feature | Spec file | Status | Notes |
 |---|---|---|---|
 | App shell / theme | `PROJECT_OVERVIEW.md`, `DESIGN_SYSTEM.md` | Done | App shell, router, design system, and home screen grid complete |
+| App Icon / Branding | `DESIGN_SYSTEM.md` | Done | Master source icon, Android adaptive icons, Windows `.ico`, and in-app assets generated |
 | PDF Merge | `FEATURE_pdf_merge.md` | Done | PDF Merge controller, UI, and test suite passing |
 | PDF Page Manager | `FEATURE_pdf_page_manager.md` | Not started | |
 | PDF Split | *(spec pending)* | Not started | |
@@ -62,6 +64,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 - Decision: Used `sourcePage.createTemplate()` and `destinationPage.graphics.drawPdfTemplate` during PDF merge to preserve exact original page content.
 - Decision: Root cause of PDF Merge cropping bug identified — `destinationDoc.pages.add()` inherits default section settings with 40pt margins and default A4 size, causing clipping of non-A4 or landscape pages. Fixed by adding a dedicated `destinationDoc.sections.add()` per page with `section.pageSettings.size = sourcePage.size`, `section.pageSettings.margins.all = 0`, and explicit orientation matching.
 - Decision: Catches password protection via `PdfDocument(inputBytes: bytes)` exception string analysis ("encrypted" / "password") to reject encrypted files at add-time with user-actionable instructions.
+- Decision: Finalized `anvil_icon_07.png` (Stamp Ring Impact mark) as master logo asset. Configured Android adaptive background to design system token `workshopGrey` (`#ECEAE4`). Keyed background out for transparent adaptive foreground assets.
 
 ## 6. Known issues / tech debt
 
