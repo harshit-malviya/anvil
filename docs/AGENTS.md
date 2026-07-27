@@ -45,11 +45,13 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - In-app 128x128px transparent mark saved to `assets/icons/anvil_mark.png` registered in `pubspec.yaml`
 - Next: start `FEATURE_pdf_page_manager.md`
 
-## 2026-07-27 — Session 4
-- Created Inno Setup script `windows/installer/anvil.iss` for building Windows installers (`AnvilSetup-1.0.0.exe`)
-- Integrated app icon (`windows/runner/resources/app_icon.ico`) into installer setup wizard, Start Menu/Desktop shortcuts, and Windows Add/Remove Programs
-- Verified successful compilation via ISCC producing `build/windows/installer/AnvilSetup-1.0.0.exe`
-- Updated `docs/BUILD_SETUP.md` with Windows installer compilation instructions
+## 2026-07-27 — Session 5
+- Implemented PDF Page Manager feature (`FEATURE_pdf_page_manager.md`):
+  - Created `lib/tools/pdf_page_manager/pdf_page_manager_state.dart` with `PageItem` model and state getters
+  - Created `lib/tools/pdf_page_manager/pdf_page_manager_controller.dart` supporting loading, async thumbnail rendering via `pdfx`, deletion/undo, rotation (90° steps), reordering, and Syncfusion PDF export with rotation settings
+  - Created `lib/tools/pdf_page_manager/pdf_page_manager_screen.dart` with single PDF drop zone, responsive virtualized page thumbnail grid, interactive delete/undo/rotate/reorder controls, bottom summary bar, and success view
+  - Registered route `/pdf-page-manager` in `lib/core/router.dart`
+  - Created comprehensive unit test suite `test/tools/pdf_page_manager/pdf_page_manager_controller_test.dart` testing load, delete/undo, rotate cycle, reorder, zero-page guard, and PDF export with applied page transformations
 
 ## 4. Feature status tracker
 
@@ -58,7 +60,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | App shell / theme | `PROJECT_OVERVIEW.md`, `DESIGN_SYSTEM.md` | Done | App shell, router, design system, and home screen grid complete |
 | App Icon / Branding | `DESIGN_SYSTEM.md` | Done | Master source icon, Android adaptive icons, Windows `.ico`, and in-app assets generated |
 | PDF Merge | `FEATURE_pdf_merge.md` | Done | PDF Merge controller, UI, and test suite passing |
-| PDF Page Manager | `FEATURE_pdf_page_manager.md` | Not started | |
+| PDF Page Manager | `FEATURE_pdf_page_manager.md` | Done | PDF Page Manager controller, UI, and test suite passing |
 | PDF Split | *(spec pending)* | Not started | |
 | Image tools (v2) | *(spec pending)* | Not started | |
 
