@@ -62,5 +62,13 @@ class ToolRegistry {
       route: '/pdf-to-image',
       isAvailable: true,
     ),
+    ToolMetadata(
+      id: 'pdf_password',
+      title: 'Password Protect PDF',
+      description: 'Add password protection to secure a PDF, or remove existing protection.',
+      icon: Icons.lock_outline_rounded,
+      route: '/pdf-password',
+      isAvailable: true,
+    ),
   ];
 }

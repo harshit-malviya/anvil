@@ -80,6 +80,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Registered route `/pdf-to-image` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
   - Created comprehensive unit test suite `test/tools/pdf_to_image/pdf_to_image_controller_test.dart` testing document parsing, password rejection, selection quick actions, format/resolution updates, single-page export, multi-page document order export, directory collision handling, and per-page failure recovery.
 
+## 2026-07-27 — Session 9
+- Implemented PDF Password Protection feature (`FEATURE_pdf_password.md`):
+  - Created `lib/tools/pdf_password/pdf_password_state.dart` with `PdfPasswordMode` (Add/Remove) enum, validation getters (`isPasswordTooShort`, `passwordsMatch`, `canSubmitAdd`, `canSubmitRemove`), and file size formatters.
+  - Created `lib/tools/pdf_password/pdf_password_controller.dart` supporting document loading with auto-detection of password protection status, Add Password path with minimum length and confirmation checks, and Remove Password path requiring exact valid current password (with clear error handling on wrong password).
+  - Created `lib/tools/pdf_password/pdf_password_screen.dart` with single PDF drop zone, file header card with security badge, mode-specific form inputs with visibility toggles, stamp animation (`PROTECTED` / `UNPROTECTED`), and standard completion action set (`Open Folder`, `Save As…`, `Share`, `Process Another PDF`).
+  - Registered route `/pdf-password` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
+  - Created comprehensive unit test suite `test/tools/pdf_password/pdf_password_controller_test.dart` testing auto-detection on load, corrupted/empty file rejection, password length & confirmation validations, Add Password encryption execution, Remove Password incorrect password rejection, and Remove Password decryption happy path.
+
 ## 4. Feature status tracker
 
 | Feature | Spec file | Status | Notes |
@@ -91,6 +99,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | PDF Split | `FEATURE_pdf_split.md` | Done | PDF Split controller, UI, thumbnail service extraction, and test suite passing |
 | PDF Compress | `FEATURE_pdf_compress.md` | Done | PDF Compress controller, UI, before/after size badge, and test suite passing |
 | PDF to Image | `FEATURE_pdf_to_image.md` | Done | PDF to Image controller, UI, DPI estimates, and test suite passing |
+| PDF Password | `FEATURE_pdf_password.md` | Done | PDF Password controller, UI, Add/Remove protection, and test suite passing |
 | Image tools (v2) | *(spec pending)* | Not started | |
 
 ## 5. Decisions log
