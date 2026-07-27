@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -103,6 +104,63 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
 
   Future<void> _openOutputFolder(String folderPath) async {
     await _fileService.openFolder(folderPath);
+  }
+
+  Future<void> _handleSaveAs(String outputFolderPath) async {
+    final targetDir = await _fileService.pickDirectory(
+      dialogTitle: 'Select destination folder for split PDFs',
+    );
+    if (targetDir != null && targetDir.isNotEmpty && mounted) {
+      try {
+        final srcDir = Directory(outputFolderPath);
+        if (srcDir.existsSync()) {
+          final destDir = Directory(targetDir);
+          if (!destDir.existsSync()) {
+            destDir.createSync(recursive: true);
+          }
+          final files = srcDir.listSync().whereType<File>().toList();
+          int copiedCount = 0;
+          for (final f in files) {
+            final targetPath = p.join(destDir.path, p.basename(f.path));
+            f.copySync(targetPath);
+            copiedCount++;
+          }
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Saved $copiedCount split files to $targetDir'),
+                backgroundColor: AppColors.anvilTeal,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not save files: $e'),
+              backgroundColor: AppColors.rustRed,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _handleShare(String outputFolderPath) async {
+    final srcDir = Directory(outputFolderPath);
+    if (srcDir.existsSync()) {
+      final pdfPaths = srcDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.toLowerCase().endsWith('.pdf'))
+          .map((f) => f.path)
+          .toList();
+
+      if (pdfPaths.isNotEmpty) {
+        await _fileService.shareMultipleFiles(pdfPaths);
+      }
+    }
   }
 
   @override
@@ -252,11 +310,31 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
               children: [
                 AppButton(
                   label: 'Open Folder',
-                  icon: Icons.folder_open,
+                  icon: Icons.folder_open_rounded,
                   variant: AppButtonVariant.primary,
                   onPressed: () {
                     if (state.outputFolderPath != null) {
                       _openOutputFolder(state.outputFolderPath!);
+                    }
+                  },
+                ),
+                AppButton(
+                  label: 'Save As…',
+                  icon: Icons.save_alt_rounded,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () {
+                    if (state.outputFolderPath != null) {
+                      _handleSaveAs(state.outputFolderPath!);
+                    }
+                  },
+                ),
+                AppButton(
+                  label: 'Share',
+                  icon: Icons.share_rounded,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () {
+                    if (state.outputFolderPath != null) {
+                      _handleShare(state.outputFolderPath!);
                     }
                   },
                 ),

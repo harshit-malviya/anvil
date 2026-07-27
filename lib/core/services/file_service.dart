@@ -47,6 +47,20 @@ class FileService {
     );
   }
 
+  /// Share multiple files on Android or desktop.
+  Future<void> shareMultipleFiles(List<String> filePaths, {String? text}) async {
+    if (filePaths.isEmpty) return;
+    await Share.shareXFiles(
+      filePaths.map((p) => XFile(p)).toList(),
+      text: text ?? 'Sharing split PDF files',
+    );
+  }
+
+  /// Select a directory location using OS picker.
+  Future<String?> pickDirectory({String? dialogTitle}) async {
+    return await FilePicker.platform.getDirectoryPath(dialogTitle: dialogTitle);
+  }
+
   /// Get temporary directory for transient outputs.
   Future<Directory> getTempDirectory() async {
     return await getTemporaryDirectory();

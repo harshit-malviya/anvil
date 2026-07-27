@@ -555,18 +555,29 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32.0),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
                 children: [
+                  AppButton(
+                    label: 'Open Folder',
+                    variant: AppButtonVariant.primary,
+                    icon: Icons.folder_open_rounded,
+                    onPressed: () {
+                      if (state.outputPath != null) {
+                        _fileService.openFolder(p.dirname(state.outputPath!));
+                      }
+                    },
+                  ),
                   AppButton(
                     label: 'Save As…',
                     variant: AppButtonVariant.secondary,
                     icon: Icons.save_alt_rounded,
                     onPressed: () => _handleSaveAs(state.outputPath!),
                   ),
-                  const SizedBox(width: 12.0),
                   AppButton(
-                    label: 'Share / Open',
+                    label: 'Share',
                     variant: AppButtonVariant.secondary,
                     icon: Icons.share_rounded,
                     onPressed: () {

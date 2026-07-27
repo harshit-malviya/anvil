@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -390,18 +391,25 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 28),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
                 children: [
                   AppButton(
-                    label: 'Save As',
+                    label: 'Open Folder',
                     variant: AppButtonVariant.primary,
+                    icon: Icons.folder_open_rounded,
+                    onPressed: () => _fileService.openFolder(p.dirname(outputPath)),
+                  ),
+                  AppButton(
+                    label: 'Save As',
+                    variant: AppButtonVariant.secondary,
                     icon: Icons.save_alt_rounded,
                     onPressed: () => _handleSaveAs(outputPath),
                   ),
-                  const SizedBox(width: 12),
                   AppButton(
-                    label: 'Share / Open',
+                    label: 'Share',
                     variant: AppButtonVariant.secondary,
                     icon: Icons.share_rounded,
                     onPressed: () => _fileService.shareFile(outputPath),
