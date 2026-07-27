@@ -46,5 +46,13 @@ class ToolRegistry {
       route: '/pdf-split',
       isAvailable: true,
     ),
+    ToolMetadata(
+      id: 'pdf_compress',
+      title: 'Compress PDF',
+      description: 'Reduce PDF file size while preserving text sharpness and document structure.',
+      icon: Icons.compress_rounded,
+      route: '/pdf-compress',
+      isAvailable: true,
+    ),
   ];
 }

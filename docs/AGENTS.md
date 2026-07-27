@@ -63,6 +63,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Registered route `/pdf-split` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`
   - Created unit test suite `test/tools/pdf_split/pdf_split_controller_test.dart` testing multi-page loading, single-page flag, protected PDF rejection, mode switching, visual range markers, text range parsing, overlap detection, gap warning & override, equal parts logic, batch PDF creation, and page orientation preservation
 
+## 2026-07-27 — Session 7
+- Implemented PDF Compress feature (`FEATURE_pdf_compress.md`):
+  - Created `lib/tools/pdf_compress/pdf_compress_state.dart` with compression level presets (`Low`, `Medium`, `High`), result types (`normalSuccess`, `minimalReduction`, `outputLarger`), byte formatters, and percentage reduction getters
+  - Created `lib/tools/pdf_compress/pdf_compress_controller.dart` supporting loading, password rejection, compression preset stream deflation, minimal reduction handling (< 5%), and safety guard when compressed file exceeds original size
+  - Created `lib/tools/pdf_compress/pdf_compress_screen.dart` with constrained drop zone, original size indicator, level selector, before → after size comparison badge, stamp animation (`COMPRESSED`), and output actions (`Open Folder`, `Save As...`, `Share`)
+  - Registered route `/pdf-compress` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`
+  - Created unit test suite `test/tools/pdf_compress/pdf_compress_controller_test.dart` testing document loading, password rejection, level configuration, minimal reduction handling, and larger file protection
+
 ## 4. Feature status tracker
 
 | Feature | Spec file | Status | Notes |
@@ -72,7 +80,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | PDF Merge | `FEATURE_pdf_merge.md` | Done | PDF Merge controller, UI, and test suite passing |
 | PDF Page Manager | `FEATURE_pdf_page_manager.md` | Done | PDF Page Manager controller, UI, and test suite passing |
 | PDF Split | `FEATURE_pdf_split.md` | Done | PDF Split controller, UI, thumbnail service extraction, and test suite passing |
-| Image tools (v2) | *(spec pending)* | Not started | |
+| PDF Compress | `FEATURE_pdf_compress.md` | Done | PDF Compress controller, UI, before/after size badge, and test suite passing |
 | Image tools (v2) | *(spec pending)* | Not started | |
 
 ## 5. Decisions log
