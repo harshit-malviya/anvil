@@ -45,6 +45,12 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - In-app 128x128px transparent mark saved to `assets/icons/anvil_mark.png` registered in `pubspec.yaml`
 - Next: start `FEATURE_pdf_page_manager.md`
 
+## 2026-07-27 — Session 4
+- Created Inno Setup script `windows/installer/anvil.iss` for building Windows installers (`AnvilSetup-1.0.0.exe`)
+- Integrated app icon (`windows/runner/resources/app_icon.ico`) into installer setup wizard, Start Menu/Desktop shortcuts, and Windows Add/Remove Programs
+- Verified successful compilation via ISCC producing `build/windows/installer/AnvilSetup-1.0.0.exe`
+- Updated `docs/BUILD_SETUP.md` with Windows installer compilation instructions
+
 ## 4. Feature status tracker
 
 | Feature | Spec file | Status | Notes |

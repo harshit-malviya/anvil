@@ -35,9 +35,14 @@ Run `flutter pub get` after adding.
 flutter build windows --release
 ```
 
-Output binary lands in `build/windows/x64/runner/Release/`. Package this folder as a `.zip` for
-GitHub Releases initially — an installer (`.msix` via `msix` package, or Inno Setup) is a nice-to-
-have for later, not required for v1.
+Output binary lands in `build/windows/x64/runner/Release/`.
+
+To build the Windows installer (`AnvilSetup-1.0.0.exe`), use Inno Setup:
+```powershell
+iscc windows/installer/anvil.iss
+```
+The compiled installer will be created at `build/windows/installer/AnvilSetup-1.0.0.exe`.
+The installer includes custom setup icon, Start Menu / Desktop shortcuts with app icon, and Windows Add/Remove Programs icon integration.
 
 ## 3. Android build
 
