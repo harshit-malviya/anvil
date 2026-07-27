@@ -194,19 +194,14 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
   }
 
   Widget _buildEmptyState(Brightness brightness) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FileDropZone(
-              onTap: _pickFile,
-              label: 'Select a PDF document to split',
-              sublabel: 'Supports multi-page PDF files',
-              icon: Icons.call_split_rounded,
-            ),
-          ],
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 400),
+        child: FileDropZone(
+          onTap: _pickFile,
+          label: 'Drop PDF file here or click to browse',
+          sublabel: 'Select a PDF document to split into smaller files',
+          icon: Icons.call_split_rounded,
         ),
       ),
     );
