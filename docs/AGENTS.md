@@ -35,14 +35,21 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 - Created shared UI components (`ToolCard`, `FileDropZone`, `AppButton`, `StampAnimation`) in `lib/core/widgets/`
 - Implemented tool registry (`lib/tools/registry.dart`) and application router (`lib/core/router.dart`)
 - Implemented `HomeScreen` tool grid and verified widget test harness passes
-- Next: start `FEATURE_pdf_merge.md`
+## 2026-07-27 — Session 2
+- Implemented Feature 1: PDF Merge (`lib/tools/pdf_merge/`)
+- Built `FileService` abstraction (`lib/core/services/file_service.dart`)
+- Implemented `PdfMergeController` StateNotifier handling validation, rejection of password-protected/corrupted files, reordering, and Syncfusion PDF page template merging preserving original page sizes and orientation
+- Implemented `PdfMergeScreen` UI with empty drop zone, reorderable file list with `mono` metadata text, bottom action bar, progress state, error banner, and `StampAnimation` success view
+- Connected `/pdf-merge` route in `lib/core/router.dart`
+- Written 9 comprehensive unit tests in `test/tools/pdf_merge/pdf_merge_controller_test.dart` covering all edge cases
+- Next: start `FEATURE_pdf_page_manager.md`
 
 ## 4. Feature status tracker
 
 | Feature | Spec file | Status | Notes |
 |---|---|---|---|
 | App shell / theme | `PROJECT_OVERVIEW.md`, `DESIGN_SYSTEM.md` | Done | App shell, router, design system, and home screen grid complete |
-| PDF Merge | `FEATURE_pdf_merge.md` | Not started | |
+| PDF Merge | `FEATURE_pdf_merge.md` | Done | PDF Merge controller, UI, and test suite passing |
 | PDF Page Manager | `FEATURE_pdf_page_manager.md` | Not started | |
 | PDF Split | *(spec pending)* | Not started | |
 | Image tools (v2) | *(spec pending)* | Not started | |
@@ -52,6 +59,8 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 ## 2026-07-27
 - Decision: Used `google_fonts` to resolve `Space Grotesk`, `Inter`, and `IBM Plex Mono` dynamically for desktop and mobile targets.
 - Decision: Built reusable custom painter `_DashedBorderPainter` inside `file_drop_zone.dart` for cross-platform drag-and-drop feedback.
+- Decision: Used `sourcePage.createTemplate()` and `destinationPage.graphics.drawPdfTemplate` during PDF merge to preserve exact original page sizes and orientations across mixed-format PDFs.
+- Decision: Catches password protection via `PdfDocument(inputBytes: bytes)` exception string analysis ("encrypted" / "password") to reject encrypted files at add-time with user-actionable instructions.
 
 ## 6. Known issues / tech debt
 
