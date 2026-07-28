@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import '../../core/services/file_service.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import 'pdf_to_image_state.dart';
 
@@ -23,12 +24,15 @@ final pdfToImageControllerProvider =
 class PdfToImageController extends StateNotifier<PdfToImageState> {
   final PdfThumbnailService _thumbnailService;
   final PageRenderer? _customRenderer;
+  final FileService _fileService;
 
   PdfToImageController({
     PdfThumbnailService? thumbnailService,
     PageRenderer? customRenderer,
+    FileService? fileService,
   })  : _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _customRenderer = customRenderer,
+        _fileService = fileService ?? FileService(),
         super(const PdfToImageState());
 
   /// Load and validate a single PDF document.
@@ -262,13 +266,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         } else {
           final fileName = '${baseName}_page${pageIdx + 1}.$ext';
           final sourceFilePath = state.file?.path;
-          if (sourceFilePath != null && sourceFilePath.isNotEmpty) {
-            final dir = p.dirname(sourceFilePath);
-            targetFilePath = p.join(dir, fileName);
-          } else {
-            final tempDir = Directory.systemTemp;
-            targetFilePath = p.join(tempDir.path, fileName);
-          }
+          final outputDir = await _fileService.getDefaultOutputDirectory(sourceFilePath: sourceFilePath);
+          targetFilePath = p.join(outputDir.path, fileName);
         }
 
         final file = File(targetFilePath);
@@ -291,14 +290,12 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         String targetDirPath;
 
         final sourceFilePath = state.file?.path;
-        final parentDir = (sourceFilePath != null && sourceFilePath.isNotEmpty)
-            ? p.dirname(sourceFilePath)
-            : Directory.systemTemp.path;
+        final parentDir = await _fileService.getDefaultOutputDirectory(sourceFilePath: sourceFilePath);
 
-        targetDirPath = p.join(parentDir, baseDirName);
+        targetDirPath = p.join(parentDir.path, baseDirName);
         int counter = 2;
         while (Directory(targetDirPath).existsSync()) {
-          targetDirPath = p.join(parentDir, '${baseDirName}_$counter');
+          targetDirPath = p.join(parentDir.path, '${baseDirName}_$counter');
           counter++;
         }
 

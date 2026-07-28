@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import '../../core/services/file_service.dart';
 import 'pdf_merge_state.dart';
 
 final pdfMergeControllerProvider =
@@ -13,7 +14,11 @@ final pdfMergeControllerProvider =
 });
 
 class PdfMergeController extends StateNotifier<PdfMergeState> {
-  PdfMergeController() : super(const PdfMergeState());
+  final FileService _fileService;
+
+  PdfMergeController({FileService? fileService})
+      : _fileService = fileService ?? FileService(),
+        super(const PdfMergeState());
 
   /// Validate and add PDF files to state list.
   Future<void> addFiles(List<PlatformFile> platformFiles) async {
@@ -154,13 +159,8 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         final defaultFileName = 'merged_$timestamp.pdf';
 
         final firstFilePath = state.files.first.path;
-        if (firstFilePath != null && firstFilePath.isNotEmpty) {
-          final dir = p.dirname(firstFilePath);
-          targetPath = p.join(dir, defaultFileName);
-        } else {
-          final tempDir = Directory.systemTemp;
-          targetPath = p.join(tempDir.path, defaultFileName);
-        }
+        final outputDir = await _fileService.getDefaultOutputDirectory(sourceFilePath: firstFilePath);
+        targetPath = p.join(outputDir.path, defaultFileName);
       }
 
       final outputFile = File(targetPath);

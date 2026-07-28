@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import '../../core/services/file_service.dart';
 import 'pdf_compress_state.dart';
 
 final pdfCompressControllerProvider =
@@ -13,7 +14,11 @@ final pdfCompressControllerProvider =
 });
 
 class PdfCompressController extends StateNotifier<PdfCompressState> {
-  PdfCompressController() : super(const PdfCompressState());
+  final FileService _fileService;
+
+  PdfCompressController({FileService? fileService})
+      : _fileService = fileService ?? FileService(),
+        super(const PdfCompressState());
 
   /// Load and validate a single PDF document.
   Future<void> loadDocument(PlatformFile platformFile,
@@ -197,13 +202,8 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
         final defaultFileName = 'compressed_$timestamp.pdf';
 
         final sourceFilePath = state.file?.path;
-        if (sourceFilePath != null && sourceFilePath.isNotEmpty) {
-          final dir = p.dirname(sourceFilePath);
-          targetPath = p.join(dir, defaultFileName);
-        } else {
-          final tempDir = Directory.systemTemp;
-          targetPath = p.join(tempDir.path, defaultFileName);
-        }
+        final outputDir = await _fileService.getDefaultOutputDirectory(sourceFilePath: sourceFilePath);
+        targetPath = p.join(outputDir.path, defaultFileName);
       }
 
       final outputFile = File(targetPath);

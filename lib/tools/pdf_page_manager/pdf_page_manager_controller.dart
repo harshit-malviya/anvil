@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import '../../core/services/file_service.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import 'pdf_page_manager_state.dart';
 
@@ -15,7 +16,11 @@ final pdfPageManagerControllerProvider =
 });
 
 class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
-  PdfPageManagerController() : super(const PdfPageManagerState());
+  final FileService _fileService;
+
+  PdfPageManagerController({FileService? fileService})
+      : _fileService = fileService ?? FileService(),
+        super(const PdfPageManagerState());
 
   /// Load and validate a single PDF document.
   Future<void> loadDocument(PlatformFile platformFile, {Uint8List? overrideBytes}) async {
@@ -268,13 +273,8 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
         final defaultFileName = 'arranged_$timestamp.pdf';
 
         final sourceFilePath = state.file?.path;
-        if (sourceFilePath != null && sourceFilePath.isNotEmpty) {
-          final dir = p.dirname(sourceFilePath);
-          targetPath = p.join(dir, defaultFileName);
-        } else {
-          final tempDir = Directory.systemTemp;
-          targetPath = p.join(tempDir.path, defaultFileName);
-        }
+        final outputDir = await _fileService.getDefaultOutputDirectory(sourceFilePath: sourceFilePath);
+        targetPath = p.join(outputDir.path, defaultFileName);
       }
 
       final outputFile = File(targetPath);

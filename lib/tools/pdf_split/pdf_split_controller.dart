@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import '../../core/services/file_service.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import 'pdf_split_state.dart';
 
@@ -15,9 +16,13 @@ final pdfSplitControllerProvider =
 
 class PdfSplitController extends StateNotifier<PdfSplitState> {
   final PdfThumbnailService _thumbnailService;
+  final FileService _fileService;
 
-  PdfSplitController({PdfThumbnailService? thumbnailService})
-      : _thumbnailService = thumbnailService ?? PdfThumbnailService(),
+  PdfSplitController({
+    PdfThumbnailService? thumbnailService,
+    FileService? fileService,
+  })  : _thumbnailService = thumbnailService ?? PdfThumbnailService(),
+        _fileService = fileService ?? FileService(),
         super(const PdfSplitState());
 
   /// Load and validate a single PDF document.
@@ -304,13 +309,8 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       final baseName = p.basenameWithoutExtension(state.file?.name ?? 'document');
       final folderName = '${baseName}_split';
 
-      if (sourcePath != null && sourcePath.isNotEmpty) {
-        final parentDir = p.dirname(sourcePath);
-        outputDir = Directory(p.join(parentDir, folderName));
-      } else {
-        final tempDir = Directory.systemTemp;
-        outputDir = Directory(p.join(tempDir.path, folderName));
-      }
+      final baseOutputDir = await _fileService.getDefaultOutputDirectory(sourceFilePath: sourcePath);
+      outputDir = Directory(p.join(baseOutputDir.path, folderName));
     }
 
     try {

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import '../../core/services/file_service.dart';
 import 'pdf_password_state.dart';
 
 final pdfPasswordControllerProvider =
@@ -13,7 +14,11 @@ final pdfPasswordControllerProvider =
 });
 
 class PdfPasswordController extends StateNotifier<PdfPasswordState> {
-  PdfPasswordController() : super(const PdfPasswordState());
+  final FileService _fileService;
+
+  PdfPasswordController({FileService? fileService})
+      : _fileService = fileService ?? FileService(),
+        super(const PdfPasswordState());
 
   /// Load and inspect a PDF file to detect password protection.
   Future<void> loadDocument(
@@ -190,7 +195,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       final List<int> protectedBytes = await destDoc.save();
       destDoc.dispose();
 
-      final targetPath = _resolveOutputPath(
+      final targetPath = await _resolveOutputPath(
         suffix: 'protected',
         customOutputPath: customOutputPath,
       );
@@ -264,7 +269,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       final List<int> unprotectedBytes = await destDoc.save();
       destDoc.dispose();
 
-      final targetPath = _resolveOutputPath(
+      final targetPath = await _resolveOutputPath(
         suffix: 'unprotected',
         customOutputPath: customOutputPath,
       );
@@ -290,10 +295,10 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
     }
   }
 
-  String _resolveOutputPath({
+  Future<String> _resolveOutputPath({
     required String suffix,
     String? customOutputPath,
-  }) {
+  }) async {
     if (customOutputPath != null && customOutputPath.isNotEmpty) {
       return customOutputPath;
     }
@@ -301,13 +306,8 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
     final defaultFileName = 'document_${suffix}_$timestamp.pdf';
 
     final sourceFilePath = state.file?.path;
-    if (sourceFilePath != null && sourceFilePath.isNotEmpty) {
-      final dir = p.dirname(sourceFilePath);
-      return p.join(dir, defaultFileName);
-    } else {
-      final tempDir = Directory.systemTemp;
-      return p.join(tempDir.path, defaultFileName);
-    }
+    final outputDir = await _fileService.getDefaultOutputDirectory(sourceFilePath: sourceFilePath);
+    return p.join(outputDir.path, defaultFileName);
   }
 
   @visibleForTesting

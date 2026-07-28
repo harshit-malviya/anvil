@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -78,4 +79,61 @@ class FileService {
       }
     } catch (_) {}
   }
+
+  /// Get default directory for saving output files.
+  /// On Android, saves to an accessible 'Anvil' directory in public storage (e.g. Download/Anvil).
+  /// On Windows/desktop, uses the parent directory of [sourceFilePath] if available, or system temp directory.
+  Future<Directory> getDefaultOutputDirectory({String? sourceFilePath}) async {
+    if (Platform.isAndroid) {
+      try {
+        final downloadsDir = await getDownloadsDirectory();
+        if (downloadsDir != null) {
+          final anvilDir = Directory(p.join(downloadsDir.path, 'Anvil'));
+          if (!await anvilDir.exists()) {
+            await anvilDir.create(recursive: true);
+          }
+          return anvilDir;
+        }
+      } catch (_) {}
+
+      final publicPaths = [
+        '/storage/emulated/0/Download/Anvil',
+        '/storage/emulated/0/Anvil',
+        '/sdcard/Download/Anvil',
+      ];
+      for (final path in publicPaths) {
+        try {
+          final dir = Directory(path);
+          if (!await dir.exists()) {
+            await dir.create(recursive: true);
+          }
+          return dir;
+        } catch (_) {}
+      }
+
+      try {
+        final extDir = await getExternalStorageDirectory();
+        if (extDir != null) {
+          final anvilDir = Directory(p.join(extDir.path, 'Anvil'));
+          if (!await anvilDir.exists()) {
+            await anvilDir.create(recursive: true);
+          }
+          return anvilDir;
+        }
+      } catch (_) {}
+    }
+
+    if (sourceFilePath != null && sourceFilePath.isNotEmpty) {
+      final parentDir = p.dirname(sourceFilePath);
+      if (parentDir.isNotEmpty) {
+        final dir = Directory(parentDir);
+        if (dir.existsSync()) {
+          return dir;
+        }
+      }
+    }
+
+    return Directory.systemTemp;
+  }
 }
+
