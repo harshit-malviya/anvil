@@ -86,18 +86,22 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            if (state.errorMessage != null)
-              _buildErrorBanner(context, state.errorMessage!, brightness, controller),
-            Expanded(
-              child: !state.isLoaded
-                  ? _buildEmptyDropZone(brightness)
-                  : state.outputPath != null
-                      ? _buildSuccessView(context, state, brightness, controller)
-                      : _buildCompressForm(context, state, brightness, controller),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (state.errorMessage != null)
+                _buildErrorBanner(context, state.errorMessage!, brightness, controller),
+              Expanded(
+                child: !state.isLoaded
+                    ? _buildEmptyDropZone(brightness)
+                    : state.outputPath != null
+                        ? _buildSuccessView(context, state, brightness, controller)
+                        : _buildCompressForm(context, state, brightness, controller),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -107,7 +111,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
       Brightness brightness, PdfCompressController controller) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 16.0),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.rustRed.withValues(alpha: 0.1),
@@ -140,7 +144,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
   Widget _buildEmptyDropZone(Brightness brightness) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 400),
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
         child: FileDropZone(
           onTap: _pickFile,
           label: 'Drop PDF file here or click to browse',

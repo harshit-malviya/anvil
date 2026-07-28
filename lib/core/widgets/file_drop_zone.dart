@@ -51,7 +51,8 @@ class _FileDropZoneState extends State<FileDropZone> {
         ),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 24.0),
+          height: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 24.0),
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(6.0),

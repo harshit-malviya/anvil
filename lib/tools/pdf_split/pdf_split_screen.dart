@@ -198,20 +198,24 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            if (state.errorMessage != null)
-              _buildErrorBanner(context, state.errorMessage!, brightness, controller),
-            Expanded(
-              child: !state.isLoaded
-                  ? _buildEmptyState(brightness)
-                  : state.outputFolderPath != null
-                      ? _buildSuccessState(context, state, brightness, controller)
-                      : _buildMainContent(context, state, brightness, controller),
-            ),
-            if (state.isLoaded && state.outputFolderPath == null)
-              _buildBottomSummaryBar(context, state, brightness),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (state.errorMessage != null)
+                _buildErrorBanner(context, state.errorMessage!, brightness, controller),
+              Expanded(
+                child: !state.isLoaded
+                    ? _buildEmptyState(brightness)
+                    : state.outputFolderPath != null
+                        ? _buildSuccessState(context, state, brightness, controller)
+                        : _buildMainContent(context, state, brightness, controller),
+              ),
+              if (state.isLoaded && state.outputFolderPath == null)
+                _buildBottomSummaryBar(context, state, brightness),
+            ],
+          ),
         ),
       ),
     );
@@ -221,7 +225,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
       Brightness brightness, PdfSplitController controller) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 16.0),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.rustRed.withValues(alpha: 0.1),
@@ -254,7 +258,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
   Widget _buildEmptyState(Brightness brightness) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 400),
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
         child: FileDropZone(
           onTap: _pickFile,
           label: 'Drop PDF file here or click to browse',

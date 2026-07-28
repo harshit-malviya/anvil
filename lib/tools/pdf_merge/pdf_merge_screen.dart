@@ -137,7 +137,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
   Widget _buildEmptyDropZone(BuildContext context) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 400),
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
         child: FileDropZone(
           onTap: _pickAndAddFiles,
           label: 'Drop PDF files here or click to browse',

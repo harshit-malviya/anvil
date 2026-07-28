@@ -197,7 +197,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
   Widget _buildDropZoneView(BuildContext context) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 400),
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
         child: FileDropZone(
           onTap: _pickAndLoadFile,
           label: 'Drop PDF file here or click to browse',
