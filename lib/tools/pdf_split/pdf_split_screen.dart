@@ -280,25 +280,28 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
               style: AppTypography.displayMedium(brightness),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
-              '${state.outputCreatedFileCount} files created in output folder:',
-              style: AppTypography.bodyMedium(brightness).copyWith(
-                color: AppColors.text(brightness).withValues(alpha: 0.7),
-              ),
+              '${state.outputCreatedFileCount} files created. Saved to:',
+              style: AppTypography.labelSmall(brightness),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              constraints: const BoxConstraints(maxWidth: 520),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.cardBackground(brightness),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppColors.pegGrey),
+                color: AppColors.pegGrey.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6.0),
+                border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.3)),
               ),
-              child: Text(
+              child: SelectableText(
                 state.outputFolderPath ?? '',
-                style: AppTypography.mono(brightness).copyWith(fontSize: 12),
+                style: AppTypography.mono(brightness).copyWith(
+                  fontSize: 12,
+                  color: AppColors.text(brightness),
+                ),
                 textAlign: TextAlign.center,
               ),
             ),

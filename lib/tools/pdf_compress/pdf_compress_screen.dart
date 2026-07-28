@@ -378,6 +378,33 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
               ),
             ],
 
+            if (state.outputPath != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Saved to:',
+                style: AppTypography.labelSmall(brightness),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.pegGrey.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6.0),
+                  border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.3)),
+                ),
+                child: SelectableText(
+                  state.outputPath!,
+                  style: AppTypography.mono(brightness).copyWith(
+                    fontSize: 12,
+                    color: AppColors.text(brightness),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+
             const SizedBox(height: 28),
 
             // Action Buttons

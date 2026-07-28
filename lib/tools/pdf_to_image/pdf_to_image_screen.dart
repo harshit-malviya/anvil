@@ -751,6 +751,31 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
               style: AppTypography.bodyMedium(brightness),
               textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 12),
+            Text(
+              'Saved to:',
+              style: AppTypography.labelSmall(brightness),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Container(
+              constraints: const BoxConstraints(maxWidth: 520),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.pegGrey.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6.0),
+                border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.3)),
+              ),
+              child: SelectableText(
+                outputPath,
+                style: AppTypography.mono(brightness).copyWith(
+                  fontSize: 12,
+                  color: AppColors.text(brightness),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
             if (skippedNote != null) ...[
               const SizedBox(height: 8),
               Text(

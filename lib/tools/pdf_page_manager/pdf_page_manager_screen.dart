@@ -545,14 +545,26 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
               ),
               const SizedBox(height: 12.0),
               Text(
-                'Output saved to:',
+                'Saved to:',
                 style: AppTypography.labelSmall(brightness),
               ),
-              const SizedBox(height: 4.0),
-              SelectableText(
-                state.outputPath ?? '',
-                style: AppTypography.mono(brightness).copyWith(fontSize: 12),
-                textAlign: TextAlign.center,
+              const SizedBox(height: 6.0),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.pegGrey.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6.0),
+                  border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.3)),
+                ),
+                child: SelectableText(
+                  state.outputPath ?? '',
+                  style: AppTypography.mono(brightness).copyWith(
+                    fontSize: 12,
+                    color: AppColors.text(brightness),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 32.0),
               Wrap(
