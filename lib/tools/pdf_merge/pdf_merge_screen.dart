@@ -195,13 +195,14 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
         const SizedBox(height: 12),
         Expanded(
           child: ReorderableListView.builder(
+            buildDefaultDragHandles: false,
             onReorderItem: (oldIndex, newIndex) {
               controller.reorderFiles(oldIndex, newIndex);
             },
             itemCount: state.files.length,
             itemBuilder: (context, index) {
               final item = state.files[index];
-              return _buildFileRow(context, item, controller, brightness, key: ValueKey(item.id));
+              return _buildFileRow(context, item, index, controller, brightness, key: ValueKey(item.id));
             },
           ),
         ),
@@ -226,6 +227,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
   Widget _buildFileRow(
     BuildContext context,
     PdfMergeItem item,
+    int index,
     PdfMergeController controller,
     Brightness brightness, {
     required Key key,
@@ -243,9 +245,18 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.drag_indicator_rounded,
-            color: AppColors.text(brightness).withValues(alpha: 0.4),
+          ReorderableDragStartListener(
+            index: index,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.grab,
+              child: Tooltip(
+                message: 'Drag to reorder',
+                child: Icon(
+                  Icons.drag_indicator_rounded,
+                  color: AppColors.text(brightness).withValues(alpha: 0.4),
+                ),
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           Container(
@@ -288,6 +299,24 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
             icon: const Icon(Icons.close_rounded, size: 20),
             onPressed: () => controller.removeFile(item.id),
             tooltip: 'Remove file',
+          ),
+          const SizedBox(width: 8),
+          ReorderableDragStartListener(
+            index: index,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.grab,
+              child: Tooltip(
+                message: 'Drag to reorder',
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: Icon(
+                    Icons.reorder_rounded,
+                    size: 20,
+                    color: AppColors.text(brightness).withValues(alpha: 0.5),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -345,7 +374,6 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
   ) {
     final brightness = Theme.of(context).brightness;
     final outputPath = state.outputPath!;
-    final fileName = outputPath.split(RegExp(r'[/\\]')).last;
 
     return Center(
       child: MaxWidthContainer(
