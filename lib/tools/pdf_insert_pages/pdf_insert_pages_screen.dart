@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -22,6 +23,38 @@ class PdfInsertPagesScreen extends ConsumerStatefulWidget {
 
 class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
   final FileService _fileService = FileService();
+  late final ScrollController _targetScrollController;
+  late final ScrollController _sourceScrollController;
+  late final TextEditingController _pageInputController;
+  bool _isTargetGridExpanded = false;
+  bool _isSourceGridExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _targetScrollController = ScrollController();
+    _sourceScrollController = ScrollController();
+    _pageInputController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _targetScrollController.dispose();
+    _sourceScrollController.dispose();
+    _pageInputController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToTargetIndex(int index, int totalPages) {
+    if (!_targetScrollController.hasClients) return;
+    const itemWidth = 170.0;
+    final targetOffset = ((index + 1) * itemWidth).clamp(0.0, _targetScrollController.position.maxScrollExtent);
+    _targetScrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
 
   Future<void> _pickTargetFile() async {
     final files = await _fileService.pickPdfFiles(allowMultiple: false);
@@ -100,7 +133,10 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
             IconButton(
               tooltip: 'Reset All',
               icon: const Icon(Icons.refresh),
-              onPressed: controller.clearTarget,
+              onPressed: () {
+                _pageInputController.clear();
+                controller.clearTarget();
+              },
             ),
         ],
       ),
@@ -242,7 +278,10 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   label: 'Insert Into Another PDF',
                   icon: Icons.refresh,
                   variant: AppButtonVariant.secondary,
-                  onPressed: controller.clearTarget,
+                  onPressed: () {
+                    _pageInputController.clear();
+                    controller.clearTarget();
+                  },
                 ),
               ],
             ),
@@ -283,7 +322,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
           _buildTargetInsertionBar(context, state, brightness, controller),
           const SizedBox(height: 12),
           SizedBox(
-            height: 220,
+            height: _isTargetGridExpanded ? 380 : 230,
             child: _buildTargetThumbnailGrid(context, state, brightness, controller),
           ),
 
@@ -310,7 +349,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
             _buildSourceSelectionBar(context, state, brightness, controller),
             const SizedBox(height: 12),
             SizedBox(
-              height: 220,
+              height: _isSourceGridExpanded ? 380 : 230,
               child: _buildSourceThumbnailGrid(context, state, brightness, controller),
             ),
           ],
@@ -393,6 +432,11 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     Brightness brightness,
     PdfInsertPagesController controller,
   ) {
+    final currentVal = state.insertionPoint == -1 ? 0 : state.insertionPoint + 1;
+    if (_pageInputController.text != currentVal.toString() && !_pageInputController.selection.isValid) {
+      _pageInputController.text = currentVal.toString();
+    }
+
     String positionLabel;
     if (state.insertionPoint == -1) {
       positionLabel = 'At start (before Page 1)';
@@ -402,34 +446,81 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
       positionLabel = 'After Page ${state.insertionPoint + 1}';
     }
 
-    return Row(
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Expanded(
-          child: Row(
-            children: [
-              Text(
-                'INSERTION POINT:',
-                style: AppTypography.labelSmall(brightness),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'INSERTION POINT:',
+              style: AppTypography.labelSmall(brightness),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.anvilTeal.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: AppColors.anvilTeal),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.anvilTeal.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: AppColors.anvilTeal),
-                ),
-                child: Text(
-                  positionLabel,
-                  style: AppTypography.mono(brightness).copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.anvilTeal,
-                  ),
+              child: Text(
+                positionLabel,
+                style: AppTypography.mono(brightness).copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.anvilTeal,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'After Page:',
+              style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 13),
+            ),
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 76,
+              height: 36,
+              child: TextField(
+                controller: _pageInputController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: AppTypography.mono(brightness).copyWith(fontWeight: FontWeight.bold),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (val) {
+                  final pageNum = int.tryParse(val.trim());
+                  if (pageNum != null) {
+                    int targetIdx;
+                    if (pageNum <= 0) {
+                      targetIdx = -1;
+                    } else if (pageNum >= state.targetPageCount) {
+                      targetIdx = state.targetPageCount - 1;
+                    } else {
+                      targetIdx = pageNum - 1;
+                    }
+                    controller.setInsertionPoint(targetIdx);
+                    _scrollToTargetIndex(targetIdx, state.targetPageCount);
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '(0=Start, ${state.targetPageCount}=End)',
+              style: AppTypography.mono(brightness).copyWith(fontSize: 11, color: AppColors.text(brightness).withValues(alpha: 0.6)),
+            ),
+          ],
         ),
         SegmentedButton<int>(
           segments: [
@@ -442,9 +533,28 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
               label: const Text('At End'),
             ),
           ],
-          selected: {state.insertionPoint == -1 ? -1 : state.targetPageCount - 1},
+          selected: {
+            if (state.insertionPoint == -1)
+              -1
+            else if (state.insertionPoint == state.targetPageCount - 1)
+              state.targetPageCount - 1
+            else
+              -99
+          },
           onSelectionChanged: (Set<int> newSelection) {
-            controller.setInsertionPoint(newSelection.first);
+            if (newSelection.first != -99) {
+              controller.setInsertionPoint(newSelection.first);
+              _scrollToTargetIndex(newSelection.first, state.targetPageCount);
+            }
+          },
+        ),
+        IconButton(
+          tooltip: _isTargetGridExpanded ? 'Collapse to Horizontal Strip' : 'Expand Grid View',
+          icon: Icon(_isTargetGridExpanded ? Icons.view_stream_rounded : Icons.grid_view_rounded),
+          onPressed: () {
+            setState(() {
+              _isTargetGridExpanded = !_isTargetGridExpanded;
+            });
           },
         ),
       ],
@@ -460,13 +570,21 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     final hasInsertedBlock = state.hasSource && state.selectedSourceCount > 0;
     final totalGridItems = state.targetPageCount + (hasInsertedBlock ? 1 : 0);
 
-    return GridView.builder(
-      scrollDirection: Axis.horizontal,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 1,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.3,
-      ),
+    final gridWidget = GridView.builder(
+      controller: _targetScrollController,
+      scrollDirection: _isTargetGridExpanded ? Axis.vertical : Axis.horizontal,
+      gridDelegate: _isTargetGridExpanded
+          ? const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 140,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.75,
+            )
+          : const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 1,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.3,
+            ),
       itemCount: totalGridItems,
       itemBuilder: (context, index) {
         int targetIdx;
@@ -475,7 +593,6 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
         final insertionIdx = state.insertionPoint; // -1 to targetPageCount - 1
 
         if (hasInsertedBlock) {
-          // Preview block is placed after target page insertionIdx
           final blockPositionInGrid = insertionIdx + 1; // 0 for start (-1 + 1)
           if (index == blockPositionInGrid) {
             isPreviewBlock = true;
@@ -539,7 +656,10 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
         final isInsertionAnchor = (state.insertionPoint == targetIdx);
 
         return GestureDetector(
-          onTap: () => controller.setInsertionPoint(targetIdx),
+          onTap: () {
+            controller.setInsertionPoint(targetIdx);
+            _scrollToTargetIndex(targetIdx, state.targetPageCount);
+          },
           child: Container(
             decoration: BoxDecoration(
               color: AppColors.cardBackground(brightness),
@@ -618,6 +738,34 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
           ),
         );
       },
+    );
+
+    if (_isTargetGridExpanded) {
+      return Scrollbar(
+        controller: _targetScrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        child: gridWidget,
+      );
+    }
+
+    return Listener(
+      onPointerSignal: (pointerSignal) {
+        if (pointerSignal is PointerScrollEvent && _targetScrollController.hasClients) {
+          final scrollDelta = pointerSignal.scrollDelta.dy != 0
+              ? pointerSignal.scrollDelta.dy
+              : pointerSignal.scrollDelta.dx;
+          final newOffset = (_targetScrollController.offset + scrollDelta)
+              .clamp(0.0, _targetScrollController.position.maxScrollExtent);
+          _targetScrollController.jumpTo(newOffset);
+        }
+      },
+      child: Scrollbar(
+        controller: _targetScrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        child: gridWidget,
+      ),
     );
   }
 
@@ -728,6 +876,15 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
           onPressed: controller.selectNoneSource,
           child: const Text('Select None'),
         ),
+        IconButton(
+          tooltip: _isSourceGridExpanded ? 'Collapse to Horizontal Strip' : 'Expand Grid View',
+          icon: Icon(_isSourceGridExpanded ? Icons.view_stream_rounded : Icons.grid_view_rounded),
+          onPressed: () {
+            setState(() {
+              _isSourceGridExpanded = !_isSourceGridExpanded;
+            });
+          },
+        ),
       ],
     );
   }
@@ -738,13 +895,21 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     Brightness brightness,
     PdfInsertPagesController controller,
   ) {
-    return GridView.builder(
-      scrollDirection: Axis.horizontal,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 1,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.3,
-      ),
+    final gridWidget = GridView.builder(
+      controller: _sourceScrollController,
+      scrollDirection: _isSourceGridExpanded ? Axis.vertical : Axis.horizontal,
+      gridDelegate: _isSourceGridExpanded
+          ? const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 140,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.75,
+            )
+          : const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 1,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.3,
+            ),
       itemCount: state.sourcePageCount,
       itemBuilder: (context, index) {
         final pageNumber = index + 1;
@@ -790,7 +955,6 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   ),
                 ),
 
-                // Selection Overlay
                 if (isSelected)
                   Positioned.fill(
                     child: Container(
@@ -801,7 +965,6 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                     ),
                   ),
 
-                // Page Number Badge
                 Positioned(
                   bottom: 6,
                   left: 6,
@@ -822,7 +985,6 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   ),
                 ),
 
-                // Checkbox Badge
                 Positioned(
                   top: 6,
                   right: 6,
@@ -844,6 +1006,34 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
           ),
         );
       },
+    );
+
+    if (_isSourceGridExpanded) {
+      return Scrollbar(
+        controller: _sourceScrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        child: gridWidget,
+      );
+    }
+
+    return Listener(
+      onPointerSignal: (pointerSignal) {
+        if (pointerSignal is PointerScrollEvent && _sourceScrollController.hasClients) {
+          final scrollDelta = pointerSignal.scrollDelta.dy != 0
+              ? pointerSignal.scrollDelta.dy
+              : pointerSignal.scrollDelta.dx;
+          final newOffset = (_sourceScrollController.offset + scrollDelta)
+              .clamp(0.0, _sourceScrollController.position.maxScrollExtent);
+          _sourceScrollController.jumpTo(newOffset);
+        }
+      },
+      child: Scrollbar(
+        controller: _sourceScrollController,
+        thumbVisibility: true,
+        trackVisibility: true,
+        child: gridWidget,
+      ),
     );
   }
 
