@@ -129,6 +129,8 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
       return null;
     }
 
+    final startTime = DateTime.now();
+
     state = state.copyWith(
       isProcessing: true,
       progressMessage: "Compressing PDF…",
@@ -136,6 +138,7 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
       resetOutput: true,
       resetResultType: true,
     );
+    await Future.delayed(const Duration(milliseconds: 50));
 
     try {
       final sourceDoc = PdfDocument(inputBytes: state.fileBytes!);
@@ -179,6 +182,11 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
       destDoc.dispose();
 
       final int outputLength = compressedBytes.length;
+
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
 
       // Edge case: Compressed output is larger than or equal to original file
       if (outputLength >= state.originalSizeBytes) {
@@ -226,6 +234,10 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
 
       return targetPath;
     } on OutOfMemoryError {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -233,6 +245,10 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -240,6 +256,10 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
       );
       return null;
     } catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,

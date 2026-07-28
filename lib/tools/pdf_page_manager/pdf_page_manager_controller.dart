@@ -112,24 +112,25 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
 
   /// Generate thumbnails for all pages asynchronously.
   Future<void> _generateThumbnails(Uint8List bytes) async {
-    List<PageItem> updatedPages = List<PageItem>.from(state.pages);
-
     await _thumbnailService.generateThumbnails(
       bytes,
       onPageRendered: (pageIndex, thumbnailBytes) {
         if (state.fileBytes != bytes) return;
-        if (pageIndex < updatedPages.length) {
-          updatedPages[pageIndex] = updatedPages[pageIndex].copyWith(
+        final currentPages = List<PageItem>.from(state.pages);
+        final idx = currentPages.indexWhere((p) => p.originalIndex == pageIndex);
+        if (idx != -1) {
+          currentPages[idx] = currentPages[idx].copyWith(
             thumbnailBytes: thumbnailBytes,
             hasThumbnailError: thumbnailBytes == null,
           );
+          state = state.copyWith(pages: currentPages);
         }
       },
     );
 
     if (state.fileBytes == bytes) {
       // Mark any remaining unrendered thumbnails as errors
-      final finalPages = updatedPages.map((p) {
+      final finalPages = state.pages.map((p) {
         if (p.thumbnailBytes == null) {
           return p.copyWith(hasThumbnailError: true);
         }
@@ -216,12 +217,15 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       return null;
     }
 
+    final startTime = DateTime.now();
+
     state = state.copyWith(
       isProcessing: true,
       progressMessage: "Saving page changes…",
       resetError: true,
       resetOutput: true,
     );
+    await Future.delayed(const Duration(milliseconds: 50));
 
     try {
       final sourceDoc = PdfDocument(inputBytes: state.fileBytes!);
@@ -280,6 +284,11 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       final outputFile = File(targetPath);
       await outputFile.writeAsBytes(outputBytes, flush: true);
 
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -288,6 +297,10 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
 
       return targetPath;
     } on OutOfMemoryError {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -295,6 +308,10 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -302,6 +319,10 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       );
       return null;
     } catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,

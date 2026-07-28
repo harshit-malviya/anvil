@@ -293,12 +293,15 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       return null;
     }
 
+    final startTime = DateTime.now();
+
     state = state.copyWith(
       isProcessing: true,
       progressMessage: "Splitting into ${ranges.length} files…",
       resetError: true,
       resetOutput: true,
     );
+    await Future.delayed(const Duration(milliseconds: 50));
 
     // Prepare target directory
     late Directory outputDir;
@@ -318,6 +321,10 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         outputDir.createSync(recursive: true);
       }
     } catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -368,6 +375,11 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
 
       sourceDoc.dispose();
 
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -385,6 +397,11 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
             f.deleteSync();
           }
         } catch (_) {}
+      }
+
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
       }
 
       state = state.copyWith(

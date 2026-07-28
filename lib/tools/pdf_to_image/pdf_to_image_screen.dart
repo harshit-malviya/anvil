@@ -9,6 +9,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
+import '../../core/widgets/task_progress_bar.dart';
 import 'pdf_to_image_controller.dart';
 import 'pdf_to_image_state.dart';
 
@@ -155,6 +156,11 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              TaskProgressBar(
+                isVisible: state.isProcessing,
+                message: state.progressMessage ?? 'Exporting images…',
+                progressPercent: state.progressPercent,
+              ),
               if (state.errorMessage != null)
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(

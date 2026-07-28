@@ -8,6 +8,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
+import '../../core/widgets/task_progress_bar.dart';
 import 'pdf_split_controller.dart';
 import 'pdf_split_state.dart';
 
@@ -203,6 +204,10 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              TaskProgressBar(
+                isVisible: state.isProcessing,
+                message: state.progressMessage ?? 'Splitting PDF…',
+              ),
               if (state.errorMessage != null)
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(

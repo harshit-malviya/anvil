@@ -206,6 +206,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
       return null;
     }
 
+    final startTime = DateTime.now();
+
     state = state.copyWith(
       isProcessing: true,
       progressMessage: "Preparing export…",
@@ -215,6 +217,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
       exportedCount: 0,
       skippedPages: const [],
     );
+    await Future.delayed(const Duration(milliseconds: 50));
 
     // Selected page indices in document order (0-indexed)
     final sortedPages = state.selectedPages.toList()..sort();
@@ -251,6 +254,10 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         }
 
         if (imageBytes == null) {
+          final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+          if (elapsedMs < 600) {
+            await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+          }
           state = state.copyWith(
             isProcessing: false,
             resetProgressMessage: true,
@@ -272,6 +279,11 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
 
         final file = File(targetFilePath);
         await file.writeAsBytes(imageBytes, flush: true);
+
+        final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+        if (elapsedMs < 600) {
+          await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+        }
 
         state = state.copyWith(
           isProcessing: false,
@@ -336,6 +348,11 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
           }
         }
 
+        final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+        if (elapsedMs < 600) {
+          await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+        }
+
         if (exported == 0) {
           // Cleanup empty directory
           try {
@@ -366,6 +383,10 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         return targetDirPath;
       }
     } on OutOfMemoryError {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -374,6 +395,10 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -382,6 +407,10 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
       );
       return null;
     } catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,

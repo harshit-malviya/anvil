@@ -8,6 +8,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
+import '../../core/widgets/task_progress_bar.dart';
 import 'pdf_merge_controller.dart';
 import 'pdf_merge_state.dart';
 
@@ -72,6 +73,10 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              TaskProgressBar(
+                isVisible: state.isProcessing,
+                message: state.progressMessage ?? 'Merging PDFs…',
+              ),
               if (state.errorMessage != null) _buildErrorBanner(context, state.errorMessage!, controller),
               Expanded(
                 child: state.outputPath != null

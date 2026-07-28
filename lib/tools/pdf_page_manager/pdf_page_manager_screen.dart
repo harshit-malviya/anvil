@@ -10,6 +10,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
+import '../../core/widgets/task_progress_bar.dart';
 import 'pdf_page_manager_controller.dart';
 import 'pdf_page_manager_state.dart';
 
@@ -141,6 +142,10 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                TaskProgressBar(
+                  isVisible: state.isProcessing,
+                  message: state.progressMessage ?? 'Applying page changes…',
+                ),
                 if (state.errorMessage != null)
                   _buildErrorBanner(context, state.errorMessage!, controller),
                 Expanded(

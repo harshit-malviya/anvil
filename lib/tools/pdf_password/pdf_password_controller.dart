@@ -160,12 +160,15 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
   Future<String?> _addPassword({String? customOutputPath}) async {
     if (!state.canSubmitAdd) return null;
 
+    final startTime = DateTime.now();
+
     state = state.copyWith(
       isProcessing: true,
       progressMessage: "Protecting PDF…",
       resetError: true,
       resetOutput: true,
     );
+    await Future.delayed(const Duration(milliseconds: 50));
 
     try {
       final sourceDoc = PdfDocument(inputBytes: state.fileBytes!);
@@ -203,6 +206,11 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       final outputFile = File(targetPath);
       await outputFile.writeAsBytes(protectedBytes, flush: true);
 
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -211,6 +219,10 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
 
       return targetPath;
     } catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -223,12 +235,15 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
   Future<String?> _removePassword({String? customOutputPath}) async {
     if (!state.canSubmitRemove) return null;
 
+    final startTime = DateTime.now();
+
     state = state.copyWith(
       isProcessing: true,
       progressMessage: "Removing protection…",
       resetError: true,
       resetOutput: true,
     );
+    await Future.delayed(const Duration(milliseconds: 50));
 
     PdfDocument sourceDoc;
     try {
@@ -237,6 +252,10 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         password: state.removalPassword,
       );
     } catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -277,6 +296,11 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       final outputFile = File(targetPath);
       await outputFile.writeAsBytes(unprotectedBytes, flush: true);
 
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -286,6 +310,10 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       return targetPath;
     } catch (e) {
       sourceDoc.dispose();
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,

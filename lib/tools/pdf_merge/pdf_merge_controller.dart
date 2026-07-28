@@ -118,12 +118,15 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
       return null;
     }
 
+    final startTime = DateTime.now();
+
     state = state.copyWith(
       isProcessing: true,
       progressMessage: "Merging ${state.files.length} files…",
       resetError: true,
       resetOutput: true,
     );
+    await Future.delayed(const Duration(milliseconds: 50));
 
     try {
       final destinationDoc = PdfDocument();
@@ -166,6 +169,11 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
       final outputFile = File(targetPath);
       await outputFile.writeAsBytes(mergedBytes, flush: true);
 
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -174,6 +182,10 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
 
       return targetPath;
     } on OutOfMemoryError {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -181,6 +193,10 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -188,6 +204,10 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
       );
       return null;
     } catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
       final errStr = e.toString().toLowerCase();
       if (errStr.contains('memory') || errStr.contains('allocation')) {
         state = state.copyWith(
