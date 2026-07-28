@@ -44,6 +44,14 @@ abstract class AppTypography {
     );
   }
 
+  static TextStyle bodySmall(Brightness brightness) {
+    return GoogleFonts.inter(
+      fontSize: 12,
+      fontWeight: FontWeight.w400,
+      color: AppColors.text(brightness),
+    );
+  }
+
   static TextStyle labelSmall(Brightness brightness) {
     return GoogleFonts.inter(
       fontSize: 12,

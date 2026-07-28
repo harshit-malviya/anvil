@@ -17,7 +17,7 @@ class HomeScreen extends StatelessWidget {
         child: CustomScrollView(
           slivers: [
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24.0, 32.0, 24.0, 16.0),
+              padding: const EdgeInsets.fromLTRB(16.0, 20.0, 16.0, 12.0),
               sliver: SliverToBoxAdapter(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -29,8 +29,8 @@ class HomeScreen extends StatelessWidget {
                         Row(
                           children: [
                             Container(
-                              width: 36,
-                              height: 36,
+                              width: 32,
+                              height: 32,
                               decoration: BoxDecoration(
                                 color: AppColors.primary(brightness),
                                 borderRadius: BorderRadius.circular(6.0),
@@ -38,20 +38,20 @@ class HomeScreen extends StatelessWidget {
                               child: const Icon(
                                 Icons.build_rounded,
                                 color: Colors.white,
-                                size: 20,
+                                size: 18,
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 10),
                             Text(
                               'Anvil',
-                              style: AppTypography.displayLarge(brightness),
+                              style: AppTypography.displayMedium(brightness),
                             ),
                           ],
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
+                            horizontal: 8,
+                            vertical: 3,
                           ),
                           decoration: BoxDecoration(
                             color: AppColors.anvilTeal.withValues(alpha: 0.15),
@@ -65,58 +65,47 @@ class HomeScreen extends StatelessWidget {
                             style: AppTypography.labelSmall(brightness).copyWith(
                               color: AppColors.secondary(brightness),
                               fontWeight: FontWeight.bold,
-                              fontSize: 11,
+                              fontSize: 10,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       'Select a tool below to process your files locally on your device.',
-                      style: AppTypography.bodyLarge(brightness).copyWith(
+                      style: AppTypography.bodyMedium(brightness).copyWith(
                         color: AppColors.text(brightness).withValues(alpha: 0.7),
+                        fontSize: 13,
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 14),
                     const Divider(height: 1),
                   ],
                 ),
               ),
             ),
             SliverPadding(
-              padding: const EdgeInsets.all(24.0),
-              sliver: SliverLayoutBuilder(
-                builder: (context, constraints) {
-                  final width = constraints.crossAxisExtent;
-                  int crossAxisCount = 1;
-                  if (width >= 900) {
-                    crossAxisCount = 3;
-                  } else if (width >= 550) {
-                    crossAxisCount = 2;
-                  }
-
-                  return SliverGrid(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: crossAxisCount,
-                      crossAxisSpacing: 16.0,
-                      mainAxisSpacing: 16.0,
-                      childAspectRatio: 1.5,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final tool = ToolRegistry.tools[index];
-                        return ToolCard(
-                          tool: tool,
-                          onTap: () {
-                            context.push(tool.route);
-                          },
-                        );
+              padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 20.0),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 260.0,
+                  mainAxisExtent: 118.0,
+                  crossAxisSpacing: 12.0,
+                  mainAxisSpacing: 12.0,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final tool = ToolRegistry.tools[index];
+                    return ToolCard(
+                      tool: tool,
+                      onTap: () {
+                        context.push(tool.route);
                       },
-                      childCount: ToolRegistry.tools.length,
-                    ),
-                  );
-                },
+                    );
+                  },
+                  childCount: ToolRegistry.tools.length,
+                ),
               ),
             ),
           ],

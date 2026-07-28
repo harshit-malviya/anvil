@@ -45,7 +45,7 @@ class _ToolCardState extends State<ToolCard> {
           splashColor: AppColors.primary(brightness).withValues(alpha: 0.1),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(12.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(6.0),
               border: Border.all(
@@ -61,8 +61,8 @@ class _ToolCardState extends State<ToolCard> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      width: 40,
-                      height: 40,
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
                         color: brightness == Brightness.dark
                             ? AppColors.steelCard
@@ -74,15 +74,15 @@ class _ToolCardState extends State<ToolCard> {
                       ),
                       child: Icon(
                         widget.tool.icon,
-                        size: 22,
+                        size: 18,
                         color: AppColors.primary(brightness),
                       ),
                     ),
                     if (!widget.tool.isAvailable)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+                          horizontal: 6,
+                          vertical: 2,
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.pegGrey.withValues(alpha: 0.2),
@@ -91,27 +91,33 @@ class _ToolCardState extends State<ToolCard> {
                         child: Text(
                           'SOON',
                           style: AppTypography.labelSmall(brightness).copyWith(
-                            fontSize: 10,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
                             color: AppColors.text(brightness).withValues(alpha: 0.6),
                           ),
                         ),
                       ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       widget.tool.title,
-                      style: AppTypography.titleMedium(brightness),
+                      style: AppTypography.titleMedium(brightness).copyWith(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 2),
                     Text(
                       widget.tool.description,
-                      style: AppTypography.bodyMedium(brightness).copyWith(
+                      style: AppTypography.bodySmall(brightness).copyWith(
+                        fontSize: 11,
+                        height: 1.2,
                         color: AppColors.text(brightness).withValues(alpha: 0.7),
                       ),
                       maxLines: 2,
@@ -127,3 +133,4 @@ class _ToolCardState extends State<ToolCard> {
     );
   }
 }
+
