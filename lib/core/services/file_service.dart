@@ -85,32 +85,27 @@ class FileService {
   /// On Windows/desktop, uses the parent directory of [sourceFilePath] if available, or system temp directory.
   Future<Directory> getDefaultOutputDirectory({String? sourceFilePath}) async {
     if (Platform.isAndroid) {
-      try {
-        final downloadsDir = await getDownloadsDirectory();
-        if (downloadsDir != null) {
-          final anvilDir = Directory(p.join(downloadsDir.path, 'Anvil'));
-          if (!await anvilDir.exists()) {
-            await anvilDir.create(recursive: true);
-          }
-          return anvilDir;
-        }
-      } catch (_) {}
-
+      // Direct public storage paths outside restricted Android/data
       final publicPaths = [
         '/storage/emulated/0/Download/Anvil',
         '/storage/emulated/0/Anvil',
+        '/storage/emulated/0/Documents/Anvil',
         '/sdcard/Download/Anvil',
+        '/sdcard/Anvil',
       ];
       for (final path in publicPaths) {
         try {
           final dir = Directory(path);
-          if (!await dir.exists()) {
-            await dir.create(recursive: true);
+          if (!dir.existsSync()) {
+            dir.createSync(recursive: true);
           }
-          return dir;
+          if (dir.existsSync()) {
+            return dir;
+          }
         } catch (_) {}
       }
 
+      // Fallback only if public paths are blocked by system
       try {
         final extDir = await getExternalStorageDirectory();
         if (extDir != null) {
