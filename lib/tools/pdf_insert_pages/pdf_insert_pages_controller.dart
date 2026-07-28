@@ -240,38 +240,12 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
     await Future.delayed(const Duration(milliseconds: 50));
 
     try {
-      final targetDoc = PdfDocument(inputBytes: state.targetBytes!);
-      final sourceDoc = PdfDocument(inputBytes: state.sourceBytes!);
-      final destinationDoc = PdfDocument();
-
-      final insertionPoint = state.insertionPoint;
-
-      // 1. Copy target pages from index 0 up to insertionPoint (inclusive)
-      if (insertionPoint >= 0) {
-        for (int i = 0; i <= insertionPoint && i < targetDoc.pages.count; i++) {
-          _copyPageToDestination(targetDoc.pages[i], destinationDoc);
-        }
-      }
-
-      // 2. Copy selected source pages in chosen order
-      for (final srcIdx in state.selectedSourcePageIndices) {
-        if (srcIdx >= 0 && srcIdx < sourceDoc.pages.count) {
-          _copyPageToDestination(sourceDoc.pages[srcIdx], destinationDoc);
-        }
-      }
-
-      // 3. Copy remaining target pages from insertionPoint + 1 to end
-      for (int i = insertionPoint + 1; i < targetDoc.pages.count; i++) {
-        if (i >= 0) {
-          _copyPageToDestination(targetDoc.pages[i], destinationDoc);
-        }
-      }
-
-      targetDoc.dispose();
-      sourceDoc.dispose();
-
-      final List<int> resultBytes = await destinationDoc.save();
-      destinationDoc.dispose();
+      final List<int> resultBytes = await splicePages(
+        targetBytes: state.targetBytes!,
+        sourceBytes: state.sourceBytes!,
+        selectedSourceIndices: state.selectedSourcePageIndices,
+        insertionPoint: state.insertionPoint,
+      );
 
       String targetPath;
       if (customOutputPath != null && customOutputPath.isNotEmpty) {
@@ -337,8 +311,49 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
     }
   }
 
+  /// Splice pages from [sourceBytes] (indices in [selectedSourceIndices]) into [targetBytes]
+  /// after target page index [insertionPoint] (`-1` means at start).
+  static Future<Uint8List> splicePages({
+    required Uint8List targetBytes,
+    required Uint8List sourceBytes,
+    required List<int> selectedSourceIndices,
+    required int insertionPoint,
+  }) async {
+    final targetDoc = PdfDocument(inputBytes: targetBytes);
+    final sourceDoc = PdfDocument(inputBytes: sourceBytes);
+    final destinationDoc = PdfDocument();
+
+    // 1. Copy target pages from index 0 up to insertionPoint (inclusive)
+    if (insertionPoint >= 0) {
+      for (int i = 0; i <= insertionPoint && i < targetDoc.pages.count; i++) {
+        copyPageToDestination(targetDoc.pages[i], destinationDoc);
+      }
+    }
+
+    // 2. Copy selected source pages in chosen order
+    for (final srcIdx in selectedSourceIndices) {
+      if (srcIdx >= 0 && srcIdx < sourceDoc.pages.count) {
+        copyPageToDestination(sourceDoc.pages[srcIdx], destinationDoc);
+      }
+    }
+
+    // 3. Copy remaining target pages from insertionPoint + 1 to end
+    for (int i = insertionPoint + 1; i < targetDoc.pages.count; i++) {
+      if (i >= 0) {
+        copyPageToDestination(targetDoc.pages[i], destinationDoc);
+      }
+    }
+
+    targetDoc.dispose();
+    sourceDoc.dispose();
+
+    final List<int> resultBytes = await destinationDoc.save();
+    destinationDoc.dispose();
+    return Uint8List.fromList(resultBytes);
+  }
+
   /// Helper to copy page with preserved dimensions, zero margins, and explicit orientation.
-  void _copyPageToDestination(PdfPage page, PdfDocument destinationDoc) {
+  static void copyPageToDestination(PdfPage page, PdfDocument destinationDoc) {
     final section = destinationDoc.sections!.add();
     section.pageSettings.size = page.size;
     section.pageSettings.margins.all = 0;

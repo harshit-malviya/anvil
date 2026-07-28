@@ -21,6 +21,22 @@ class FileService {
     return result.files;
   }
 
+  /// Open OS file picker for selecting Image files (JPEG, PNG).
+  Future<List<PlatformFile>> pickImageFiles({bool allowMultiple = false}) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png'],
+      allowMultiple: allowMultiple,
+      withData: true,
+      withReadStream: true,
+    );
+
+    if (result == null || result.files.isEmpty) {
+      return [];
+    }
+    return result.files;
+  }
+
   /// Open OS save dialog to save a file.
   Future<String?> saveFile({
     required String defaultFileName,

@@ -88,13 +88,15 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Registered route `/pdf-password` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
   - Created comprehensive unit test suite `test/tools/pdf_password/pdf_password_controller_test.dart` testing auto-detection on load, corrupted/empty file rejection, password length & confirmation validations, Add Password encryption execution, Remove Password incorrect password rejection, and Remove Password decryption happy path.
 
-## 2026-07-28 — Session 10
-- Implemented PDF Insert Pages feature (`FEATURE_pdf_insert_pages.md`):
-  - Created `lib/tools/pdf_insert_pages/pdf_insert_pages_state.dart` with target and source document models, insertion point position index, tap-ordered page selection indices, and state getters.
-  - Created `lib/tools/pdf_insert_pages/pdf_insert_pages_controller.dart` supporting target/source loading & validation, password/corruption rejection, tap order selection toggles, quick insertion point controls, and Syncfusion PDF page splicing preserving per-page size and orientation.
-  - Created `lib/tools/pdf_insert_pages/pdf_insert_pages_screen.dart` with target PDF drop zone, target thumbnail grid with insertion point markers & live preview inserted block, source PDF drop zone, source page grid with checkboxes, stamp animation (`PAGES INSERTED`), and completion action buttons (`Open Folder`, `Save As...`, `Insert Into Another PDF`). Added direct numeric page input (`After Page: [ 180 ]`), mouse wheel horizontal scroll listener (`PointerScrollEvent`), visible scrollbar thumbs, and expandable vertical grid toggle for large 100+ page documents.
-  - Registered route `/pdf-insert-pages` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
-  - Created comprehensive unit test suite `test/tools/pdf_insert_pages/pdf_insert_pages_controller_test.dart` covering load target/source, password/corruption rejection, insert-at-start, insert-at-end, insert-in-middle, partial source selection with custom tap order, same file source & target, zero source selection guard, clearing source, and page dimension preservation.
+## 2026-07-28 — Session 11
+- Implemented PDF Insert Image as Page feature (`FEATURE_pdf_insert_image_as_page.md`):
+  - Refactored `PdfInsertPagesController` to expose `splicePages` static helper method for document splicing.
+  - Added `pickImageFiles` to `FileService` supporting JPEG and PNG selection.
+  - Created `lib/tools/pdf_insert_image_as_page/pdf_insert_image_as_page_state.dart` with `PageFitMode` enum (`matchNeighboringPage`, `fitToImage`) and state getters.
+  - Created `lib/tools/pdf_insert_image_as_page/pdf_insert_image_as_page_controller.dart` supporting target document loading & validation, password/corruption rejection, image format validation (JPEG/PNG), image decoding, oversized image downscaling (>3000px cap), fit mode configuration, insertion point controls, and image-to-PDF page conversion with explicit white background transparency flattening.
+  - Created `lib/tools/pdf_insert_image_as_page/pdf_insert_image_as_page_screen.dart` with target PDF drop zone, thumbnail grid with insertion point controls, image drop zone, image preview header, page fit mode selector, live preview grid block, stamp animation (`PAGE INSERTED`), and completion action buttons (`Open Folder`, `Save As...`, `Insert Another Image`).
+  - Registered route `/pdf-insert-image-as-page` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
+  - Created comprehensive unit test suite `test/tools/pdf_insert_image_as_page/pdf_insert_image_as_page_controller_test.dart` testing insert-at-start with `matchNeighboringPage`, insert-at-end with `fitToImage`, insert-in-middle with preceding neighbor matching, unsupported image format rejection, corrupted image rejection, zero-existing-pages fallback, protected target rejection, and corrupted target rejection.
 
 ## 4. Feature status tracker
 
@@ -109,13 +111,15 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | PDF to Image | `FEATURE_pdf_to_image.md` | Done | PDF to Image controller, UI, DPI estimates, and test suite passing |
 | PDF Password | `FEATURE_pdf_password.md` | Done | PDF Password controller, UI, Add/Remove protection, and test suite passing |
 | PDF Insert Pages | `docs/PHASE 3/FEATURE_pdf_insert_pages.md` | Done | PDF Insert Pages controller, UI, live preview block, and test suite passing |
+| PDF Insert Image as Page | `docs/PHASE 3/FEATURE_pdf_insert_image_as_page.md` | Done | PDF Insert Image as Page controller, UI, page fit modes, and test suite passing |
 | Image tools (v2) | *(spec pending)* | Not started | |
 
 ## 5. Decisions log
 
 ## 2026-07-28
-- Decision: Defaulted target insertion point to 'at the end' (`targetPageCount - 1`) upon loading target PDF.
-- Decision: Maintained manual tap order in `selectedSourcePageIndices` when pages are toggled individually, while defaulting to document order when 'Select All' is used.
+- Decision: Refactored `PdfInsertPagesController` to expose a static `splicePages` helper function, reusing page splicing logic directly for `PdfInsertImageAsPageController`.
+- Decision: Explicitly filled background rectangle with white color when converting image to single-page PDF to ensure PNG transparency flattens cleanly without black backgrounds.
+- Decision: Capped max image dimensions at 3000px and downscaled oversized source images during loading to avoid bloated output PDF file sizes.
 
 ## 2026-07-27
 - Decision: Used `google_fonts` to resolve `Space Grotesk`, `Inter`, and `IBM Plex Mono` dynamically for desktop and mobile targets.

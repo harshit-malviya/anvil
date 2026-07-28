@@ -78,5 +78,13 @@ class ToolRegistry {
       route: '/pdf-insert-pages',
       isAvailable: true,
     ),
+    ToolMetadata(
+      id: 'pdf_insert_image_as_page',
+      title: 'Insert Image as Page',
+      description: 'Insert a single image (JPEG or PNG) into an existing PDF document as a page.',
+      icon: Icons.add_photo_alternate_outlined,
+      route: '/pdf-insert-image-as-page',
+      isAvailable: true,
+    ),
   ];
 }
