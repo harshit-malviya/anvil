@@ -8,6 +8,7 @@ class ToolMetadata {
   final IconData icon;
   final String route;
   final bool isAvailable;
+  final List<String> keywords;
 
   const ToolMetadata({
     required this.id,
@@ -16,6 +17,7 @@ class ToolMetadata {
     required this.icon,
     required this.route,
     this.isAvailable = true,
+    this.keywords = const [],
   });
 }
 
@@ -29,6 +31,7 @@ class ToolRegistry {
       icon: Icons.picture_as_pdf_outlined,
       route: '/pdf-merge',
       isAvailable: true,
+      keywords: ['combine', 'join', 'attach', 'put together', 'one file'],
     ),
     ToolMetadata(
       id: 'pdf_page_manager',
@@ -37,6 +40,15 @@ class ToolRegistry {
       icon: Icons.grid_view_rounded,
       route: '/pdf-page-manager',
       isAvailable: true,
+      keywords: [
+        'remove page',
+        'delete page',
+        'rotate',
+        'reorder',
+        'rearrange',
+        'sideways',
+        'upside down',
+      ],
     ),
     ToolMetadata(
       id: 'pdf_split',
@@ -45,6 +57,7 @@ class ToolRegistry {
       icon: Icons.call_split_rounded,
       route: '/pdf-split',
       isAvailable: true,
+      keywords: ['separate', 'break apart', 'cut', 'divide', 'extract pages'],
     ),
     ToolMetadata(
       id: 'pdf_compress',
@@ -53,6 +66,7 @@ class ToolRegistry {
       icon: Icons.compress_rounded,
       route: '/pdf-compress',
       isAvailable: true,
+      keywords: ['shrink', 'reduce size', 'smaller', 'make smaller', 'file size'],
     ),
     ToolMetadata(
       id: 'pdf_to_image',
@@ -61,6 +75,14 @@ class ToolRegistry {
       icon: Icons.image_outlined,
       route: '/pdf-to-image',
       isAvailable: true,
+      keywords: [
+        'screenshot',
+        'jpg',
+        'png',
+        'picture',
+        'export as image',
+        'convert to picture',
+      ],
     ),
     ToolMetadata(
       id: 'pdf_password',
@@ -69,6 +91,7 @@ class ToolRegistry {
       icon: Icons.lock_outline_rounded,
       route: '/pdf-password',
       isAvailable: true,
+      keywords: ['lock', 'unlock', 'protect', 'encrypt', 'secure', 'remove password'],
     ),
     ToolMetadata(
       id: 'pdf_insert_pages',
@@ -77,6 +100,7 @@ class ToolRegistry {
       icon: Icons.post_add_rounded,
       route: '/pdf-insert-pages',
       isAvailable: true,
+      keywords: ['add pages', 'combine part', 'insert'],
     ),
     ToolMetadata(
       id: 'pdf_insert_image_as_page',
@@ -85,6 +109,7 @@ class ToolRegistry {
       icon: Icons.add_photo_alternate_outlined,
       route: '/pdf-insert-image-as-page',
       isAvailable: true,
+      keywords: ['add photo', 'add screenshot', 'missing page', 'add picture'],
     ),
   ];
 }

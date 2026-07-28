@@ -98,6 +98,13 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Registered route `/pdf-insert-image-as-page` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
   - Created comprehensive unit test suite `test/tools/pdf_insert_image_as_page/pdf_insert_image_as_page_controller_test.dart` testing insert-at-start with `matchNeighboringPage`, insert-at-end with `fitToImage`, insert-in-middle with preceding neighbor matching, unsupported image format rejection, corrupted image rejection, zero-existing-pages fallback, protected target rejection, and corrupted target rejection.
 
+## 2026-07-28 — Session 12
+- Implemented Tool Search feature (`docs/PHASE 3/FEATURE_tool_search.md`):
+  - Added `keywords` field to `ToolMetadata` in `lib/tools/registry.dart` and populated keyword synonyms for all 8 registered tools.
+  - Created `lib/home/tool_search_controller.dart` with pure function `filterTools` (all-words, case-insensitive, title/description/keywords matching) and Riverpod providers (`searchQueryProvider`, `filteredToolsProvider`).
+  - Refactored `HomeScreen` in `lib/home/home_screen.dart` with search input (6px corner radius, `pegGrey` resting border, `emberCopper` focus border, 70% opacity placeholder, clear button) and zero-match empty state presentation.
+  - Created unit test suite `test/home/tool_search_controller_test.dart` testing empty query, whitespace-only query, title matching, keyword matching, description matching, multi-word matching, zero matches, and safe handling of empty keyword lists.
+
 ## 4. Feature status tracker
 
 | Feature | Spec file | Status | Notes |
@@ -112,6 +119,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | PDF Password | `FEATURE_pdf_password.md` | Done | PDF Password controller, UI, Add/Remove protection, and test suite passing |
 | PDF Insert Pages | `docs/PHASE 3/FEATURE_pdf_insert_pages.md` | Done | PDF Insert Pages controller, UI, live preview block, and test suite passing |
 | PDF Insert Image as Page | `docs/PHASE 3/FEATURE_pdf_insert_image_as_page.md` | Done | PDF Insert Image as Page controller, UI, page fit modes, and test suite passing |
+| Tool Search | `docs/PHASE 3/FEATURE_tool_search.md` | Done | Tool search controller, home screen filtering, and unit test suite passing |
 | Image tools (v2) | *(spec pending)* | Not started | |
 
 ## 5. Decisions log
