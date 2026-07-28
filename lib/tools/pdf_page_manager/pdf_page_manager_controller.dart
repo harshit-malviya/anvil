@@ -231,7 +231,13 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       final sourceDoc = PdfDocument(inputBytes: state.fileBytes!);
       final destinationDoc = PdfDocument();
 
-      for (final item in state.activePages) {
+      for (int i = 0; i < state.activePages.length; i++) {
+        final item = state.activePages[i];
+        state = state.copyWith(
+          progressMessage: "Arranging page ${i + 1} of ${state.activePages.length}…",
+        );
+        await Future.delayed(const Duration(milliseconds: 15));
+
         final sourcePage = sourceDoc.pages[item.originalIndex];
         final section = destinationDoc.sections!.add();
         section.pageSettings.size = sourcePage.size;

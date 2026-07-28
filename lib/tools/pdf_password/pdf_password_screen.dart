@@ -9,6 +9,7 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_bar.dart';
+import '../../core/widgets/task_progress_dialog.dart';
 import 'pdf_password_controller.dart';
 import 'pdf_password_state.dart';
 
@@ -24,6 +25,19 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _obscureRemovalPassword = true;
+
+  Future<void> _handleSubmit() async {
+    final controller = ref.read(pdfPasswordControllerProvider.notifier);
+    final state = ref.read(pdfPasswordControllerProvider);
+    final isAdd = state.mode == PdfPasswordMode.add;
+    await showTaskProgressDialog<String>(
+      context: context,
+      title: isAdd ? 'Protecting PDF' : 'Removing Protection',
+      defaultMessage: isAdd ? 'Encrypting file…' : 'Decrypting file…',
+      getMessage: () => ref.read(pdfPasswordControllerProvider).progressMessage ?? (isAdd ? 'Encrypting file…' : 'Decrypting file…'),
+      task: () => controller.submit(),
+    );
+  }
 
   Future<void> _pickFile() async {
     final files = await _fileService.pickPdfFiles(allowMultiple: false);
@@ -95,10 +109,6 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TaskProgressBar(
-                isVisible: state.isProcessing,
-                message: state.progressMessage ?? 'Processing PDF…',
-              ),
               if (state.errorMessage != null)
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(
@@ -351,7 +361,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                     icon: Icons.lock_rounded,
                     variant: AppButtonVariant.primary,
                     isLoading: state.isProcessing,
-                    onPressed: state.canSubmitAdd ? controller.submit : null,
+                    onPressed: state.canSubmitAdd ? _handleSubmit : null,
                   ),
                 ] else ...[
                   Text(
@@ -397,7 +407,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                     icon: Icons.lock_open_rounded,
                     variant: AppButtonVariant.primary,
                     isLoading: state.isProcessing,
-                    onPressed: state.canSubmitRemove ? controller.submit : null,
+                    onPressed: state.canSubmitRemove ? _handleSubmit : null,
                   ),
                 ],
               ],

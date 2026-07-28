@@ -131,7 +131,13 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
     try {
       final destinationDoc = PdfDocument();
 
-      for (final item in state.files) {
+      for (int f = 0; f < state.files.length; f++) {
+        final item = state.files[f];
+        state = state.copyWith(
+          progressMessage: "Merging document ${f + 1} of ${state.files.length}…",
+        );
+        await Future.delayed(const Duration(milliseconds: 15));
+
         final sourceDoc = PdfDocument(inputBytes: item.bytes);
         for (int i = 0; i < sourceDoc.pages.count; i++) {
           final page = sourceDoc.pages[i];

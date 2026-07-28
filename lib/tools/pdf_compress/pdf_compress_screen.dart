@@ -9,6 +9,7 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_bar.dart';
+import '../../core/widgets/task_progress_dialog.dart';
 import 'pdf_compress_controller.dart';
 import 'pdf_compress_state.dart';
 
@@ -21,6 +22,17 @@ class PdfCompressScreen extends ConsumerStatefulWidget {
 
 class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
   final FileService _fileService = FileService();
+
+  Future<void> _handleCompress() async {
+    final controller = ref.read(pdfCompressControllerProvider.notifier);
+    await showTaskProgressDialog<String>(
+      context: context,
+      title: 'Compressing PDF',
+      defaultMessage: 'Reducing file size…',
+      getMessage: () => ref.read(pdfCompressControllerProvider).progressMessage ?? 'Reducing file size…',
+      task: () => controller.compress(),
+    );
+  }
 
   Future<void> _pickFile() async {
     final files = await _fileService.pickPdfFiles(allowMultiple: false);
@@ -92,10 +104,6 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TaskProgressBar(
-                isVisible: state.isProcessing,
-                message: state.progressMessage ?? 'Compressing PDF…',
-              ),
               if (state.errorMessage != null)
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(
@@ -275,7 +283,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                 icon: Icons.compress_rounded,
                 variant: AppButtonVariant.primary,
                 isLoading: state.isProcessing,
-                onPressed: state.isProcessing ? null : controller.compress,
+                onPressed: state.isProcessing ? null : _handleCompress,
               ),
             ],
           ),

@@ -9,6 +9,7 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_bar.dart';
+import '../../core/widgets/task_progress_dialog.dart';
 import 'pdf_split_controller.dart';
 import 'pdf_split_state.dart';
 
@@ -95,12 +96,23 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
         ),
       );
       if (confirmGap != true) return;
-
-      await controller.split(overrideGapCheck: true);
+      await showTaskProgressDialog<String>(
+        context: context,
+        title: 'Splitting PDF',
+        defaultMessage: 'Creating files…',
+        getMessage: () => ref.read(pdfSplitControllerProvider).progressMessage ?? 'Creating files…',
+        task: () => controller.split(overrideGapCheck: true),
+      );
       return;
     }
 
-    await controller.split();
+    await showTaskProgressDialog<String>(
+      context: context,
+      title: 'Splitting PDF',
+      defaultMessage: 'Creating files…',
+      getMessage: () => ref.read(pdfSplitControllerProvider).progressMessage ?? 'Creating files…',
+      task: () => controller.split(),
+    );
   }
 
   Future<void> _openOutputFolder(String folderPath) async {
@@ -204,10 +216,6 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TaskProgressBar(
-                isVisible: state.isProcessing,
-                message: state.progressMessage ?? 'Splitting PDF…',
-              ),
               if (state.errorMessage != null)
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(

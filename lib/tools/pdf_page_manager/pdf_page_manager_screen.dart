@@ -11,6 +11,7 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_bar.dart';
+import '../../core/widgets/task_progress_dialog.dart';
 import 'pdf_page_manager_controller.dart';
 import 'pdf_page_manager_state.dart';
 
@@ -23,6 +24,17 @@ class PdfPageManagerScreen extends ConsumerStatefulWidget {
 
 class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
   final FileService _fileService = FileService();
+
+  Future<void> _handleApplyChanges() async {
+    final controller = ref.read(pdfPageManagerControllerProvider.notifier);
+    await showTaskProgressDialog<String>(
+      context: context,
+      title: 'Applying Page Changes',
+      defaultMessage: 'Saving changes…',
+      getMessage: () => ref.read(pdfPageManagerControllerProvider).progressMessage ?? 'Saving changes…',
+      task: () => controller.applyChanges(),
+    );
+  }
 
   Future<void> _pickAndLoadFile() async {
     final pickedFiles = await _fileService.pickPdfFiles(allowMultiple: false);
@@ -142,10 +154,6 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TaskProgressBar(
-                  isVisible: state.isProcessing,
-                  message: state.progressMessage ?? 'Applying page changes…',
-                ),
                 if (state.errorMessage != null)
                   _buildErrorBanner(context, state.errorMessage!, controller),
                 Expanded(
@@ -311,7 +319,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                 variant: AppButtonVariant.primary,
                 icon: Icons.check_circle_outline_rounded,
                 isLoading: state.isProcessing,
-                onPressed: state.canApply ? () => controller.applyChanges() : null,
+                onPressed: state.canApply ? _handleApplyChanges : null,
               ),
             ],
           ),

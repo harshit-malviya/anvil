@@ -9,6 +9,7 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_bar.dart';
+import '../../core/widgets/task_progress_dialog.dart';
 import 'pdf_merge_controller.dart';
 import 'pdf_merge_state.dart';
 
@@ -21,6 +22,17 @@ class PdfMergeScreen extends ConsumerStatefulWidget {
 
 class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
   final FileService _fileService = FileService();
+
+  Future<void> _handleMerge() async {
+    final controller = ref.read(pdfMergeControllerProvider.notifier);
+    await showTaskProgressDialog<String>(
+      context: context,
+      title: 'Merging PDFs',
+      defaultMessage: 'Combining documents…',
+      getMessage: () => ref.read(pdfMergeControllerProvider).progressMessage ?? 'Combining documents…',
+      task: () => controller.merge(),
+    );
+  }
 
   Future<void> _pickAndAddFiles() async {
     final pickedFiles = await _fileService.pickPdfFiles(allowMultiple: true);
@@ -73,10 +85,6 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TaskProgressBar(
-                isVisible: state.isProcessing,
-                message: state.progressMessage ?? 'Merging PDFs…',
-              ),
               if (state.errorMessage != null) _buildErrorBanner(context, state.errorMessage!, controller),
               Expanded(
                 child: state.outputPath != null
@@ -367,7 +375,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
           child: AppButton(
             label: 'Merge ${state.files.length} PDFs',
             isLoading: state.isProcessing,
-            onPressed: state.canMerge ? () => controller.merge() : null,
+            onPressed: state.canMerge ? _handleMerge : null,
           ),
         ),
       ],

@@ -161,6 +161,11 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
       }
 
       for (int i = 0; i < sourceDoc.pages.count; i++) {
+        state = state.copyWith(
+          progressMessage: "Compressing page ${i + 1} of ${sourceDoc.pages.count}…",
+        );
+        await Future.delayed(const Duration(milliseconds: 15));
+
         final sourcePage = sourceDoc.pages[i];
         final section = destDoc.sections!.add();
         section.pageSettings.size = sourcePage.size;

@@ -176,8 +176,12 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
 
       destDoc.security.userPassword = state.password;
       destDoc.security.ownerPassword = state.password;
-
       for (int i = 0; i < sourceDoc.pages.count; i++) {
+        state = state.copyWith(
+          progressMessage: "Encrypting page ${i + 1} of ${sourceDoc.pages.count}…",
+        );
+        await Future.delayed(const Duration(milliseconds: 15));
+
         final sourcePage = sourceDoc.pages[i];
         final section = destDoc.sections!.add();
         section.pageSettings.size = sourcePage.size;
@@ -268,6 +272,11 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       final destDoc = PdfDocument();
 
       for (int i = 0; i < sourceDoc.pages.count; i++) {
+        state = state.copyWith(
+          progressMessage: "Decrypting page ${i + 1} of ${sourceDoc.pages.count}…",
+        );
+        await Future.delayed(const Duration(milliseconds: 15));
+
         final sourcePage = sourceDoc.pages[i];
         final section = destDoc.sections!.add();
         section.pageSettings.size = sourcePage.size;

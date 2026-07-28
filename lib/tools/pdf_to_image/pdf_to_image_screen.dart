@@ -10,6 +10,7 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_bar.dart';
+import '../../core/widgets/task_progress_dialog.dart';
 import 'pdf_to_image_controller.dart';
 import 'pdf_to_image_state.dart';
 
@@ -22,6 +23,18 @@ class PdfToImageScreen extends ConsumerStatefulWidget {
 
 class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
   final FileService _fileService = FileService();
+
+  Future<void> _handleExport() async {
+    final controller = ref.read(pdfToImageControllerProvider.notifier);
+    await showTaskProgressDialog<String>(
+      context: context,
+      title: 'Exporting Images',
+      defaultMessage: 'Rendering PDF pages…',
+      getMessage: () => ref.read(pdfToImageControllerProvider).progressMessage ?? 'Rendering PDF pages…',
+      getProgressPercent: () => ref.read(pdfToImageControllerProvider).progressPercent,
+      task: () => controller.export(),
+    );
+  }
 
   Future<void> _pickFile() async {
     final files = await _fileService.pickPdfFiles(allowMultiple: false);
@@ -156,11 +169,6 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TaskProgressBar(
-                isVisible: state.isProcessing,
-                message: state.progressMessage ?? 'Exporting images…',
-                progressPercent: state.progressPercent,
-              ),
               if (state.errorMessage != null)
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(
@@ -720,7 +728,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                   icon: state.isProcessing ? null : Icons.download_rounded,
                   variant: AppButtonVariant.primary,
                   isLoading: state.isProcessing,
-                  onPressed: state.canExport ? () => controller.export() : null,
+                  onPressed: state.canExport ? _handleExport : null,
                 ),
               ],
             ),

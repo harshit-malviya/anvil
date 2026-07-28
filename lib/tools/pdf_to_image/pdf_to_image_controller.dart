@@ -324,6 +324,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
             progressMessage: "Exporting page ${pageIdx + 1} (${i + 1} of ${sortedPages.length})…",
             progressPercent: progressRatio,
           );
+          await Future.delayed(const Duration(milliseconds: 15));
 
           Uint8List? imageBytes;
           if (_customRenderer != null) {

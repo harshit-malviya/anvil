@@ -342,6 +342,11 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       final sourceDoc = PdfDocument(inputBytes: state.fileBytes!);
 
       for (int rIdx = 0; rIdx < ranges.length; rIdx++) {
+        state = state.copyWith(
+          progressMessage: "Splitting file ${rIdx + 1} of ${ranges.length}…",
+        );
+        await Future.delayed(const Duration(milliseconds: 15));
+
         final range = ranges[rIdx];
         final destDoc = PdfDocument();
 
