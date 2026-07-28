@@ -7,6 +7,7 @@ import '../tools/pdf_split/pdf_split_screen.dart';
 import '../tools/pdf_compress/pdf_compress_screen.dart';
 import '../tools/pdf_to_image/pdf_to_image_screen.dart';
 import '../tools/pdf_password/pdf_password_screen.dart';
+import '../tools/pdf_insert_pages/pdf_insert_pages_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -38,6 +39,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/pdf-password',
       builder: (context, state) => const PdfPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/pdf-insert-pages',
+      builder: (context, state) => const PdfInsertPagesScreen(),
     ),
   ],
 );

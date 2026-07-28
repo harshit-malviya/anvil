@@ -70,5 +70,13 @@ class ToolRegistry {
       route: '/pdf-password',
       isAvailable: true,
     ),
+    ToolMetadata(
+      id: 'pdf_insert_pages',
+      title: 'Insert Pages',
+      description: 'Insert pages from another PDF at a specific position into your document.',
+      icon: Icons.post_add_rounded,
+      route: '/pdf-insert-pages',
+      isAvailable: true,
+    ),
   ];
 }

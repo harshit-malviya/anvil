@@ -88,6 +88,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Registered route `/pdf-password` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
   - Created comprehensive unit test suite `test/tools/pdf_password/pdf_password_controller_test.dart` testing auto-detection on load, corrupted/empty file rejection, password length & confirmation validations, Add Password encryption execution, Remove Password incorrect password rejection, and Remove Password decryption happy path.
 
+## 2026-07-28 — Session 10
+- Implemented PDF Insert Pages feature (`FEATURE_pdf_insert_pages.md`):
+  - Created `lib/tools/pdf_insert_pages/pdf_insert_pages_state.dart` with target and source document models, insertion point position index, tap-ordered page selection indices, and state getters.
+  - Created `lib/tools/pdf_insert_pages/pdf_insert_pages_controller.dart` supporting target/source loading & validation, password/corruption rejection, tap order selection toggles, quick insertion point controls, and Syncfusion PDF page splicing preserving per-page size and orientation.
+  - Created `lib/tools/pdf_insert_pages/pdf_insert_pages_screen.dart` with target PDF drop zone, target thumbnail grid with insertion point markers & live preview inserted block, source PDF drop zone, source page grid with checkboxes, stamp animation (`PAGES INSERTED`), and completion action buttons (`Open Folder`, `Save As...`, `Insert Into Another PDF`).
+  - Registered route `/pdf-insert-pages` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
+  - Created comprehensive unit test suite `test/tools/pdf_insert_pages/pdf_insert_pages_controller_test.dart` covering load target/source, password/corruption rejection, insert-at-start, insert-at-end, insert-in-middle, partial source selection with custom tap order, same file source & target, zero source selection guard, clearing source, and page dimension preservation.
+
 ## 4. Feature status tracker
 
 | Feature | Spec file | Status | Notes |
@@ -100,9 +108,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | PDF Compress | `FEATURE_pdf_compress.md` | Done | PDF Compress controller, UI, before/after size badge, and test suite passing |
 | PDF to Image | `FEATURE_pdf_to_image.md` | Done | PDF to Image controller, UI, DPI estimates, and test suite passing |
 | PDF Password | `FEATURE_pdf_password.md` | Done | PDF Password controller, UI, Add/Remove protection, and test suite passing |
+| PDF Insert Pages | `docs/PHASE 3/FEATURE_pdf_insert_pages.md` | Done | PDF Insert Pages controller, UI, live preview block, and test suite passing |
 | Image tools (v2) | *(spec pending)* | Not started | |
 
 ## 5. Decisions log
+
+## 2026-07-28
+- Decision: Defaulted target insertion point to 'at the end' (`targetPageCount - 1`) upon loading target PDF.
+- Decision: Maintained manual tap order in `selectedSourcePageIndices` when pages are toggled individually, while defaulting to document order when 'Select All' is used.
 
 ## 2026-07-27
 - Decision: Used `google_fonts` to resolve `Space Grotesk`, `Inter`, and `IBM Plex Mono` dynamically for desktop and mobile targets.
