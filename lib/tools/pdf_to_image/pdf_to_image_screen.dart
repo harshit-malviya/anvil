@@ -294,10 +294,14 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
               const SizedBox(height: 24),
 
               // Page Selection Header & Actions
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
                 children: [
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         'Select Pages',
@@ -321,6 +325,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                     ],
                   ),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       TextButton(
                         onPressed: state.isProcessing ? null : controller.selectAll,
@@ -490,29 +495,28 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
           // Format Selector
           Text('Image Format', style: AppTypography.titleMedium(brightness)),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
             children: ImageFormat.values.map((fmt) {
               final isSelected = state.format == fmt;
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: InkWell(
-                  onTap: state.isProcessing ? null : () => controller.setFormat(fmt),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary(brightness) : AppColors.background(brightness),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isSelected ? AppColors.primary(brightness) : AppColors.pegGrey.withValues(alpha: 0.5),
-                      ),
+              return InkWell(
+                onTap: state.isProcessing ? null : () => controller.setFormat(fmt),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.primary(brightness) : AppColors.background(brightness),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isSelected ? AppColors.primary(brightness) : AppColors.pegGrey.withValues(alpha: 0.5),
                     ),
-                    child: Text(
-                      fmt.label,
-                      style: AppTypography.labelSmall(brightness).copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : AppColors.text(brightness),
-                      ),
+                  ),
+                  child: Text(
+                    fmt.label,
+                    style: AppTypography.labelSmall(brightness).copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? Colors.white : AppColors.text(brightness),
                     ),
                   ),
                 ),
