@@ -38,4 +38,20 @@ abstract class AppColors {
 
   static Color secondary(Brightness brightness) =>
       brightness == Brightness.dark ? anvilTealDark : anvilTeal;
+
+  // Disabled State Tokens
+  static Color disabledBackground(Brightness brightness) =>
+      brightness == Brightness.dark
+          ? const Color(0xFF26292E)
+          : const Color(0xFFE2DFD7);
+
+  static Color disabledText(Brightness brightness) =>
+      brightness == Brightness.dark
+          ? const Color(0xFF6C7075)
+          : const Color(0xFF9E9B93);
+
+  static Color disabledBorder(Brightness brightness) =>
+      brightness == Brightness.dark
+          ? const Color(0xFF32363C)
+          : const Color(0xFFD0CDC5);
 }

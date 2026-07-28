@@ -174,7 +174,12 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                   label: const Text('Add More'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.primary(brightness),
-                    side: BorderSide(color: AppColors.primary(brightness)),
+                    disabledForegroundColor: AppColors.disabledText(brightness),
+                    side: BorderSide(
+                      color: state.isProcessing
+                          ? AppColors.disabledBorder(brightness)
+                          : AppColors.primary(brightness),
+                    ),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.0)),
                   ),
                 ),
@@ -184,7 +189,9 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                   child: Text(
                     'Clear All',
                     style: AppTypography.bodyMedium(brightness).copyWith(
-                      color: AppColors.rustRed,
+                      color: state.isProcessing
+                          ? AppColors.disabledText(brightness)
+                          : AppColors.rustRed,
                     ),
                   ),
                 ),

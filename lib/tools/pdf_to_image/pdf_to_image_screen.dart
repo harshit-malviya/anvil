@@ -337,13 +337,24 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                         onPressed: state.isProcessing ? null : controller.selectAll,
                         child: Text(
                           'Select All',
-                          style: AppTypography.labelSmall(brightness).copyWith(color: AppColors.primary(brightness)),
+                          style: AppTypography.labelSmall(brightness).copyWith(
+                            color: state.isProcessing
+                                ? AppColors.disabledText(brightness)
+                                : AppColors.primary(brightness),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       TextButton(
                         onPressed: state.isProcessing ? null : controller.selectNone,
-                        child: Text('Select None', style: AppTypography.labelSmall(brightness)),
+                        child: Text(
+                          'Select None',
+                          style: AppTypography.labelSmall(brightness).copyWith(
+                            color: state.isProcessing
+                                ? AppColors.disabledText(brightness)
+                                : AppColors.text(brightness),
+                          ),
+                        ),
                       ),
                     ],
                   ),

@@ -433,7 +433,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                     IconButton(
                       icon: const Icon(Icons.rotate_right_rounded),
                       tooltip: 'Rotate 90° (${page.rotation}°)',
-                      color: AppColors.anvilTeal,
+                      color: page.isDeleted ? AppColors.disabledText(brightness) : AppColors.anvilTeal,
                       onPressed: page.isDeleted ? null : () => controller.rotatePage(index),
                     ),
                     IconButton(
