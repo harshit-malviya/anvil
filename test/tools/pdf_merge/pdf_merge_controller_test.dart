@@ -256,5 +256,31 @@ void main() {
       mergedDoc.dispose();
       tempDir.deleteSync(recursive: true);
     });
+
+    test('Merging with Hindi filename ("भारत की नदियां #1.pdf") renders divider page without throwing', () async {
+      final letterDoc = await createValidPdf(pagesCount: 1, pageSize: PdfPageSize.letter);
+      final hindiDoc = await createValidPdf(pagesCount: 1, pageSize: PdfPageSize.a4);
+
+      final pf1 = PlatformFile(name: 'first_document.pdf', size: letterDoc.length, bytes: letterDoc);
+      final pf2 = PlatformFile(name: 'भारत की नदियां #1.pdf', size: hindiDoc.length, bytes: hindiDoc);
+
+      await controller.addFiles([pf1, pf2]);
+      controller.setInsertDividers(true);
+
+      final tempDir = Directory.systemTemp.createTempSync('anvil_merge_hindi_test');
+      final targetPath = '${tempDir.path}${Platform.pathSeparator}hindi_merged.pdf';
+      final resultPath = await controller.merge(customOutputPath: targetPath);
+      expect(resultPath, isNotNull);
+
+      final outputFile = File(targetPath);
+      final mergedDoc = PdfDocument(inputBytes: outputFile.readAsBytesSync());
+
+      // 1 (file1) + 1 (divider before hindi file) + 1 (file2) = 3 pages
+      expect(mergedDoc.pages.count, equals(3));
+      expect(mergedDoc.pages[1].size.height, equals(72.0));
+
+      mergedDoc.dispose();
+      tempDir.deleteSync(recursive: true);
+    });
   });
 }

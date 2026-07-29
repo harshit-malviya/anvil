@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:characters/characters.dart';
 import 'package:flutter/foundation.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
@@ -11,11 +12,13 @@ class MergeParams {
   final List<Uint8List> fileBytesList;
   final List<String> fileNames;
   final bool insertDividers;
+  final Uint8List? fontBytes;
 
   const MergeParams({
     required this.fileBytesList,
     this.fileNames = const [],
     this.insertDividers = false,
+    this.fontBytes,
   });
 }
 
@@ -52,7 +55,17 @@ Future<Uint8List> isolateMergePdfs(MergeParams params) async {
 
       final fileName = params.fileNames.length > k ? params.fileNames[k] : '';
       if (fileName.isNotEmpty) {
-        final font = PdfStandardFont(PdfFontFamily.courier, 12);
+        PdfFont font;
+        if (params.fontBytes != null && params.fontBytes!.isNotEmpty) {
+          try {
+            font = PdfTrueTypeFont(params.fontBytes!, 12);
+          } catch (_) {
+            font = PdfStandardFont(PdfFontFamily.courier, 12);
+          }
+        } else {
+          font = PdfStandardFont(PdfFontFamily.courier, 12);
+        }
+
         final textBrush = PdfSolidBrush(PdfColor(0x1E, 0x22, 0x26));
         final maxAllowedWidth = dividerWidth * 0.9;
 
@@ -61,7 +74,7 @@ Future<Uint8List> isolateMergePdfs(MergeParams params) async {
 
         if (textSize.width > maxAllowedWidth) {
           while (displayText.isNotEmpty && font.measureString('$displayText...').width > maxAllowedWidth) {
-            displayText = displayText.substring(0, displayText.length - 1);
+            displayText = displayText.characters.skipLast(1).toString();
           }
           displayText = '$displayText...';
           textSize = font.measureString(displayText);

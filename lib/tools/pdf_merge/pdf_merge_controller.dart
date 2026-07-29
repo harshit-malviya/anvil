@@ -8,6 +8,8 @@ import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import 'pdf_merge_state.dart';
 
+import 'package:flutter/services.dart' show rootBundle;
+
 final pdfMergeControllerProvider =
     StateNotifierProvider<PdfMergeController, PdfMergeState>((ref) {
   return PdfMergeController();
@@ -136,10 +138,21 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
       // Run heavy PDF work on a background isolate
       final fileBytesList = state.files.map((f) => f.bytes).toList();
       final fileNames = state.files.map((f) => p.basenameWithoutExtension(f.name)).toList();
+      Uint8List? fontBytes;
+      if (state.insertDividers) {
+        try {
+          final fontData = await rootBundle.load('assets/fonts/NotoSansDevanagari-Regular.ttf');
+          fontBytes = fontData.buffer.asUint8List();
+        } catch (_) {
+          fontBytes = null;
+        }
+      }
+
       final params = MergeParams(
         fileBytesList: fileBytesList,
         fileNames: fileNames,
         insertDividers: state.insertDividers,
+        fontBytes: fontBytes,
       );
       final Uint8List mergedBytes = await compute(isolateMergePdfs, params);
 

@@ -110,10 +110,11 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 
 ## 2026-07-29 — Session 14
 - Implemented optional divider pages feature for PDF Merge (`docs/PHASE 3/TASK_pdf_merge_divider.md`):
-  - Updated `isolateMergePdfs` in `lib/core/services/pdf_isolate_worker.dart` to accept `MergeParams` and build 1-inch (72pt) white divider pages before source files 2..N with centered/truncated filename in monospace type style (`PdfStandardFont(PdfFontFamily.courier, 12)`).
+  - Updated `isolateMergePdfs` in `lib/core/services/pdf_isolate_worker.dart` to accept `MergeParams` and build 1-inch (72pt) white divider pages before source files 2..N with centered/truncated filename.
+  - Added Unicode Devanagari / Hindi filename support (e.g. `भारत की नदियां #1.pdf`): bundled `NotoSansDevanagari-Regular.ttf` asset in `assets/fonts/` and registered in `pubspec.yaml`; `isolateMergePdfs` embeds `PdfTrueTypeFont` when `fontBytes` are provided, with grapheme cluster truncation via `package:characters`.
   - Updated `PdfMergeState` and `PdfMergeController` with `insertDividers` property and `setInsertDividers` toggle.
   - Added "Insert a divider page between files" checkbox in `lib/tools/pdf_merge/pdf_merge_screen.dart`.
-  - Added unit test cases in `test/tools/pdf_merge/pdf_merge_controller_test.dart` for divider insertion, height/width matching, and state toggles.
+  - Added unit test cases in `test/tools/pdf_merge/pdf_merge_controller_test.dart` for divider insertion, height/width matching, Hindi filename rendering, and state toggles.
 
 ## 2026-07-29 — Session 13
 - Fixed critical UI freezing during PDF processing by moving all Syncfusion PDF work to background isolates:
