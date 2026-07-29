@@ -55,6 +55,8 @@ class PdfMergeState {
   final bool isProcessing;
   final String? progressMessage;
   final bool insertDividers;
+  final double dividerFontSize;
+  final bool dividerIsBold;
 
   const PdfMergeState({
     this.files = const [],
@@ -63,6 +65,8 @@ class PdfMergeState {
     this.isProcessing = false,
     this.progressMessage,
     this.insertDividers = false,
+    this.dividerFontSize = 14.0,
+    this.dividerIsBold = false,
   });
 
   bool get canMerge => files.length >= 2 && !isProcessing;
@@ -77,6 +81,8 @@ class PdfMergeState {
     String? progressMessage,
     bool resetProgressMessage = false,
     bool? insertDividers,
+    double? dividerFontSize,
+    bool? dividerIsBold,
   }) {
     return PdfMergeState(
       files: files ?? this.files,
@@ -85,6 +91,8 @@ class PdfMergeState {
       isProcessing: isProcessing ?? this.isProcessing,
       progressMessage: resetProgressMessage ? null : (progressMessage ?? this.progressMessage),
       insertDividers: insertDividers ?? this.insertDividers,
+      dividerFontSize: dividerFontSize ?? this.dividerFontSize,
+      dividerIsBold: dividerIsBold ?? this.dividerIsBold,
     );
   }
 }

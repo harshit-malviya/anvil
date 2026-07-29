@@ -284,5 +284,44 @@ void main() {
       mergedDoc.dispose();
       tempDir.deleteSync(recursive: true);
     });
+
+    test('setDividerFontSize and setDividerIsBold update state correctly', () {
+      expect(controller.testState.dividerFontSize, equals(14.0));
+      expect(controller.testState.dividerIsBold, isFalse);
+
+      controller.setDividerFontSize(18.0);
+      expect(controller.testState.dividerFontSize, equals(18.0));
+
+      controller.setDividerIsBold(true);
+      expect(controller.testState.dividerIsBold, isTrue);
+    });
+
+    test('Merging with custom divider font size and bold option enabled creates divider page successfully', () async {
+      final doc1 = await createValidPdf(pagesCount: 1, pageSize: PdfPageSize.letter);
+      final doc2 = await createValidPdf(pagesCount: 1, pageSize: PdfPageSize.letter);
+
+      final pf1 = PlatformFile(name: 'doc1.pdf', size: doc1.length, bytes: doc1);
+      final pf2 = PlatformFile(name: 'doc2.pdf', size: doc2.length, bytes: doc2);
+
+      await controller.addFiles([pf1, pf2]);
+      controller.setInsertDividers(true);
+      controller.setDividerFontSize(20.0);
+      controller.setDividerIsBold(true);
+
+      final tempDir = Directory.systemTemp.createTempSync('anvil_merge_custom_font_test');
+      final targetPath = '${tempDir.path}${Platform.pathSeparator}custom_font_merged.pdf';
+      final resultPath = await controller.merge(customOutputPath: targetPath);
+
+      expect(resultPath, isNotNull);
+      final outputFile = File(targetPath);
+      expect(outputFile.existsSync(), isTrue);
+
+      final mergedDoc = PdfDocument(inputBytes: outputFile.readAsBytesSync());
+      expect(mergedDoc.pages.count, equals(3));
+      expect(mergedDoc.pages[1].size.height, equals(72.0));
+
+      mergedDoc.dispose();
+      tempDir.deleteSync(recursive: true);
+    });
   });
 }

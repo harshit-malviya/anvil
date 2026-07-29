@@ -221,35 +221,219 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        InkWell(
-          onTap: state.isProcessing
-              ? null
-              : () => controller.setInsertDividers(!state.insertDividers),
-          borderRadius: BorderRadius.circular(6.0),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: Checkbox(
-                    value: state.insertDividers,
-                    onChanged: state.isProcessing
-                        ? null
-                        : (val) => controller.setInsertDividers(val ?? false),
-                    activeColor: AppColors.primary(brightness),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.cardBackground(brightness),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(
+              color: state.insertDividers
+                  ? AppColors.primary(brightness).withValues(alpha: 0.5)
+                  : AppColors.pegGrey.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkWell(
+                onTap: state.isProcessing
+                    ? null
+                    : () => controller.setInsertDividers(!state.insertDividers),
+                borderRadius: BorderRadius.circular(8.0),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Checkbox(
+                          value: state.insertDividers,
+                          onChanged: state.isProcessing
+                              ? null
+                              : (val) => controller.setInsertDividers(val ?? false),
+                          activeColor: AppColors.primary(brightness),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Insert a divider page between files',
+                        style: AppTypography.bodyMedium(brightness).copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                Text(
-                  'Insert a divider page between files',
-                  style: AppTypography.bodyMedium(brightness),
+              ),
+              if (state.insertDividers) ...[
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(14.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Font size control & Bold option row
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Font Size:',
+                            style: AppTypography.bodyMedium(brightness).copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${state.dividerFontSize.round()} pt',
+                            style: AppTypography.mono(brightness).copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary(brightness),
+                            ),
+                          ),
+                          Expanded(
+                            child: SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: 4,
+                                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                              ),
+                              child: Slider(
+                                value: state.dividerFontSize,
+                                min: 10.0,
+                                max: 24.0,
+                                divisions: 14,
+                                label: '${state.dividerFontSize.round()} pt',
+                                activeColor: AppColors.primary(brightness),
+                                onChanged: state.isProcessing
+                                    ? null
+                                    : (val) => controller.setDividerFontSize(val),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Bold toggle
+                          FilterChip(
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'B',
+                                  style: AppTypography.bodyMedium(brightness).copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: state.dividerIsBold
+                                        ? AppColors.primary(brightness)
+                                        : AppColors.text(brightness),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Text('Bold', style: AppTypography.bodyMedium(brightness)),
+                              ],
+                            ),
+                            selected: state.dividerIsBold,
+                            onSelected: state.isProcessing
+                                ? null
+                                : (val) => controller.setDividerIsBold(val),
+                            selectedColor: AppColors.primary(brightness).withValues(alpha: 0.15),
+                            checkmarkColor: AppColors.primary(brightness),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6.0),
+                              side: BorderSide(
+                                color: state.dividerIsBold
+                                    ? AppColors.primary(brightness)
+                                    : AppColors.pegGrey.withValues(alpha: 0.4),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Predefined Range Preset Buttons
+                      Row(
+                        children: [
+                          Text(
+                            'Presets: ',
+                            style: AppTypography.labelSmall(brightness),
+                          ),
+                          const SizedBox(width: 6),
+                          Wrap(
+                            spacing: 6,
+                            children: [10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 24.0].map((size) {
+                              final isSelected = (state.dividerFontSize == size);
+                              return InkWell(
+                                onTap: state.isProcessing
+                                    ? null
+                                    : () => controller.setDividerFontSize(size),
+                                borderRadius: BorderRadius.circular(4.0),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppColors.primary(brightness)
+                                        : AppColors.pegGrey.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4.0),
+                                  ),
+                                  child: Text(
+                                    '${size.round()}pt',
+                                    style: AppTypography.mono(brightness).copyWith(
+                                      fontSize: 11,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppColors.text(brightness),
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      // Live Text Preview Card
+                      Text(
+                        'Divider Page Text Preview:',
+                        style: AppTypography.labelSmall(brightness),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        width: double.infinity,
+                        height: 56,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFFFF),
+                          borderRadius: BorderRadius.circular(6.0),
+                          border: Border.all(
+                            color: const Color(0xFFD0D5DD),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Text(
+                            state.files.length > 1
+                                ? p.basenameWithoutExtension(state.files[1].name)
+                                : 'Sample_Document_Title.pdf',
+                            style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: state.dividerFontSize,
+                              fontWeight: state.dividerIsBold ? FontWeight.bold : FontWeight.normal,
+                              color: const Color(0xFF1E2226),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
-            ),
+            ],
           ),
         ),
         const SizedBox(height: 12),

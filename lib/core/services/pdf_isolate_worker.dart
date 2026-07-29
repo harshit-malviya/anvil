@@ -12,6 +12,8 @@ class MergeParams {
   final List<Uint8List> fileBytesList;
   final List<String> fileNames;
   final bool insertDividers;
+  final double dividerFontSize;
+  final bool dividerIsBold;
   final Uint8List? fontBytes;
 
   /// Pre-rendered PNG image bytes per divider page (for source files 2..N).
@@ -21,6 +23,8 @@ class MergeParams {
     required this.fileBytesList,
     this.fileNames = const [],
     this.insertDividers = false,
+    this.dividerFontSize = 14.0,
+    this.dividerIsBold = false,
     this.fontBytes,
     this.dividerImages,
   });
@@ -71,14 +75,24 @@ Future<Uint8List> isolateMergePdfs(MergeParams params) async {
         final fileName = params.fileNames.length > k ? params.fileNames[k] : '';
         if (fileName.isNotEmpty) {
           PdfFont font;
+          final fontSize = params.dividerFontSize;
+          final isBold = params.dividerIsBold;
           if (params.fontBytes != null && params.fontBytes!.isNotEmpty) {
             try {
-              font = PdfTrueTypeFont(params.fontBytes!, 12);
+              font = PdfTrueTypeFont(params.fontBytes!, fontSize);
             } catch (_) {
-              font = PdfStandardFont(PdfFontFamily.courier, 12);
+              font = PdfStandardFont(
+                PdfFontFamily.courier,
+                fontSize,
+                style: isBold ? PdfFontStyle.bold : PdfFontStyle.regular,
+              );
             }
           } else {
-            font = PdfStandardFont(PdfFontFamily.courier, 12);
+            font = PdfStandardFont(
+              PdfFontFamily.courier,
+              fontSize,
+              style: isBold ? PdfFontStyle.bold : PdfFontStyle.regular,
+            );
           }
 
           final textBrush = PdfSolidBrush(PdfColor(0x1E, 0x22, 0x26));

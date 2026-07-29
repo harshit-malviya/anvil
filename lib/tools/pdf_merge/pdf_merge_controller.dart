@@ -17,6 +17,8 @@ Future<Uint8List> renderDividerImage({
   required String text,
   required double widthPt,
   required double heightPt,
+  double fontSize = 14.0,
+  bool isBold = false,
   double pixelRatio = 3.0,
 }) async {
   final widthPx = (widthPt * pixelRatio).round();
@@ -30,7 +32,8 @@ Future<Uint8List> renderDividerImage({
 
   final textStyle = TextStyle(
     fontFamily: 'monospace',
-    fontSize: 12.0 * pixelRatio,
+    fontSize: fontSize * pixelRatio,
+    fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
     color: const Color(0xFF1E2226),
   );
 
@@ -156,6 +159,16 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
     state = state.copyWith(insertDividers: value);
   }
 
+  /// Set divider font size in predefined range.
+  void setDividerFontSize(double size) {
+    state = state.copyWith(dividerFontSize: size);
+  }
+
+  /// Set whether divider text is bold.
+  void setDividerIsBold(bool isBold) {
+    state = state.copyWith(dividerIsBold: isBold);
+  }
+
   /// Dismiss error banner.
   void clearError() {
     state = state.copyWith(resetError: true);
@@ -203,6 +216,8 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
               text: fileName,
               widthPt: widthPt,
               heightPt: 72.0,
+              fontSize: state.dividerFontSize,
+              isBold: state.dividerIsBold,
             );
             dividerImages.add(pngBytes);
           } catch (_) {
@@ -222,6 +237,8 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         fileBytesList: fileBytesList,
         fileNames: fileNames,
         insertDividers: state.insertDividers,
+        dividerFontSize: state.dividerFontSize,
+        dividerIsBold: state.dividerIsBold,
         fontBytes: fontBytes,
         dividerImages: dividerImages,
       );
