@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:anvil/tools/pdf_merge/pdf_merge_controller.dart';
 
@@ -53,6 +54,7 @@ void main() {
   late Uint8List corruptedPdf;
 
   setUpAll(() async {
+    GoogleFonts.config.allowRuntimeFetching = false;
     validPdf1 = await createValidPdf(pagesCount: 1);
     validPdf2 = await createValidPdf(pagesCount: 2);
     protectedPdf = await createProtectedPdf();

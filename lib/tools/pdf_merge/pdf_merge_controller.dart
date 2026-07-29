@@ -8,7 +8,50 @@ import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import 'pdf_merge_state.dart';
 
+import 'dart:ui' as ui;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+
+/// Pre-render divider strip using Flutter's HarfBuzz engine for 100% accurate Complex Text Layout (Devanagari/Hindi).
+Future<Uint8List> renderDividerImage({
+  required String text,
+  required double widthPt,
+  required double heightPt,
+  double pixelRatio = 3.0,
+}) async {
+  final widthPx = (widthPt * pixelRatio).round();
+  final heightPx = (heightPt * pixelRatio).round();
+
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, widthPx.toDouble(), heightPx.toDouble()));
+
+  final bgPaint = Paint()..color = const Color(0xFFFFFFFF);
+  canvas.drawRect(Rect.fromLTWH(0, 0, widthPx.toDouble(), heightPx.toDouble()), bgPaint);
+
+  final textStyle = TextStyle(
+    fontFamily: 'monospace',
+    fontSize: 12.0 * pixelRatio,
+    color: const Color(0xFF1E2226),
+  );
+
+  final textPainter = TextPainter(
+    text: TextSpan(text: text, style: textStyle),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+    ellipsis: '...',
+  );
+
+  textPainter.layout(maxWidth: widthPx * 0.9);
+
+  final x = (widthPx - textPainter.width) / 2;
+  final y = (heightPx - textPainter.height) / 2;
+  textPainter.paint(canvas, Offset(x, y));
+
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(widthPx, heightPx);
+  final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+  return byteData!.buffer.asUint8List();
+}
 
 final pdfMergeControllerProvider =
     StateNotifierProvider<PdfMergeController, PdfMergeState>((ref) {
@@ -138,8 +181,35 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
       // Run heavy PDF work on a background isolate
       final fileBytesList = state.files.map((f) => f.bytes).toList();
       final fileNames = state.files.map((f) => p.basenameWithoutExtension(f.name)).toList();
+      List<Uint8List>? dividerImages;
       Uint8List? fontBytes;
       if (state.insertDividers) {
+        dividerImages = [];
+        for (int k = 1; k < state.files.length; k++) {
+          final item = state.files[k];
+          final fileName = p.basenameWithoutExtension(item.name);
+
+          double widthPt = 595.28;
+          try {
+            final doc = PdfDocument(inputBytes: item.bytes);
+            if (doc.pages.count > 0) {
+              widthPt = doc.pages[0].size.width;
+            }
+            doc.dispose();
+          } catch (_) {}
+
+          try {
+            final pngBytes = await renderDividerImage(
+              text: fileName,
+              widthPt: widthPt,
+              heightPt: 72.0,
+            );
+            dividerImages.add(pngBytes);
+          } catch (_) {
+            dividerImages.add(Uint8List(0));
+          }
+        }
+
         try {
           final fontData = await rootBundle.load('assets/fonts/NotoSansDevanagari-Regular.ttf');
           fontBytes = fontData.buffer.asUint8List();
@@ -153,6 +223,7 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         fileNames: fileNames,
         insertDividers: state.insertDividers,
         fontBytes: fontBytes,
+        dividerImages: dividerImages,
       );
       final Uint8List mergedBytes = await compute(isolateMergePdfs, params);
 

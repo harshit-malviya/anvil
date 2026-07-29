@@ -14,11 +14,15 @@ class MergeParams {
   final bool insertDividers;
   final Uint8List? fontBytes;
 
+  /// Pre-rendered PNG image bytes per divider page (for source files 2..N).
+  final List<Uint8List>? dividerImages;
+
   const MergeParams({
     required this.fileBytesList,
     this.fileNames = const [],
     this.insertDividers = false,
     this.fontBytes,
+    this.dividerImages,
   });
 }
 
@@ -47,48 +51,60 @@ Future<Uint8List> isolateMergePdfs(MergeParams params) async {
 
       final dividerPage = dividerSection.pages.add();
 
-      // Draw white background
-      dividerPage.graphics.drawRectangle(
-        brush: PdfSolidBrush(PdfColor(255, 255, 255)),
-        bounds: Rect.fromLTWH(0, 0, dividerWidth, dividerHeight),
-      );
+      // Check if a pre-rendered HarfBuzz-shaped PNG image is provided for this divider
+      final dividerImgIndex = k - 1;
+      if (params.dividerImages != null &&
+          dividerImgIndex < params.dividerImages!.length &&
+          params.dividerImages![dividerImgIndex].isNotEmpty) {
+        final pdfImage = PdfBitmap(params.dividerImages![dividerImgIndex]);
+        dividerPage.graphics.drawImage(
+          pdfImage,
+          Rect.fromLTWH(0, 0, dividerWidth, dividerHeight),
+        );
+      } else {
+        // Fallback: draw background and text directly
+        dividerPage.graphics.drawRectangle(
+          brush: PdfSolidBrush(PdfColor(255, 255, 255)),
+          bounds: Rect.fromLTWH(0, 0, dividerWidth, dividerHeight),
+        );
 
-      final fileName = params.fileNames.length > k ? params.fileNames[k] : '';
-      if (fileName.isNotEmpty) {
-        PdfFont font;
-        if (params.fontBytes != null && params.fontBytes!.isNotEmpty) {
-          try {
-            font = PdfTrueTypeFont(params.fontBytes!, 12);
-          } catch (_) {
+        final fileName = params.fileNames.length > k ? params.fileNames[k] : '';
+        if (fileName.isNotEmpty) {
+          PdfFont font;
+          if (params.fontBytes != null && params.fontBytes!.isNotEmpty) {
+            try {
+              font = PdfTrueTypeFont(params.fontBytes!, 12);
+            } catch (_) {
+              font = PdfStandardFont(PdfFontFamily.courier, 12);
+            }
+          } else {
             font = PdfStandardFont(PdfFontFamily.courier, 12);
           }
-        } else {
-          font = PdfStandardFont(PdfFontFamily.courier, 12);
-        }
 
-        final textBrush = PdfSolidBrush(PdfColor(0x1E, 0x22, 0x26));
-        final maxAllowedWidth = dividerWidth * 0.9;
+          final textBrush = PdfSolidBrush(PdfColor(0x1E, 0x22, 0x26));
+          final maxAllowedWidth = dividerWidth * 0.9;
 
-        String displayText = fileName;
-        Size textSize = font.measureString(displayText);
+          String displayText = fileName;
+          Size textSize = font.measureString(displayText);
 
-        if (textSize.width > maxAllowedWidth) {
-          while (displayText.isNotEmpty && font.measureString('$displayText...').width > maxAllowedWidth) {
-            displayText = displayText.characters.skipLast(1).toString();
+          if (textSize.width > maxAllowedWidth) {
+            while (displayText.isNotEmpty && font.measureString('$displayText...').width > maxAllowedWidth) {
+              displayText = displayText.characters.skipLast(1).toString();
+            }
+            displayText = '$displayText...';
+            textSize = font.measureString(displayText);
           }
-          displayText = '$displayText...';
-          textSize = font.measureString(displayText);
+
+          final textX = (dividerWidth - textSize.width) / 2;
+          final textY = (dividerHeight - textSize.height) / 2;
+
+          dividerPage.graphics.drawString(
+            displayText,
+            font,
+            brush: textBrush,
+            bounds: Rect.fromLTWH(textX, textY, textSize.width, textSize.height),
+          );
         }
-
-        final textX = (dividerWidth - textSize.width) / 2;
-        final textY = (dividerHeight - textSize.height) / 2;
-
-        dividerPage.graphics.drawString(
-          displayText,
-          font,
-          brush: textBrush,
-          bounds: Rect.fromLTWH(textX, textY, textSize.width, textSize.height),
-        );
       }
     }
 
