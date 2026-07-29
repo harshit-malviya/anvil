@@ -10,7 +10,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
-import '../../core/widgets/task_progress_bar.dart';
+import '../../core/widgets/task_progress_dialog.dart';
 import 'pdf_insert_image_as_page_controller.dart';
 import 'pdf_insert_image_as_page_state.dart';
 
@@ -67,8 +67,19 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
   }
 
   Future<void> _handleInsert() async {
-    final controller = ref.read(pdfInsertImageAsPageControllerProvider.notifier);
-    await controller.insertImagePages();
+    final state = ref.read(pdfInsertImageAsPageControllerProvider);
+    final count = state.imageCount;
+    final defaultMsg = count <= 1
+        ? 'Inserting image page into document…'
+        : 'Inserting $count image pages into document…';
+
+    await showTaskProgressDialog<String?>(
+      context: context,
+      title: 'Inserting Images',
+      defaultMessage: defaultMsg,
+      task: () => ref.read(pdfInsertImageAsPageControllerProvider.notifier).insertImagePages(),
+      getMessage: () => ref.read(pdfInsertImageAsPageControllerProvider).progressMessage ?? defaultMsg,
+    );
   }
 
   Future<void> _openOutputFolder(String filePath) async {
@@ -142,10 +153,6 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TaskProgressBar(
-                isVisible: state.isProcessing,
-                message: state.progressMessage ?? 'Inserting image page(s)…',
-              ),
               if (state.errorMessage != null)
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(
@@ -347,7 +354,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
           else ...[
             _buildImageSectionHeader(context, state, brightness, controller),
             const SizedBox(height: 12),
-            _buildReorderableImageList(context, state, brightness, controller),
+            _buildImageCardGrid(context, state, brightness, controller),
             const SizedBox(height: 20),
             _buildPageFitControls(context, state, brightness, controller),
           ],
@@ -842,101 +849,156 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     );
   }
 
-  Widget _buildReorderableImageList(
+  Widget _buildImageCardGrid(
     BuildContext context,
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
   ) {
-    return Container(
-      constraints: const BoxConstraints(maxHeight: 280),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground(brightness),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.pegGrey),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 180,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.72,
       ),
-      child: ReorderableListView.builder(
-        shrinkWrap: true,
-        itemCount: state.images.length,
-        onReorder: controller.reorderImages,
-        itemBuilder: (context, index) {
-          final item = state.images[index];
-          final fileSizeKb = (item.file.size / 1024).toStringAsFixed(1);
+      itemCount: state.images.length,
+      itemBuilder: (context, index) {
+        final item = state.images[index];
+        return _buildImageCard(context, index, item, state, brightness, controller);
+      },
+    );
+  }
 
-          return Container(
-            key: ValueKey(item.id),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: AppColors.pegGrey.withValues(alpha: 0.4),
-                  width: index == state.images.length - 1 ? 0 : 1,
-                ),
-              ),
-            ),
-            child: Row(
+  Widget _buildImageCard(
+    BuildContext context,
+    int index,
+    ImageItemState item,
+    PdfInsertImageAsPageState state,
+    Brightness brightness,
+    PdfInsertImageAsPageController controller,
+  ) {
+    final fileSizeKb = (item.file.size / 1024).toStringAsFixed(1);
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8.0),
+        side: const BorderSide(color: AppColors.pegGrey, width: 1.0),
+      ),
+      color: AppColors.cardBackground(brightness),
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          children: [
+            // Top Badge & Reorder Arrows
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                ReorderableDragStartListener(
-                  index: index,
-                  child: const Icon(
-                    Icons.drag_handle,
-                    color: AppColors.pegGrey,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                  decoration: BoxDecoration(
+                    color: AppColors.anvilTeal.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4.0),
                   ),
-                ),
-                const SizedBox(width: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Image.memory(
-                      item.thumbnail,
-                      fit: BoxFit.cover,
+                  child: Text(
+                    'IMAGE ${index + 1}',
+                    style: AppTypography.mono(brightness).copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.anvilTeal,
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.file.name,
-                        style: AppTypography.bodyMedium(brightness).copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    if (index > 0)
+                      InkWell(
+                        onTap: () => controller.reorderImages(index, index - 1),
+                        child: Icon(Icons.arrow_left_rounded,
+                            size: 20, color: AppColors.text(brightness).withValues(alpha: 0.6)),
                       ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Text(
-                            '${item.width} × ${item.height} px',
-                            style: AppTypography.mono(brightness).copyWith(fontSize: 11),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '($fileSizeKb KB)',
-                            style: AppTypography.mono(brightness).copyWith(
-                              fontSize: 11,
-                              color: AppColors.text(brightness).withValues(alpha: 0.6),
-                            ),
-                          ),
-                        ],
+                    if (index < state.images.length - 1)
+                      InkWell(
+                        onTap: () => controller.reorderImages(index, index + 2),
+                        child: Icon(Icons.arrow_right_rounded,
+                            size: 20, color: AppColors.text(brightness).withValues(alpha: 0.6)),
                       ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Remove Image',
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: () => controller.removeImage(item.id),
+                  ],
                 ),
               ],
             ),
-          );
-        },
+            const SizedBox(height: 6.0),
+
+            // Image Thumbnail Preview
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4.0),
+                child: Container(
+                  width: double.infinity,
+                  color: Colors.white,
+                  child: Image.memory(
+                    item.thumbnail,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6.0),
+
+            // File Info
+            Text(
+              item.file.name,
+              style: AppTypography.bodyMedium(brightness).copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              '${item.width} × ${item.height} px ($fileSizeKb KB)',
+              style: AppTypography.mono(brightness).copyWith(
+                fontSize: 10,
+                color: AppColors.text(brightness).withValues(alpha: 0.6),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6.0),
+
+            // Remove Action Button
+            InkWell(
+              onTap: () => controller.removeImage(item.id),
+              borderRadius: BorderRadius.circular(4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.rustRed.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.delete_outline_rounded, size: 14, color: AppColors.rustRed),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Remove',
+                      style: AppTypography.labelSmall(brightness).copyWith(
+                        fontSize: 10,
+                        color: AppColors.rustRed,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
