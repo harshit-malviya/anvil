@@ -34,6 +34,7 @@ class MergeParams {
 /// Output: merged PDF bytes.
 Future<Uint8List> isolateMergePdfs(MergeParams params) async {
   final destinationDoc = PdfDocument();
+  destinationDoc.compressionLevel = PdfCompressionLevel.best;
 
   for (int k = 0; k < params.fileBytesList.length; k++) {
     final fileBytes = params.fileBytesList[k];
@@ -226,6 +227,7 @@ Future<List<Uint8List>> isolateSplitPdf(SplitParams params) async {
 
   for (final range in params.ranges) {
     final destDoc = PdfDocument();
+    destDoc.compressionLevel = PdfCompressionLevel.best;
 
     for (int pIdx = range.startPage - 1; pIdx < range.endPage; pIdx++) {
       final sourcePage = sourceDoc.pages[pIdx];
@@ -273,11 +275,63 @@ class ArrangePagesParams {
   const ArrangePagesParams({required this.inputBytes, required this.pages});
 }
 
+PdfPageRotateAngle _getRotateAngle(int degrees) {
+  switch (degrees % 360) {
+    case 90:
+      return PdfPageRotateAngle.rotateAngle90;
+    case 180:
+      return PdfPageRotateAngle.rotateAngle180;
+    case 270:
+      return PdfPageRotateAngle.rotateAngle270;
+    case 0:
+    default:
+      return PdfPageRotateAngle.rotateAngle0;
+  }
+}
+
 /// Input: ArrangePagesParams.
 /// Output: rearranged PDF bytes.
 Future<Uint8List> isolateArrangePages(ArrangePagesParams params) async {
+  bool isReordered = false;
+  for (int i = 0; i < params.pages.length - 1; i++) {
+    if (params.pages[i].originalIndex >= params.pages[i + 1].originalIndex) {
+      isReordered = true;
+      break;
+    }
+  }
+
+  if (!isReordered) {
+    // FAST PATH: pages remain in original relative order (only deletions and/or rotations).
+    // Editing existing document in-place preserves original compression and byte stream.
+    final loadedDoc = PdfDocument(inputBytes: params.inputBytes);
+
+    final keptIndices = params.pages.map((p) => p.originalIndex).toSet();
+
+    // Remove non-kept pages in reverse order so indices remain stable
+    for (int i = loadedDoc.pages.count - 1; i >= 0; i--) {
+      if (!keptIndices.contains(i)) {
+        loadedDoc.pages.removeAt(i);
+      }
+    }
+
+    // Apply rotations to the remaining pages
+    for (int i = 0; i < params.pages.length; i++) {
+      final rotation = params.pages[i].rotation;
+      if (rotation % 360 != 0) {
+        final page = loadedDoc.pages[i];
+        page.rotation = _getRotateAngle(rotation);
+      }
+    }
+
+    final List<int> outputBytes = await loadedDoc.save();
+    loadedDoc.dispose();
+    return Uint8List.fromList(outputBytes);
+  }
+
+  // SLOW PATH: pages were reordered. Copy via templates with best compression.
   final sourceDoc = PdfDocument(inputBytes: params.inputBytes);
   final destinationDoc = PdfDocument();
+  destinationDoc.compressionLevel = PdfCompressionLevel.best;
 
   for (final item in params.pages) {
     final sourcePage = sourceDoc.pages[item.originalIndex];
@@ -291,21 +345,7 @@ Future<Uint8List> isolateArrangePages(ArrangePagesParams params) async {
       section.pageSettings.orientation = PdfPageOrientation.portrait;
     }
 
-    switch (item.rotation % 360) {
-      case 90:
-        section.pageSettings.rotate = PdfPageRotateAngle.rotateAngle90;
-        break;
-      case 180:
-        section.pageSettings.rotate = PdfPageRotateAngle.rotateAngle180;
-        break;
-      case 270:
-        section.pageSettings.rotate = PdfPageRotateAngle.rotateAngle270;
-        break;
-      case 0:
-      default:
-        section.pageSettings.rotate = PdfPageRotateAngle.rotateAngle0;
-        break;
-    }
+    section.pageSettings.rotate = _getRotateAngle(item.rotation);
 
     final template = sourcePage.createTemplate();
     final newPage = section.pages.add();
@@ -335,6 +375,7 @@ class AddPasswordParams {
 Future<Uint8List> isolateAddPassword(AddPasswordParams params) async {
   final sourceDoc = PdfDocument(inputBytes: params.inputBytes);
   final destDoc = PdfDocument();
+  destDoc.compressionLevel = PdfCompressionLevel.best;
 
   destDoc.security.userPassword = params.password;
   destDoc.security.ownerPassword = params.password;
@@ -381,6 +422,7 @@ Future<Uint8List> isolateRemovePassword(RemovePasswordParams params) async {
     password: params.password,
   );
   final destDoc = PdfDocument();
+  destDoc.compressionLevel = PdfCompressionLevel.best;
 
   for (int i = 0; i < sourceDoc.pages.count; i++) {
     final sourcePage = sourceDoc.pages[i];
@@ -448,6 +490,7 @@ Future<Uint8List> isolateInsertPages(InsertPagesParams params) async {
   final targetDoc = PdfDocument(inputBytes: params.targetBytes);
   final sourceDoc = PdfDocument(inputBytes: params.sourceBytes);
   final destinationDoc = PdfDocument();
+  destinationDoc.compressionLevel = PdfCompressionLevel.best;
 
   // 1. Copy target pages from index 0 up to insertionPoint (inclusive)
   if (params.insertionPoint >= 0) {
