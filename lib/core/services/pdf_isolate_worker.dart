@@ -6,13 +6,79 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 // MERGE
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Input: list of Uint8List (one per PDF file to merge, in order).
+/// Parameter container for merge isolate.
+class MergeParams {
+  final List<Uint8List> fileBytesList;
+  final List<String> fileNames;
+  final bool insertDividers;
+
+  const MergeParams({
+    required this.fileBytesList,
+    this.fileNames = const [],
+    this.insertDividers = false,
+  });
+}
+
+/// Input: MergeParams.
 /// Output: merged PDF bytes.
-Future<Uint8List> isolateMergePdfs(List<Uint8List> fileBytesList) async {
+Future<Uint8List> isolateMergePdfs(MergeParams params) async {
   final destinationDoc = PdfDocument();
 
-  for (final fileBytes in fileBytesList) {
+  for (int k = 0; k < params.fileBytesList.length; k++) {
+    final fileBytes = params.fileBytesList[k];
     final sourceDoc = PdfDocument(inputBytes: fileBytes);
+
+    if (params.insertDividers && k > 0 && sourceDoc.pages.count > 0) {
+      final firstPageSize = sourceDoc.pages[0].size;
+      final dividerWidth = firstPageSize.width;
+      const dividerHeight = 72.0; // 1 inch = 72 pt
+
+      final dividerSection = destinationDoc.sections!.add();
+      dividerSection.pageSettings.size = Size(dividerWidth, dividerHeight);
+      dividerSection.pageSettings.margins.all = 0;
+      if (dividerWidth > dividerHeight) {
+        dividerSection.pageSettings.orientation = PdfPageOrientation.landscape;
+      } else {
+        dividerSection.pageSettings.orientation = PdfPageOrientation.portrait;
+      }
+
+      final dividerPage = dividerSection.pages.add();
+
+      // Draw white background
+      dividerPage.graphics.drawRectangle(
+        brush: PdfSolidBrush(PdfColor(255, 255, 255)),
+        bounds: Rect.fromLTWH(0, 0, dividerWidth, dividerHeight),
+      );
+
+      final fileName = params.fileNames.length > k ? params.fileNames[k] : '';
+      if (fileName.isNotEmpty) {
+        final font = PdfStandardFont(PdfFontFamily.courier, 12);
+        final textBrush = PdfSolidBrush(PdfColor(0x1E, 0x22, 0x26));
+        final maxAllowedWidth = dividerWidth * 0.9;
+
+        String displayText = fileName;
+        Size textSize = font.measureString(displayText);
+
+        if (textSize.width > maxAllowedWidth) {
+          while (displayText.isNotEmpty && font.measureString('$displayText...').width > maxAllowedWidth) {
+            displayText = displayText.substring(0, displayText.length - 1);
+          }
+          displayText = '$displayText...';
+          textSize = font.measureString(displayText);
+        }
+
+        final textX = (dividerWidth - textSize.width) / 2;
+        final textY = (dividerHeight - textSize.height) / 2;
+
+        dividerPage.graphics.drawString(
+          displayText,
+          font,
+          brush: textBrush,
+          bounds: Rect.fromLTWH(textX, textY, textSize.width, textSize.height),
+        );
+      }
+    }
+
     for (int i = 0; i < sourceDoc.pages.count; i++) {
       final page = sourceDoc.pages[i];
       final section = destinationDoc.sections!.add();

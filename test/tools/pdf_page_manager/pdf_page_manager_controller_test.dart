@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:anvil/tools/pdf_page_manager/pdf_page_manager_controller.dart';
-import 'package:anvil/tools/pdf_page_manager/pdf_page_manager_state.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';

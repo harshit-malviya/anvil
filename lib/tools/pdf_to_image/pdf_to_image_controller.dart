@@ -241,8 +241,9 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         );
 
         Uint8List? imageBytes;
-        if (_customRenderer != null) {
-          imageBytes = await _customRenderer!(state.fileBytes!, pageIdx, dpi, state.format);
+        final renderer = _customRenderer;
+        if (renderer != null) {
+          imageBytes = await renderer(state.fileBytes!, pageIdx, dpi, state.format);
         } else {
           imageBytes = await _thumbnailService.renderPage(
             state.fileBytes!,
@@ -325,8 +326,9 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
           );
 
           Uint8List? imageBytes;
-          if (_customRenderer != null) {
-            imageBytes = await _customRenderer!(state.fileBytes!, pageIdx, dpi, state.format);
+          final renderer = _customRenderer;
+          if (renderer != null) {
+            imageBytes = await renderer(state.fileBytes!, pageIdx, dpi, state.format);
           } else {
             imageBytes = await _thumbnailService.renderPage(
               state.fileBytes!,

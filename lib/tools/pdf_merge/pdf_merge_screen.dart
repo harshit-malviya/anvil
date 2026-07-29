@@ -8,7 +8,6 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
-import '../../core/widgets/task_progress_bar.dart';
 import '../../core/widgets/task_progress_dialog.dart';
 import 'pdf_merge_controller.dart';
 import 'pdf_merge_state.dart';
@@ -221,7 +220,39 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
             },
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: state.isProcessing
+              ? null
+              : () => controller.setInsertDividers(!state.insertDividers),
+          borderRadius: BorderRadius.circular(6.0),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Checkbox(
+                    value: state.insertDividers,
+                    onChanged: state.isProcessing
+                        ? null
+                        : (val) => controller.setInsertDividers(val ?? false),
+                    activeColor: AppColors.primary(brightness),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Insert a divider page between files',
+                  style: AppTypography.bodyMedium(brightness),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         if (state.isProcessing) ...[
           LinearProgressIndicator(
             color: AppColors.primary(brightness),

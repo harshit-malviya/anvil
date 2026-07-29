@@ -10,7 +10,6 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
-import '../../core/widgets/task_progress_bar.dart';
 import '../../core/widgets/task_progress_dialog.dart';
 import 'pdf_page_manager_controller.dart';
 import 'pdf_page_manager_state.dart';

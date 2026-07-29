@@ -106,6 +106,11 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
     state = const PdfMergeState();
   }
 
+  /// Set whether to insert divider pages between files.
+  void setInsertDividers(bool value) {
+    state = state.copyWith(insertDividers: value);
+  }
+
   /// Dismiss error banner.
   void clearError() {
     state = state.copyWith(resetError: true);
@@ -130,7 +135,13 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
     try {
       // Run heavy PDF work on a background isolate
       final fileBytesList = state.files.map((f) => f.bytes).toList();
-      final Uint8List mergedBytes = await compute(isolateMergePdfs, fileBytesList);
+      final fileNames = state.files.map((f) => p.basenameWithoutExtension(f.name)).toList();
+      final params = MergeParams(
+        fileBytesList: fileBytesList,
+        fileNames: fileNames,
+        insertDividers: state.insertDividers,
+      );
+      final Uint8List mergedBytes = await compute(isolateMergePdfs, params);
 
       String targetPath;
       if (customOutputPath != null && customOutputPath.isNotEmpty) {

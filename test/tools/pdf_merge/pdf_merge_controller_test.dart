@@ -211,5 +211,50 @@ void main() {
       mergedDoc.dispose();
       tempDir.deleteSync(recursive: true);
     });
+
+    test('setInsertDividers updates state correctly', () {
+      expect(controller.testState.insertDividers, isFalse);
+      controller.setInsertDividers(true);
+      expect(controller.testState.insertDividers, isTrue);
+      controller.setInsertDividers(false);
+      expect(controller.testState.insertDividers, isFalse);
+    });
+
+    test('Merging with dividers enabled inserts divider pages with 72pt height and matching width', () async {
+      final letterDoc = await createValidPdf(pagesCount: 1, pageSize: PdfPageSize.letter);
+      final a4Doc = await createValidPdf(pagesCount: 2, pageSize: PdfPageSize.a4);
+
+      final pf1 = PlatformFile(name: 'first_document.pdf', size: letterDoc.length, bytes: letterDoc);
+      final pf2 = PlatformFile(name: 'second_document_with_very_long_filename_that_should_truncate_cleanly.pdf', size: a4Doc.length, bytes: a4Doc);
+
+      await controller.addFiles([pf1, pf2]);
+      controller.setInsertDividers(true);
+
+      final tempDir = Directory.systemTemp.createTempSync('anvil_merge_divider_test');
+      final targetPath = '${tempDir.path}${Platform.pathSeparator}divider_merged.pdf';
+
+      final resultPath = await controller.merge(customOutputPath: targetPath);
+      expect(resultPath, isNotNull);
+
+      final outputFile = File(targetPath);
+      final mergedDoc = PdfDocument(inputBytes: outputFile.readAsBytesSync());
+
+      // 1 (file1) + 1 (divider before file2) + 2 (file2) = 4 pages
+      expect(mergedDoc.pages.count, equals(4));
+
+      // Page 0: file 1 (letter size)
+      expect(mergedDoc.pages[0].size.height, equals(PdfPageSize.letter.height));
+
+      // Page 1: divider page before file 2. Height = 72pt, width matches file 2 page 1 (A4 width)
+      expect(mergedDoc.pages[1].size.height, equals(72.0));
+      expect(mergedDoc.pages[1].size.width, equals(PdfPageSize.a4.width));
+
+      // Page 2 & 3: file 2 pages (A4 size)
+      expect(mergedDoc.pages[2].size.height, equals(PdfPageSize.a4.height));
+      expect(mergedDoc.pages[3].size.height, equals(PdfPageSize.a4.height));
+
+      mergedDoc.dispose();
+      tempDir.deleteSync(recursive: true);
+    });
   });
 }

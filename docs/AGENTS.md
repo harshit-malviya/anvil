@@ -108,6 +108,13 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Registered route `/pdf-insert-image-as-page` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
   - Created comprehensive unit test suite `test/tools/pdf_insert_image_as_page/pdf_insert_image_as_page_controller_test.dart` testing insert-at-start with `matchNeighboringPage`, insert-at-end with `fitToImage`, insert-in-middle with preceding neighbor matching, unsupported image format rejection, corrupted image rejection, zero-existing-pages fallback, protected target rejection, and corrupted target rejection.
 
+## 2026-07-29 — Session 14
+- Implemented optional divider pages feature for PDF Merge (`docs/PHASE 3/TASK_pdf_merge_divider.md`):
+  - Updated `isolateMergePdfs` in `lib/core/services/pdf_isolate_worker.dart` to accept `MergeParams` and build 1-inch (72pt) white divider pages before source files 2..N with centered/truncated filename in monospace type style (`PdfStandardFont(PdfFontFamily.courier, 12)`).
+  - Updated `PdfMergeState` and `PdfMergeController` with `insertDividers` property and `setInsertDividers` toggle.
+  - Added "Insert a divider page between files" checkbox in `lib/tools/pdf_merge/pdf_merge_screen.dart`.
+  - Added unit test cases in `test/tools/pdf_merge/pdf_merge_controller_test.dart` for divider insertion, height/width matching, and state toggles.
+
 ## 2026-07-29 — Session 13
 - Fixed critical UI freezing during PDF processing by moving all Syncfusion PDF work to background isolates:
   - Created `lib/core/services/pdf_isolate_worker.dart` with 8 top-level async functions (`isolateMergePdfs`, `isolateCompressPdf`, `isolateSplitPdf`, `isolateArrangePages`, `isolateAddPassword`, `isolateRemovePassword`, `isolateInsertPages`, `isolateInsertImageAsPage`)
@@ -130,6 +137,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | App shell / theme | `PROJECT_OVERVIEW.md`, `DESIGN_SYSTEM.md` | Done | App shell, router, design system, and home screen grid complete |
 | App Icon / Branding | `DESIGN_SYSTEM.md` | Done | Master source icon, Android adaptive icons, Windows `.ico`, and in-app assets generated |
 | PDF Merge | `FEATURE_pdf_merge.md` | Done | PDF Merge controller, UI, and test suite passing |
+| PDF Merge Dividers | `docs/PHASE 3/TASK_pdf_merge_divider.md` | Done | Divider pages, width/height matching, isolate rendering, and test suite passing |
 | PDF Page Manager | `FEATURE_pdf_page_manager.md` | Done | PDF Page Manager controller, UI, and test suite passing |
 | PDF Split | `FEATURE_pdf_split.md` | Done | PDF Split controller, UI, thumbnail service extraction, and test suite passing |
 | PDF Compress | `FEATURE_pdf_compress.md` | Done | PDF Compress controller, UI, before/after size badge, and test suite passing |

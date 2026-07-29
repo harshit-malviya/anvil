@@ -76,7 +76,7 @@ class PdfToImageState {
   String estimatedDimensionsText(ExportResolution res) {
     final w = (firstPageWidthPt * res.dpi / 72.0).round();
     final h = (firstPageHeightPt * res.dpi / 72.0).round();
-    return '${res.dpi} DPI — approx. ${w}×${h}px';
+    return '${res.dpi} DPI — approx. ${w}x${h}px';
   }
 
   PdfToImageState copyWith({
