@@ -6,17 +6,31 @@ enum PageFitMode {
   fitToImage,
 }
 
+class ImageItemState {
+  final String id;
+  final PlatformFile file;
+  final Uint8List bytes;
+  final Uint8List thumbnail;
+  final int width;
+  final int height;
+
+  const ImageItemState({
+    required this.id,
+    required this.file,
+    required this.bytes,
+    required this.thumbnail,
+    required this.width,
+    required this.height,
+  });
+}
+
 class PdfInsertImageAsPageState {
   final PlatformFile? targetFile;
   final Uint8List? targetBytes;
   final List<Uint8List?> targetThumbnails;
   final int targetPageCount;
 
-  final PlatformFile? imageFile;
-  final Uint8List? imageBytes;
-  final Uint8List? imageThumbnail;
-  final int imageWidth;
-  final int imageHeight;
+  final List<ImageItemState> images;
 
   final PageFitMode fitMode;
   final int insertionPoint; // -1 = start, 0 to targetPageCount-1 = after target index
@@ -31,11 +45,7 @@ class PdfInsertImageAsPageState {
     this.targetBytes,
     this.targetThumbnails = const [],
     this.targetPageCount = 0,
-    this.imageFile,
-    this.imageBytes,
-    this.imageThumbnail,
-    this.imageWidth = 0,
-    this.imageHeight = 0,
+    this.images = const [],
     this.fitMode = PageFitMode.matchNeighboringPage,
     this.insertionPoint = -1,
     this.isProcessing = false,
@@ -45,26 +55,25 @@ class PdfInsertImageAsPageState {
   });
 
   bool get hasTarget => targetBytes != null && targetBytes!.isNotEmpty && targetPageCount > 0;
-  bool get hasImage => imageBytes != null && imageBytes!.isNotEmpty;
+  bool get hasImages => images.isNotEmpty;
+  bool get hasImage => hasImages;
+  int get imageCount => images.length;
+
   bool get canSubmit =>
       hasTarget &&
-      hasImage &&
+      hasImages &&
       insertionPoint >= -1 &&
       insertionPoint < targetPageCount &&
       !isProcessing;
 
-  int get totalResultPageCount => hasTarget ? targetPageCount + 1 : 0;
+  int get totalResultPageCount => hasTarget ? targetPageCount + images.length : 0;
 
   PdfInsertImageAsPageState copyWith({
     PlatformFile? targetFile,
     Uint8List? targetBytes,
     List<Uint8List?>? targetThumbnails,
     int? targetPageCount,
-    PlatformFile? imageFile,
-    Uint8List? imageBytes,
-    Uint8List? imageThumbnail,
-    int? imageWidth,
-    int? imageHeight,
+    List<ImageItemState>? images,
     PageFitMode? fitMode,
     int? insertionPoint,
     bool? isProcessing,
@@ -72,7 +81,7 @@ class PdfInsertImageAsPageState {
     String? errorMessage,
     String? outputPath,
     bool resetTarget = false,
-    bool resetImage = false,
+    bool resetImages = false,
     bool resetError = false,
     bool resetOutput = false,
     bool resetProgressMessage = false,
@@ -82,11 +91,7 @@ class PdfInsertImageAsPageState {
       targetBytes: resetTarget ? null : (targetBytes ?? this.targetBytes),
       targetThumbnails: resetTarget ? const [] : (targetThumbnails ?? this.targetThumbnails),
       targetPageCount: resetTarget ? 0 : (targetPageCount ?? this.targetPageCount),
-      imageFile: resetImage ? null : (imageFile ?? this.imageFile),
-      imageBytes: resetImage ? null : (imageBytes ?? this.imageBytes),
-      imageThumbnail: resetImage ? null : (imageThumbnail ?? this.imageThumbnail),
-      imageWidth: resetImage ? 0 : (imageWidth ?? this.imageWidth),
-      imageHeight: resetImage ? 0 : (imageHeight ?? this.imageHeight),
+      images: resetImages ? const [] : (images ?? this.images),
       fitMode: fitMode ?? this.fitMode,
       insertionPoint: resetTarget ? -1 : (insertionPoint ?? this.insertionPoint),
       isProcessing: isProcessing ?? this.isProcessing,

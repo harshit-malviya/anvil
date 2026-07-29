@@ -108,6 +108,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Registered route `/pdf-insert-image-as-page` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
   - Created comprehensive unit test suite `test/tools/pdf_insert_image_as_page/pdf_insert_image_as_page_controller_test.dart` testing insert-at-start with `matchNeighboringPage`, insert-at-end with `fitToImage`, insert-in-middle with preceding neighbor matching, unsupported image format rejection, corrupted image rejection, zero-existing-pages fallback, protected target rejection, and corrupted target rejection.
 
+## 2026-07-29 — Session 15
+- Upgraded PDF Insert Image as Page feature to v1.1 / v2 (`docs/PHASE 3/FEATURE_pdf_insert_image_as_page_v2.md`):
+  - Updated `ImageItemState` and `PdfInsertImageAsPageState` to store a list of images (`images`) with unique IDs, files, bytes, thumbnails, and pixel dimensions.
+  - Updated `PdfInsertImageAsPageController` with `addImages` (handling multi-file pick and per-file error messages), `removeImage`, `reorderImages`, `clearImages`, and `insertImagePages`.
+  - Updated `isolateInsertImagePages` in `lib/core/services/pdf_isolate_worker.dart` to construct multi-page image PDFs and splice them into the target document at a single shared insertion point.
+  - Refactored `PdfInsertImageAsPageScreen` UI with multi-file picker support, reorderable image list view with drag handles, thumbnail previews, file size indicators, item removal controls, and dynamic primary button labels ("Insert Page" / "Insert N Pages").
+  - Updated unit test suite `test/tools/pdf_insert_image_as_page/pdf_insert_image_as_page_controller_test.dart` covering 1-image regression, N-images insertion at start/middle/end, `matchNeighboringPage` shared neighbor sizing, `fitToImage` per-image aspect ratio sizing, image reordering before insert, bad image isolation, item removal, and zero-page fallback. All 14 unit test cases passing.
+
 ## 2026-07-29 — Session 14
 - Implemented optional divider pages feature for PDF Merge (`docs/PHASE 3/TASK_pdf_merge_divider.md`):
   - Updated `isolateMergePdfs` in `lib/core/services/pdf_isolate_worker.dart` to accept `MergeParams` and build 1-inch (72pt) white divider pages before source files 2..N with centered/truncated filename.
@@ -145,7 +153,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | PDF to Image | `FEATURE_pdf_to_image.md` | Done | PDF to Image controller, UI, DPI estimates, and test suite passing |
 | PDF Password | `FEATURE_pdf_password.md` | Done | PDF Password controller, UI, Add/Remove protection, and test suite passing |
 | PDF Insert Pages | `docs/PHASE 3/FEATURE_pdf_insert_pages.md` | Done | PDF Insert Pages controller, UI, live preview block, and test suite passing |
-| PDF Insert Image as Page | `docs/PHASE 3/FEATURE_pdf_insert_image_as_page.md` | Done | PDF Insert Image as Page controller, UI, page fit modes, and test suite passing |
+| PDF Insert Image as Page | `docs/PHASE 3/FEATURE_pdf_insert_image_as_page_v2.md` | Done | Upgraded to v2 (N images batch insertion at shared point, reordering, test suite passing) |
 | Tool Search | `docs/PHASE 3/FEATURE_tool_search.md` | Done | Tool search controller, home screen filtering, and unit test suite passing |
 | Image tools (v2) | *(spec pending)* | Not started | |
 

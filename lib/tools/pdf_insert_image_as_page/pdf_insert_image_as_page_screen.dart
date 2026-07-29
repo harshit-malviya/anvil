@@ -59,16 +59,16 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     }
   }
 
-  Future<void> _pickImageFile() async {
-    final files = await _fileService.pickImageFiles(allowMultiple: false);
+  Future<void> _pickImageFiles() async {
+    final files = await _fileService.pickImageFiles(allowMultiple: true);
     if (files.isNotEmpty) {
-      ref.read(pdfInsertImageAsPageControllerProvider.notifier).loadImage(files.first);
+      ref.read(pdfInsertImageAsPageControllerProvider.notifier).addImages(files);
     }
   }
 
   Future<void> _handleInsert() async {
     final controller = ref.read(pdfInsertImageAsPageControllerProvider.notifier);
-    await controller.insertImagePage();
+    await controller.insertImagePages();
   }
 
   Future<void> _openOutputFolder(String filePath) async {
@@ -125,7 +125,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          if (state.hasTarget || state.hasImage)
+          if (state.hasTarget || state.hasImages)
             IconButton(
               tooltip: 'Reset All',
               icon: const Icon(Icons.refresh),
@@ -144,7 +144,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
             children: [
               TaskProgressBar(
                 isVisible: state.isProcessing,
-                message: state.progressMessage ?? 'Inserting image page…',
+                message: state.progressMessage ?? 'Inserting image page(s)…',
               ),
               if (state.errorMessage != null)
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
@@ -206,16 +206,21 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     Brightness brightness,
     PdfInsertImageAsPageController controller,
   ) {
+    final stampLabel = state.imageCount <= 1 ? 'PAGE INSERTED' : 'PAGES INSERTED';
+    final successTitle = state.imageCount <= 1
+        ? 'Image Inserted Successfully!'
+        : 'Images Inserted Successfully!';
+
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const StampAnimation(label: 'PAGE INSERTED'),
+            StampAnimation(label: stampLabel),
             const SizedBox(height: 24),
             Text(
-              'Image Inserted Successfully!',
+              successTitle,
               style: AppTypography.displayMedium(brightness),
               textAlign: TextAlign.center,
             ),
@@ -271,7 +276,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                   },
                 ),
                 AppButton(
-                  label: 'Insert Another Image',
+                  label: 'Insert More Images',
                   icon: Icons.refresh,
                   variant: AppButtonVariant.secondary,
                   onPressed: () {
@@ -327,21 +332,23 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
           const SizedBox(height: 16),
 
           // STEP 2: Image Picker / Controls Panel
-          if (!state.hasImage)
+          if (!state.hasImages)
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 600, maxHeight: 180),
                 child: FileDropZone(
-                  onTap: _pickImageFile,
-                  label: 'Drop image to insert (JPEG or PNG)',
-                  sublabel: 'Step 2 — Pick single image file to add as page',
+                  onTap: _pickImageFiles,
+                  label: 'Drop image(s) to insert (JPEG or PNG)',
+                  sublabel: 'Step 2 — Pick image file(s) to add as page(s)',
                   icon: Icons.add_photo_alternate_rounded,
                 ),
               ),
             )
           else ...[
-            _buildImageHeader(context, state, brightness, controller),
-            const SizedBox(height: 16),
+            _buildImageSectionHeader(context, state, brightness, controller),
+            const SizedBox(height: 12),
+            _buildReorderableImageList(context, state, brightness, controller),
+            const SizedBox(height: 20),
             _buildPageFitControls(context, state, brightness, controller),
           ],
         ],
@@ -558,7 +565,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     Brightness brightness,
     PdfInsertImageAsPageController controller,
   ) {
-    final hasInsertedBlock = state.hasImage;
+    final hasInsertedBlock = state.hasImages;
     final totalGridItems = state.targetPageCount + (hasInsertedBlock ? 1 : 0);
 
     final gridWidget = GridView.builder(
@@ -598,6 +605,9 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
         }
 
         if (isPreviewBlock) {
+          final countLabel = state.imageCount == 1 ? '+1 Image Page' : '+${state.imageCount} Image Pages';
+          final firstThumbnail = state.images.isNotEmpty ? state.images.first.thumbnail : null;
+
           return Container(
             decoration: BoxDecoration(
               color: AppColors.anvilTeal.withValues(alpha: 0.15),
@@ -607,14 +617,14 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (state.imageThumbnail != null) ...[
+                if (firstThumbnail != null) ...[
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.all(4.0),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(4),
                         child: Image.memory(
-                          state.imageThumbnail!,
+                          firstThumbnail,
                           fit: BoxFit.contain,
                         ),
                       ),
@@ -627,9 +637,9 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                       color: AppColors.anvilTeal,
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text(
-                      '+1 Image Page',
-                      style: TextStyle(
+                    child: Text(
+                      countLabel,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
@@ -644,7 +654,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '+1 Image Page',
+                    countLabel,
                     style: AppTypography.mono(brightness).copyWith(
                       fontWeight: FontWeight.bold,
                       color: AppColors.anvilTeal,
@@ -777,83 +787,156 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     );
   }
 
-  Widget _buildImageHeader(
+  Widget _buildImageSectionHeader(
     BuildContext context,
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
   ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.anvilTeal.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.anvilTeal.withValues(alpha: 0.4)),
+        border: Border.all(color: AppColors.anvilTeal.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          if (state.imageThumbnail != null)
-            ClipRRect(
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.anvilTeal.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(4),
-              child: SizedBox(
-                width: 44,
-                height: 44,
-                child: Image.memory(
-                  state.imageThumbnail!,
-                  fit: BoxFit.cover,
+            ),
+            child: Text(
+              'IMAGES TO INSERT',
+              style: AppTypography.labelSmall(brightness).copyWith(
+                fontSize: 10,
+                color: AppColors.anvilTeal,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '(${state.imageCount} image${state.imageCount == 1 ? '' : 's'})',
+            style: AppTypography.mono(brightness).copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.anvilTeal,
+            ),
+          ),
+          const Spacer(),
+          TextButton.icon(
+            onPressed: _pickImageFiles,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add Images'),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: controller.clearImages,
+            icon: const Icon(Icons.clear_all, size: 18),
+            label: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReorderableImageList(
+    BuildContext context,
+    PdfInsertImageAsPageState state,
+    Brightness brightness,
+    PdfInsertImageAsPageController controller,
+  ) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 280),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground(brightness),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.pegGrey),
+      ),
+      child: ReorderableListView.builder(
+        shrinkWrap: true,
+        itemCount: state.images.length,
+        onReorder: controller.reorderImages,
+        itemBuilder: (context, index) {
+          final item = state.images[index];
+          final fileSizeKb = (item.file.size / 1024).toStringAsFixed(1);
+
+          return Container(
+            key: ValueKey(item.id),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: AppColors.pegGrey.withValues(alpha: 0.4),
+                  width: index == state.images.length - 1 ? 0 : 1,
                 ),
               ),
-            )
-          else
-            const Icon(Icons.image_outlined, color: AppColors.anvilTeal, size: 36),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.anvilTeal.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'IMAGE TO INSERT',
-                        style: AppTypography.labelSmall(brightness).copyWith(
-                          fontSize: 10,
-                          color: AppColors.anvilTeal,
-                        ),
-                      ),
+                ReorderableDragStartListener(
+                  index: index,
+                  child: const Icon(
+                    Icons.drag_handle,
+                    color: AppColors.pegGrey,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Image.memory(
+                      item.thumbnail,
+                      fit: BoxFit.cover,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        state.imageFile?.name ?? 'Image',
-                        style: AppTypography.bodyLarge(brightness).copyWith(
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.file.name,
+                        style: AppTypography.bodyMedium(brightness).copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Text(
+                            '${item.width} × ${item.height} px',
+                            style: AppTypography.mono(brightness).copyWith(fontSize: 11),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '($fileSizeKb KB)',
+                            style: AppTypography.mono(brightness).copyWith(
+                              fontSize: 11,
+                              color: AppColors.text(brightness).withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  '${state.imageWidth} × ${state.imageHeight} px',
-                  style: AppTypography.mono(brightness).copyWith(fontSize: 12),
+                IconButton(
+                  tooltip: 'Remove Image',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => controller.removeImage(item.id),
                 ),
               ],
             ),
-          ),
-          TextButton.icon(
-            onPressed: _pickImageFile,
-            icon: const Icon(Icons.swap_horiz, size: 18),
-            label: const Text('Change Image'),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -878,7 +961,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
               child: _buildFitOptionCard(
                 context,
                 title: 'Match neighboring page',
-                subtitle: 'Adopt page size/orientation of neighbor page and scale image to fit (centered, un-distorted).',
+                subtitle: 'Adopt page size/orientation of neighbor page and scale images to fit (centered, un-distorted).',
                 isSelected: state.fitMode == PageFitMode.matchNeighboringPage,
                 icon: Icons.aspect_ratio_rounded,
                 brightness: brightness,
@@ -976,6 +1059,10 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
       summaryText = 'Inserting after Page ${state.insertionPoint + 1}';
     }
 
+    final buttonLabel = state.imageCount <= 1
+        ? 'Insert Page'
+        : 'Insert ${state.imageCount} Pages';
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -991,7 +1078,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  state.hasImage ? summaryText : 'Select an image file to insert as page',
+                  state.hasImages ? summaryText : 'Select image file(s) to insert as page(s)',
                   style: AppTypography.bodyLarge(brightness).copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1004,7 +1091,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
             ),
           ),
           AppButton(
-            label: 'Insert Page',
+            label: buttonLabel,
             icon: Icons.add_photo_alternate_rounded,
             variant: AppButtonVariant.primary,
             onPressed: state.canSubmit ? _handleInsert : null,

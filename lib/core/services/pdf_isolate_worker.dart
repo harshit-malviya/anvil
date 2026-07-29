@@ -465,29 +465,20 @@ Future<Uint8List> isolateInsertPages(InsertPagesParams params) async {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// INSERT IMAGE AS PAGE
+// INSERT IMAGE(S) AS PAGE(S)
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Parameter container for insert-image-as-page isolate.
-class InsertImageAsPageParams {
-  final Uint8List targetBytes;
+/// Single image page specification for isolate processing.
+class ImagePageSpec {
   final Uint8List imageBytes;
-
-  /// Page size for the image page.
   final double pageWidth;
   final double pageHeight;
-
-  /// Image drawing rectangle within the page.
   final double imgLeft;
   final double imgTop;
   final double imgWidth;
   final double imgHeight;
 
-  /// Insertion point index (-1 = at start).
-  final int insertionPoint;
-
-  const InsertImageAsPageParams({
-    required this.targetBytes,
+  const ImagePageSpec({
     required this.imageBytes,
     required this.pageWidth,
     required this.pageHeight,
@@ -495,47 +486,67 @@ class InsertImageAsPageParams {
     required this.imgTop,
     required this.imgWidth,
     required this.imgHeight,
+  });
+}
+
+/// Parameter container for insert-image-pages isolate.
+class InsertImagePagesParams {
+  final Uint8List targetBytes;
+  final List<ImagePageSpec> imageSpecs;
+  final int insertionPoint;
+
+  const InsertImagePagesParams({
+    required this.targetBytes,
+    required this.imageSpecs,
     required this.insertionPoint,
   });
 }
 
-/// Input: InsertImageAsPageParams.
-/// Output: PDF bytes with the image page inserted.
-Future<Uint8List> isolateInsertImageAsPage(InsertImageAsPageParams params) async {
-  // 1. Create single-page PDF containing the image
-  final imgPdf = PdfDocument();
-  final section = imgPdf.sections!.add();
-  final pageSize = Size(params.pageWidth, params.pageHeight);
-  section.pageSettings.size = pageSize;
-  section.pageSettings.margins.all = 0;
-  if (pageSize.width > pageSize.height) {
-    section.pageSettings.orientation = PdfPageOrientation.landscape;
-  } else {
-    section.pageSettings.orientation = PdfPageOrientation.portrait;
+/// Input: InsertImagePagesParams.
+/// Output: PDF bytes with image page(s) inserted.
+Future<Uint8List> isolateInsertImagePages(InsertImagePagesParams params) async {
+  if (params.imageSpecs.isEmpty) {
+    return params.targetBytes;
   }
 
-  final page = section.pages.add();
+  // 1. Create multi-page PDF containing all images
+  final imgPdf = PdfDocument();
 
-  // Draw white background to flatten PNG transparency
-  page.graphics.drawRectangle(
-    brush: PdfSolidBrush(PdfColor(255, 255, 255)),
-    bounds: Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
-  );
+  for (final spec in params.imageSpecs) {
+    final section = imgPdf.sections!.add();
+    final pageSize = Size(spec.pageWidth, spec.pageHeight);
+    section.pageSettings.size = pageSize;
+    section.pageSettings.margins.all = 0;
+    if (pageSize.width > pageSize.height) {
+      section.pageSettings.orientation = PdfPageOrientation.landscape;
+    } else {
+      section.pageSettings.orientation = PdfPageOrientation.portrait;
+    }
 
-  final pdfImage = PdfBitmap(params.imageBytes);
-  page.graphics.drawImage(
-    pdfImage,
-    Rect.fromLTWH(params.imgLeft, params.imgTop, params.imgWidth, params.imgHeight),
-  );
+    final page = section.pages.add();
 
-  final List<int> singlePagePdfBytes = await imgPdf.save();
+    // Draw white background to flatten PNG transparency
+    page.graphics.drawRectangle(
+      brush: PdfSolidBrush(PdfColor(255, 255, 255)),
+      bounds: Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
+    );
+
+    final pdfImage = PdfBitmap(spec.imageBytes);
+    page.graphics.drawImage(
+      pdfImage,
+      Rect.fromLTWH(spec.imgLeft, spec.imgTop, spec.imgWidth, spec.imgHeight),
+    );
+  }
+
+  final List<int> imagePdfBytes = await imgPdf.save();
   imgPdf.dispose();
 
-  // 2. Splice single-page PDF into target document
+  // 2. Splice image pages into target document
+  final selectedIndices = List.generate(params.imageSpecs.length, (index) => index);
   final splicedResult = await isolateInsertPages(InsertPagesParams(
     targetBytes: params.targetBytes,
-    sourceBytes: Uint8List.fromList(singlePagePdfBytes),
-    selectedSourceIndices: const [0],
+    sourceBytes: Uint8List.fromList(imagePdfBytes),
+    selectedSourceIndices: selectedIndices,
     insertionPoint: params.insertionPoint,
   ));
 

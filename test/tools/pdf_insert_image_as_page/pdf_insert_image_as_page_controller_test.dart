@@ -45,15 +45,15 @@ Uint8List createCorruptedPdf() {
   return Uint8List.fromList('NOT_A_VALID_PDF_STREAM_9876543210'.codeUnits);
 }
 
-Uint8List createValidJpgImage({int width = 200, int height = 100}) {
+Uint8List createValidJpgImage({int width = 200, int height = 100, img.Color? color}) {
   final image = img.Image(width: width, height: height);
-  img.fill(image, color: img.ColorRgb8(255, 0, 0));
+  img.fill(image, color: color ?? img.ColorRgb8(255, 0, 0));
   return Uint8List.fromList(img.encodeJpg(image));
 }
 
-Uint8List createValidPngImage({int width = 300, int height = 150}) {
+Uint8List createValidPngImage({int width = 300, int height = 150, img.Color? color}) {
   final image = img.Image(width: width, height: height);
-  img.fill(image, color: img.ColorRgba8(0, 255, 0, 128));
+  img.fill(image, color: color ?? img.ColorRgba8(0, 255, 0, 128));
   return Uint8List.fromList(img.encodePng(image));
 }
 
@@ -66,6 +66,7 @@ void main() {
   late Uint8List corruptedPdf;
   late Uint8List sampleJpg;
   late Uint8List samplePng;
+  late Uint8List sampleJpg2;
 
   setUpAll(() async {
     targetPdf3Pages = await createValidPdf(pagesCount: 3);
@@ -73,22 +74,23 @@ void main() {
     corruptedPdf = createCorruptedPdf();
     sampleJpg = createValidJpgImage(width: 200, height: 100);
     samplePng = createValidPngImage(width: 300, height: 150);
+    sampleJpg2 = createValidJpgImage(width: 400, height: 500, color: img.ColorRgb8(0, 0, 255));
   });
 
   setUp(() {
     controller = PdfInsertImageAsPageController();
   });
 
-  group('PdfInsertImageAsPageController Unit Tests', () {
+  group('PdfInsertImageAsPageController Unit Tests (v2 Batch Insertion)', () {
     test('Initial state is empty and canSubmit is false', () {
       final state = controller.testState;
       expect(state.hasTarget, isFalse);
-      expect(state.hasImage, isFalse);
+      expect(state.hasImages, isFalse);
       expect(state.canSubmit, isFalse);
       expect(state.errorMessage, isNull);
     });
 
-    test('loadTargetDocument loads target PDF and defaults insertion point to at end', () async {
+    test('loadTargetDocument loads target PDF and defaults insertion point to end', () async {
       final pfTarget = PlatformFile(name: 'target.pdf', size: targetPdf3Pages.length, bytes: targetPdf3Pages);
 
       await controller.loadTargetDocument(pfTarget);
@@ -120,58 +122,88 @@ void main() {
       expect(state.errorMessage, contains('corrupted or unreadable'));
     });
 
-    test('loadImage loads valid JPEG and PNG images', () async {
+    test('addImages loads valid JPEG and PNG images into batch list', () async {
       final pfJpg = PlatformFile(name: 'photo.jpg', size: sampleJpg.length, bytes: sampleJpg);
-      await controller.loadImage(pfJpg);
-
-      var state = controller.testState;
-      expect(state.hasImage, isTrue);
-      expect(state.imageWidth, equals(200));
-      expect(state.imageHeight, equals(100));
-
       final pfPng = PlatformFile(name: 'graphic.png', size: samplePng.length, bytes: samplePng);
-      await controller.loadImage(pfPng);
 
-      state = controller.testState;
-      expect(state.hasImage, isTrue);
-      expect(state.imageWidth, equals(300));
-      expect(state.imageHeight, equals(150));
-    });
-
-    test('loadImage rejects unsupported image formats (e.g. GIF, WebP)', () async {
-      final pfGif = PlatformFile(name: 'anim.gif', size: 10, bytes: Uint8List.fromList([1, 2, 3]));
-
-      await controller.loadImage(pfGif);
+      await controller.addImages([pfJpg, pfPng]);
 
       final state = controller.testState;
-      expect(state.hasImage, isFalse);
+      expect(state.hasImages, isTrue);
+      expect(state.imageCount, equals(2));
+      expect(state.images[0].file.name, equals('photo.jpg'));
+      expect(state.images[0].width, equals(200));
+      expect(state.images[1].file.name, equals('graphic.png'));
+      expect(state.images[1].width, equals(300));
+    });
+
+    test('addImages rejects unsupported image format per file', () async {
+      final pfGif = PlatformFile(name: 'anim.gif', size: 10, bytes: Uint8List.fromList([1, 2, 3]));
+
+      await controller.addImages([pfGif]);
+
+      final state = controller.testState;
+      expect(state.hasImages, isFalse);
       expect(state.errorMessage, contains('Only JPEG and PNG images are supported'));
     });
 
-    test('loadImage rejects corrupted or unreadable image bytes', () async {
-      final pfBadJpg = PlatformFile(name: 'broken.jpg', size: 10, bytes: Uint8List.fromList([0, 0, 0, 0]));
+    test('addImages handles bad image per file without blocking valid ones', () async {
+      final pfJpg = PlatformFile(name: 'good.jpg', size: sampleJpg.length, bytes: sampleJpg);
+      final pfBadGif = PlatformFile(name: 'bad.gif', size: 10, bytes: Uint8List.fromList([1, 2, 3]));
+      final pfPng = PlatformFile(name: 'good.png', size: samplePng.length, bytes: samplePng);
 
-      await controller.loadImage(pfBadJpg);
+      await controller.addImages([pfJpg, pfBadGif, pfPng]);
 
       final state = controller.testState;
-      expect(state.hasImage, isFalse);
-      expect(state.errorMessage, contains("image couldn't be read"));
+      expect(state.imageCount, equals(2)); // good.jpg and good.png added
+      expect(state.images[0].file.name, equals('good.jpg'));
+      expect(state.images[1].file.name, equals('good.png'));
+      expect(state.errorMessage, contains("bad.gif wasn't added"));
     });
 
-    test('insertImagePage at start (insertionPoint = -1) with matchNeighboringPage', () async {
-      final tempDir = Directory.systemTemp.createTempSync('anvil_img_insert_start');
+    test('removeImage removes image item from batch', () async {
+      final pfJpg = PlatformFile(name: 'photo.jpg', size: sampleJpg.length, bytes: sampleJpg);
+      final pfPng = PlatformFile(name: 'graphic.png', size: samplePng.length, bytes: samplePng);
+
+      await controller.addImages([pfJpg, pfPng]);
+      expect(controller.testState.imageCount, equals(2));
+
+      final firstId = controller.testState.images[0].id;
+      controller.removeImage(firstId);
+
+      final state = controller.testState;
+      expect(state.imageCount, equals(1));
+      expect(state.images[0].file.name, equals('graphic.png'));
+    });
+
+    test('reorderImages changes order of images in batch list', () async {
+      final pfJpg = PlatformFile(name: 'first.jpg', size: sampleJpg.length, bytes: sampleJpg);
+      final pfPng = PlatformFile(name: 'second.png', size: samplePng.length, bytes: samplePng);
+
+      await controller.addImages([pfJpg, pfPng]);
+      expect(controller.testState.images[0].file.name, equals('first.jpg'));
+
+      controller.reorderImages(0, 2);
+
+      final state = controller.testState;
+      expect(state.images[0].file.name, equals('second.png'));
+      expect(state.images[1].file.name, equals('first.jpg'));
+    });
+
+    test('insertImagePages (1 image regression) at start with matchNeighboringPage', () async {
+      final tempDir = Directory.systemTemp.createTempSync('anvil_img_insert_reg');
       final targetPath = '${tempDir.path}${Platform.pathSeparator}inserted_start.pdf';
 
       final pfTarget = PlatformFile(name: 'target.pdf', size: targetPdf3Pages.length, bytes: targetPdf3Pages);
       final pfImage = PlatformFile(name: 'image.png', size: samplePng.length, bytes: samplePng);
 
       await controller.loadTargetDocument(pfTarget);
-      await controller.loadImage(pfImage);
+      await controller.addImages([pfImage]);
 
       controller.setInsertionPoint(-1);
       controller.setPageFitMode(PageFitMode.matchNeighboringPage);
 
-      final resultPath = await controller.insertImagePage(customOutputPath: targetPath);
+      final resultPath = await controller.insertImagePages(customOutputPath: targetPath);
       expect(resultPath, equals(targetPath));
 
       final doc = PdfDocument(inputBytes: File(targetPath).readAsBytesSync());
@@ -181,52 +213,28 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
-    test('insertImagePage at end (insertionPoint = targetPageCount - 1) with fitToImage', () async {
-      final tempDir = Directory.systemTemp.createTempSync('anvil_img_insert_end');
-      final targetPath = '${tempDir.path}${Platform.pathSeparator}inserted_end.pdf';
-
-      final pfTarget = PlatformFile(name: 'target.pdf', size: targetPdf3Pages.length, bytes: targetPdf3Pages);
-      final pfImage = PlatformFile(name: 'image.jpg', size: sampleJpg.length, bytes: sampleJpg);
-
-      await controller.loadTargetDocument(pfTarget);
-      await controller.loadImage(pfImage);
-
-      controller.setInsertionPoint(2);
-      controller.setPageFitMode(PageFitMode.fitToImage);
-
-      final resultPath = await controller.insertImagePage(customOutputPath: targetPath);
-      expect(resultPath, equals(targetPath));
-
-      final doc = PdfDocument(inputBytes: File(targetPath).readAsBytesSync());
-      expect(doc.pages.count, equals(4));
-      // Last page should match image aspect size (200x100)
-      expect(doc.pages[3].size.width, equals(200));
-      expect(doc.pages[3].size.height, equals(100));
-      doc.dispose();
-
-      tempDir.deleteSync(recursive: true);
-    });
-
-    test('insertImagePage in middle uses page immediately preceding insertion point as neighbor reference', () async {
-      // Create target PDF with distinct page size for page 2 (index 1): Letter Landscape (792 x 612)
-      final customTarget = await createValidPdf(pagesCount: 1, pageSize: PdfPageSize.letter, orientation: PdfPageOrientation.landscape);
-      final pfTarget = PlatformFile(name: 'custom_target.pdf', size: customTarget.length, bytes: customTarget);
-      final pfImage = PlatformFile(name: 'image.jpg', size: sampleJpg.length, bytes: sampleJpg);
+    test('insertImagePages N images at start with matchNeighboringPage (all N share resolved neighbor size)', () async {
+      final customTarget = await createValidPdf(pagesCount: 2, pageSize: PdfPageSize.letter, orientation: PdfPageOrientation.landscape);
+      final pfTarget = PlatformFile(name: 'target.pdf', size: customTarget.length, bytes: customTarget);
+      final pfImg1 = PlatformFile(name: 'img1.jpg', size: sampleJpg.length, bytes: sampleJpg);
+      final pfImg2 = PlatformFile(name: 'img2.png', size: samplePng.length, bytes: samplePng);
 
       await controller.loadTargetDocument(pfTarget);
-      await controller.loadImage(pfImage);
+      await controller.addImages([pfImg1, pfImg2]);
 
-      controller.setInsertionPoint(0); // Insert after page index 0
+      controller.setInsertionPoint(-1); // At start -> matches page 0 (Letter Landscape: 792x612)
       controller.setPageFitMode(PageFitMode.matchNeighboringPage);
 
-      final tempDir = Directory.systemTemp.createTempSync('anvil_img_insert_middle');
-      final targetPath = '${tempDir.path}${Platform.pathSeparator}inserted_middle.pdf';
+      final tempDir = Directory.systemTemp.createTempSync('anvil_img_batch_start');
+      final targetPath = '${tempDir.path}${Platform.pathSeparator}inserted_batch_start.pdf';
 
-      await controller.insertImagePage(customOutputPath: targetPath);
+      await controller.insertImagePages(customOutputPath: targetPath);
 
       final doc = PdfDocument(inputBytes: File(targetPath).readAsBytesSync());
-      expect(doc.pages.count, equals(2));
-      // Inserted page (index 1) should match preceding page 0 size (Letter Landscape: 792 x 612)
+      expect(doc.pages.count, equals(4)); // 2 target + 2 images inserted at start
+      // Inserted pages (index 0 and 1) should both match page 0's size (Letter Landscape: 792x612)
+      expect(doc.pages[0].size.width, equals(792));
+      expect(doc.pages[0].size.height, equals(612));
       expect(doc.pages[1].size.width, equals(792));
       expect(doc.pages[1].size.height, equals(612));
       doc.dispose();
@@ -234,9 +242,71 @@ void main() {
       tempDir.deleteSync(recursive: true);
     });
 
+    test('insertImagePages N images at end with fitToImage (each page uses its image aspect ratio)', () async {
+      final tempDir = Directory.systemTemp.createTempSync('anvil_img_batch_end');
+      final targetPath = '${tempDir.path}${Platform.pathSeparator}inserted_batch_end.pdf';
+
+      final pfTarget = PlatformFile(name: 'target.pdf', size: targetPdf3Pages.length, bytes: targetPdf3Pages);
+      final pfImg1 = PlatformFile(name: 'img1.jpg', size: sampleJpg.length, bytes: sampleJpg); // 200x100
+      final pfImg2 = PlatformFile(name: 'img2.png', size: samplePng.length, bytes: samplePng); // 300x150
+      final pfImg3 = PlatformFile(name: 'img3.jpg', size: sampleJpg2.length, bytes: sampleJpg2); // 400x500
+
+      await controller.loadTargetDocument(pfTarget);
+      await controller.addImages([pfImg1, pfImg2, pfImg3]);
+
+      controller.setInsertionPoint(2); // At end
+      controller.setPageFitMode(PageFitMode.fitToImage);
+
+      await controller.insertImagePages(customOutputPath: targetPath);
+
+      final doc = PdfDocument(inputBytes: File(targetPath).readAsBytesSync());
+      expect(doc.pages.count, equals(6)); // 3 target + 3 images inserted at end
+      // Check last 3 pages dimensions match each image individually
+      expect(doc.pages[3].size.width, equals(200));
+      expect(doc.pages[3].size.height, equals(100));
+
+      expect(doc.pages[4].size.width, equals(300));
+      expect(doc.pages[4].size.height, equals(150));
+
+      expect(doc.pages[5].size.width, equals(400));
+      expect(doc.pages[5].size.height, equals(500));
+      doc.dispose();
+
+      tempDir.deleteSync(recursive: true);
+    });
+
+    test('insertImagePages in middle with N images (preceding target page used as shared neighbor reference)', () async {
+      final customTarget = await createValidPdf(pagesCount: 3, pageSize: PdfPageSize.a4, orientation: PdfPageOrientation.landscape);
+      final pfTarget = PlatformFile(name: 'target.pdf', size: customTarget.length, bytes: customTarget);
+      final pfImg1 = PlatformFile(name: 'img1.jpg', size: sampleJpg.length, bytes: sampleJpg);
+      final pfImg2 = PlatformFile(name: 'img2.png', size: samplePng.length, bytes: samplePng);
+
+      await controller.loadTargetDocument(pfTarget);
+      await controller.addImages([pfImg1, pfImg2]);
+
+      controller.setInsertionPoint(0); // Insert after target page 0
+      controller.setPageFitMode(PageFitMode.matchNeighboringPage);
+
+      final tempDir = Directory.systemTemp.createTempSync('anvil_img_batch_middle');
+      final targetPath = '${tempDir.path}${Platform.pathSeparator}inserted_batch_middle.pdf';
+
+      await controller.insertImagePages(customOutputPath: targetPath);
+
+      final doc = PdfDocument(inputBytes: File(targetPath).readAsBytesSync());
+      expect(doc.pages.count, equals(5)); // 3 original + 2 inserted
+      // Page 1 and Page 2 (0-indexed) are the inserted image pages, both matching Page 0's size
+      expect(doc.pages[1].size.width, equals(doc.pages[0].size.width));
+      expect(doc.pages[1].size.height, equals(doc.pages[0].size.height));
+      expect(doc.pages[2].size.width, equals(doc.pages[0].size.width));
+      expect(doc.pages[2].size.height, equals(doc.pages[0].size.height));
+      doc.dispose();
+
+      tempDir.deleteSync(recursive: true);
+    });
+
     test('zero-existing-pages target document falls back to fitToImage automatically', () async {
       final pfImage = PlatformFile(name: 'image.jpg', size: sampleJpg.length, bytes: sampleJpg);
-      await controller.loadImage(pfImage);
+      await controller.addImages([pfImage]);
 
       controller.setPageFitMode(PageFitMode.matchNeighboringPage);
       expect(controller.testState.fitMode, equals(PageFitMode.fitToImage));

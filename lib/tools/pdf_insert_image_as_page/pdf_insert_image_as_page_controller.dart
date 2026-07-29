@@ -28,7 +28,7 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
         _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         super(const PdfInsertImageAsPageState());
 
-  /// Load and validate target PDF document into which the image page will be inserted.
+  /// Load and validate target PDF document into which image pages will be inserted.
   Future<void> loadTargetDocument(PlatformFile platformFile) async {
     Uint8List? bytes = platformFile.bytes;
     if (bytes == null && platformFile.path != null) {
@@ -98,85 +98,138 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
     }
   }
 
-  /// Load and validate image file to insert as a page.
+  /// Load single image (convenience wrapper around [addImages]).
   Future<void> loadImage(PlatformFile platformFile) async {
-    final ext = p.extension(platformFile.name).toLowerCase();
-    if (ext != '.jpg' && ext != '.jpeg' && ext != '.png') {
-      state = state.copyWith(
-        errorMessage: "Only JPEG and PNG images are supported.",
-        resetError: false,
-      );
-      return;
-    }
+    await addImages([platformFile]);
+  }
 
-    Uint8List? bytes = platformFile.bytes;
-    if (bytes == null && platformFile.path != null) {
-      final f = File(platformFile.path!);
-      if (f.existsSync()) {
-        try {
-          bytes = await f.readAsBytes();
-        } catch (_) {
-          state = state.copyWith(
-            errorMessage: "Could not read '${platformFile.name}': permission denied or file unreadable.",
-            resetError: false,
-          );
-          return;
+  /// Add and validate image files to insert as pages.
+  Future<void> addImages(List<PlatformFile> platformFiles) async {
+    if (platformFiles.isEmpty) return;
+
+    final newImages = List<ImageItemState>.from(state.images);
+    final errors = <String>[];
+    int counter = DateTime.now().microsecondsSinceEpoch;
+
+    for (final platformFile in platformFiles) {
+      final ext = p.extension(platformFile.name).toLowerCase();
+      if (ext != '.jpg' && ext != '.jpeg' && ext != '.png') {
+        if (platformFiles.length == 1) {
+          errors.add("Only JPEG and PNG images are supported.");
+        } else {
+          errors.add("Only JPEG and PNG images are supported: ${platformFile.name} wasn't added.");
+        }
+        continue;
+      }
+
+      Uint8List? bytes = platformFile.bytes;
+      if (bytes == null && platformFile.path != null) {
+        final f = File(platformFile.path!);
+        if (f.existsSync()) {
+          try {
+            bytes = await f.readAsBytes();
+          } catch (_) {
+            if (platformFiles.length == 1) {
+              errors.add("Could not read '${platformFile.name}': permission denied or file unreadable.");
+            } else {
+              errors.add("This image couldn't be read and wasn't added: ${platformFile.name}.");
+            }
+            continue;
+          }
         }
       }
-    }
 
-    if (bytes == null || bytes.isEmpty) {
-      state = state.copyWith(
-        errorMessage: "This image couldn't be read. Try a different file.",
-        resetError: false,
-      );
-      return;
-    }
-
-    img.Image? decoded;
-    try {
-      decoded = img.decodeImage(bytes);
-    } catch (_) {
-      decoded = null;
-    }
-
-    if (decoded == null) {
-      state = state.copyWith(
-        errorMessage: "This image couldn't be read. Try a different file.",
-        resetError: false,
-      );
-      return;
-    }
-
-    // ASSUMPTION: Downscale oversized images to max dimension of 3000px to avoid PDF bloat while preserving clarity.
-    const maxDimension = 3000;
-    if (decoded.width > maxDimension || decoded.height > maxDimension) {
-      if (decoded.width >= decoded.height) {
-        decoded = img.copyResize(decoded, width: maxDimension, maintainAspect: true);
-      } else {
-        decoded = img.copyResize(decoded, height: maxDimension, maintainAspect: true);
+      if (bytes == null || bytes.isEmpty) {
+        if (platformFiles.length == 1) {
+          errors.add("This image couldn't be read. Try a different file.");
+        } else {
+          errors.add("This image couldn't be read and wasn't added: ${platformFile.name}.");
+        }
+        continue;
       }
-      if (ext == '.png') {
-        bytes = Uint8List.fromList(img.encodePng(decoded));
-      } else {
-        bytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 90));
-      }
-    }
 
-    // Generate preview thumbnail for UI display
-    final previewImg = (decoded.width > 400 || decoded.height > 400)
-        ? (decoded.width >= decoded.height
-            ? img.copyResize(decoded, width: 400, maintainAspect: true)
-            : img.copyResize(decoded, height: 400, maintainAspect: true))
-        : decoded;
-    final thumbnailBytes = Uint8List.fromList(img.encodeJpg(previewImg, quality: 80));
+      img.Image? decoded;
+      try {
+        decoded = img.decodeImage(bytes);
+      } catch (_) {
+        decoded = null;
+      }
+
+      if (decoded == null) {
+        if (platformFiles.length == 1) {
+          errors.add("This image couldn't be read. Try a different file.");
+        } else {
+          errors.add("This image couldn't be read and wasn't added: ${platformFile.name}.");
+        }
+        continue;
+      }
+
+      // ASSUMPTION: Downscale oversized images to max dimension of 3000px to avoid PDF bloat while preserving clarity.
+      const maxDimension = 3000;
+      if (decoded.width > maxDimension || decoded.height > maxDimension) {
+        if (decoded.width >= decoded.height) {
+          decoded = img.copyResize(decoded, width: maxDimension, maintainAspect: true);
+        } else {
+          decoded = img.copyResize(decoded, height: maxDimension, maintainAspect: true);
+        }
+        if (ext == '.png') {
+          bytes = Uint8List.fromList(img.encodePng(decoded));
+        } else {
+          bytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 90));
+        }
+      }
+
+      // Generate preview thumbnail for UI display
+      final previewImg = (decoded.width > 400 || decoded.height > 400)
+          ? (decoded.width >= decoded.height
+              ? img.copyResize(decoded, width: 400, maintainAspect: true)
+              : img.copyResize(decoded, height: 400, maintainAspect: true))
+          : decoded;
+      final thumbnailBytes = Uint8List.fromList(img.encodeJpg(previewImg, quality: 80));
+
+      final id = '${counter++}_${platformFile.name}';
+      newImages.add(ImageItemState(
+        id: id,
+        file: platformFile,
+        bytes: bytes,
+        thumbnail: thumbnailBytes,
+        width: decoded.width,
+        height: decoded.height,
+      ));
+    }
 
     state = state.copyWith(
-      imageFile: platformFile,
-      imageBytes: bytes,
-      imageThumbnail: thumbnailBytes,
-      imageWidth: decoded.width,
-      imageHeight: decoded.height,
+      images: newImages,
+      errorMessage: errors.isNotEmpty ? errors.join('\n') : null,
+      resetError: errors.isEmpty,
+      resetOutput: true,
+    );
+  }
+
+  /// Remove image from batch by ID.
+  void removeImage(String imageId) {
+    final updated = state.images.where((img) => img.id != imageId).toList();
+    state = state.copyWith(
+      images: updated,
+      resetError: true,
+      resetOutput: true,
+    );
+  }
+
+  /// Reorder images in the batch list.
+  void reorderImages(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= state.images.length) return;
+    if (newIndex < 0 || newIndex > state.images.length) return;
+
+    final list = List<ImageItemState>.from(state.images);
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    final item = list.removeAt(oldIndex);
+    list.insert(newIndex, item);
+
+    state = state.copyWith(
+      images: list,
       resetError: true,
       resetOutput: true,
     );
@@ -202,50 +255,55 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
     state = const PdfInsertImageAsPageState();
   }
 
-  /// Clear loaded image file.
-  void clearImage() {
+  /// Clear loaded image files.
+  void clearImages() {
     state = state.copyWith(
-      resetImage: true,
+      resetImages: true,
       resetError: true,
       resetOutput: true,
     );
   }
+
+  /// Alias for [clearImages].
+  void clearImage() => clearImages();
 
   /// Dismiss error message banner.
   void clearError() {
     state = state.copyWith(resetError: true);
   }
 
-  /// Convert loaded image to single-page PDF and splice into target PDF.
-  Future<String?> insertImagePage({String? customOutputPath}) async {
+  /// Alias for [insertImagePages].
+  Future<String?> insertImagePage({String? customOutputPath}) =>
+      insertImagePages(customOutputPath: customOutputPath);
+
+  /// Convert loaded images to single-page PDFs and splice into target PDF.
+  Future<String?> insertImagePages({String? customOutputPath}) async {
     if (!state.canSubmit) {
       if (!state.hasTarget) {
         state = state.copyWith(errorMessage: "Select a target PDF document first.");
-      } else if (!state.hasImage) {
-        state = state.copyWith(errorMessage: "Select an image file to insert.");
+      } else if (!state.hasImages) {
+        state = state.copyWith(errorMessage: "Select image file(s) to insert.");
       }
       return null;
     }
 
     final startTime = DateTime.now();
 
+    final msg = state.images.length == 1
+        ? "Inserting image as page into document…"
+        : "Inserting ${state.images.length} images as pages into document…";
+
     state = state.copyWith(
       isProcessing: true,
-      progressMessage: "Inserting image as page into document…",
+      progressMessage: msg,
       resetError: true,
       resetOutput: true,
     );
 
     try {
-      // 1. Resolve page size and image rectangle
-      Size pageSize;
-      Rect imgRect;
-
-      if (state.fitMode == PageFitMode.fitToImage || state.targetPageCount == 0) {
-        pageSize = Size(state.imageWidth.toDouble(), state.imageHeight.toDouble());
-        imgRect = Rect.fromLTWH(0, 0, pageSize.width, pageSize.height);
-      } else {
-        // Resolve neighbor page index
+      // 1. Batch-level neighbor page resolution (resolved once for the whole batch)
+      Size? neighborSize;
+      if (state.fitMode == PageFitMode.matchNeighboringPage && state.targetPageCount > 0) {
         int neighborIdx;
         if (state.insertionPoint == -1) {
           neighborIdx = 0;
@@ -257,34 +315,47 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
 
         final targetDoc = PdfDocument(inputBytes: state.targetBytes!);
         if (neighborIdx >= 0 && neighborIdx < targetDoc.pages.count) {
-          final neighborPage = targetDoc.pages[neighborIdx];
-          pageSize = neighborPage.size;
-        } else {
-          pageSize = Size(state.imageWidth.toDouble(), state.imageHeight.toDouble());
+          neighborSize = targetDoc.pages[neighborIdx].size;
         }
         targetDoc.dispose();
-
-        // Calculate aspect ratio fit (centered, un-distorted)
-        final double scale = min(pageSize.width / state.imageWidth, pageSize.height / state.imageHeight);
-        final double sw = state.imageWidth * scale;
-        final double sh = state.imageHeight * scale;
-        final double dx = (pageSize.width - sw) / 2.0;
-        final double dy = (pageSize.height - sh) / 2.0;
-        imgRect = Rect.fromLTWH(dx, dy, sw, sh);
       }
 
-      // 2. Run heavy PDF work on a background isolate
-      final Uint8List resultBytes = await compute(
-        isolateInsertImageAsPage,
-        InsertImageAsPageParams(
-          targetBytes: state.targetBytes!,
-          imageBytes: state.imageBytes!,
+      // 2. Build specs for each image in the batch
+      final imageSpecs = <ImagePageSpec>[];
+      for (final imgItem in state.images) {
+        Size pageSize;
+        Rect imgRect;
+
+        if (neighborSize != null) {
+          pageSize = neighborSize;
+          final double scale = min(pageSize.width / imgItem.width, pageSize.height / imgItem.height);
+          final double sw = imgItem.width * scale;
+          final double sh = imgItem.height * scale;
+          final double dx = (pageSize.width - sw) / 2.0;
+          final double dy = (pageSize.height - sh) / 2.0;
+          imgRect = Rect.fromLTWH(dx, dy, sw, sh);
+        } else {
+          pageSize = Size(imgItem.width.toDouble(), imgItem.height.toDouble());
+          imgRect = Rect.fromLTWH(0, 0, pageSize.width, pageSize.height);
+        }
+
+        imageSpecs.add(ImagePageSpec(
+          imageBytes: imgItem.bytes,
           pageWidth: pageSize.width,
           pageHeight: pageSize.height,
           imgLeft: imgRect.left,
           imgTop: imgRect.top,
           imgWidth: imgRect.width,
           imgHeight: imgRect.height,
+        ));
+      }
+
+      // 3. Run heavy PDF work on background isolate
+      final Uint8List resultBytes = await compute(
+        isolateInsertImagePages,
+        InsertImagePagesParams(
+          targetBytes: state.targetBytes!,
+          imageSpecs: imageSpecs,
           insertionPoint: state.insertionPoint,
         ),
       );
