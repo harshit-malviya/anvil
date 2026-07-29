@@ -22,6 +22,16 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
    don't block, but don't guess silently either
 6. Don't start a new `FEATURE_*.md` file's work until the previous one is fully checked off in
    the Progress Log below, including its tests
+7. **Never run CPU-heavy processing on the main UI thread.** All Syncfusion PDF operations
+   (parsing, template creation, rendering, saving) and similar CPU-bound work MUST run in a
+   background isolate via `compute()`. Use the established pattern:
+   - Create a **top-level async function** in `lib/core/services/pdf_isolate_worker.dart` that
+     takes a serializable params object and returns serializable output
+   - Call `compute(isolateFunction, params)` from the controller
+   - Keep file I/O on the main isolate (it's async and non-blocking)
+   - Use an **indeterminate progress bar** with a static message (compute() can't send
+     incremental updates back)
+   - Never use `Future.delayed()` as a workaround for UI jank — it doesn't work; use isolates
 
 ## 3. Progress log
 
@@ -98,6 +108,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Registered route `/pdf-insert-image-as-page` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
   - Created comprehensive unit test suite `test/tools/pdf_insert_image_as_page/pdf_insert_image_as_page_controller_test.dart` testing insert-at-start with `matchNeighboringPage`, insert-at-end with `fitToImage`, insert-in-middle with preceding neighbor matching, unsupported image format rejection, corrupted image rejection, zero-existing-pages fallback, protected target rejection, and corrupted target rejection.
 
+## 2026-07-29 — Session 13
+- Fixed critical UI freezing during PDF processing by moving all Syncfusion PDF work to background isolates:
+  - Created `lib/core/services/pdf_isolate_worker.dart` with 8 top-level async functions (`isolateMergePdfs`, `isolateCompressPdf`, `isolateSplitPdf`, `isolateArrangePages`, `isolateAddPassword`, `isolateRemovePassword`, `isolateInsertPages`, `isolateInsertImageAsPage`)
+  - Refactored all 7 PDF tool controllers to call `compute(isolateFunction, params)` instead of running Syncfusion work on the UI thread
+  - Removed ineffective `Future.delayed(15ms)` yield workarounds from all controllers
+  - Cleaned up PDF-to-Image controller (pdfx uses async platform channels, not Syncfusion — removed unnecessary delays)
+  - Added standing rule #7 to enforce this pattern for all future work
+
 ## 2026-07-28 — Session 12
 - Implemented Tool Search feature (`docs/PHASE 3/FEATURE_tool_search.md`):
   - Added `keywords` field to `ToolMetadata` in `lib/tools/registry.dart` and populated keyword synonyms for all 8 registered tools.
@@ -124,6 +142,11 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 
 ## 5. Decisions log
 
+## 2026-07-29
+- Decision: All Syncfusion PDF processing (`PdfDocument`, `createTemplate`, `drawPdfTemplate`, `.save()`) must run in background isolates via `compute()`, never on the main UI thread. `Future.delayed()` between loop iterations is not a viable alternative — Syncfusion calls are synchronous CPU-bound operations that block the event loop regardless of micro-delays.
+- Decision: Used simple `compute()` (single message in, single result out) rather than full `Isolate` + `SendPort`/`ReceivePort` pipelines. Tradeoff: no per-page progress updates, but simpler code and smooth indeterminate progress bar animation. The smooth UI is a better user experience than frozen per-page text.
+- Decision: Isolate worker functions live in a single shared file (`lib/core/services/pdf_isolate_worker.dart`) with parameter container classes, keeping isolate concerns separated from controller business logic.
+
 ## 2026-07-28
 - Decision: Refactored `PdfInsertPagesController` to expose a static `splicePages` helper function, reusing page splicing logic directly for `PdfInsertImageAsPageController`.
 - Decision: Explicitly filled background rectangle with white color when converting image to single-page PDF to ensure PNG transparency flattens cleanly without black backgrounds.
@@ -140,6 +163,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 ## 6. Known issues / tech debt
 
 - **[FIXED] PDF Merge page content cropping:** Non-A4 pages and landscape pages were previously cropped due to default canvas margins and page sizes. Resolved by configuring section-level page dimensions (`pageSettings.size`) and zero margins per page. Verified via mixed-format regression tests (`test/tools/pdf_merge/pdf_merge_controller_test.dart` and `test/tools/pdf_merge/size_preservation_test.dart`).
+- **[FIXED] UI freezing during PDF processing:** All PDF tool screens froze during processing because Syncfusion operations ran on the main UI thread. Fixed by moving all heavy work to background isolates via `compute()`. See `lib/core/services/pdf_isolate_worker.dart`.
 
 ## 7. Archiving old entries (keep this file lean)
 
