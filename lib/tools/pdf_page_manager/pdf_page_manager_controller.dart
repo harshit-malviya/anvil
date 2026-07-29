@@ -1,12 +1,11 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
+import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import 'pdf_page_manager_state.dart';
 
@@ -225,55 +224,21 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       resetError: true,
       resetOutput: true,
     );
-    await Future.delayed(const Duration(milliseconds: 50));
 
     try {
-      final sourceDoc = PdfDocument(inputBytes: state.fileBytes!);
-      final destinationDoc = PdfDocument();
+      // Build isolate-compatible page arrangement list
+      final arrangedPages = state.activePages
+          .map((item) => ArrangedPage(
+                originalIndex: item.originalIndex,
+                rotation: item.rotation,
+              ))
+          .toList();
 
-      for (int i = 0; i < state.activePages.length; i++) {
-        final item = state.activePages[i];
-        state = state.copyWith(
-          progressMessage: "Arranging page ${i + 1} of ${state.activePages.length}…",
-        );
-        await Future.delayed(const Duration(milliseconds: 15));
-
-        final sourcePage = sourceDoc.pages[item.originalIndex];
-        final section = destinationDoc.sections!.add();
-        section.pageSettings.size = sourcePage.size;
-        section.pageSettings.margins.all = 0;
-
-        if (sourcePage.size.width > sourcePage.size.height) {
-          section.pageSettings.orientation = PdfPageOrientation.landscape;
-        } else {
-          section.pageSettings.orientation = PdfPageOrientation.portrait;
-        }
-
-        switch (item.rotation % 360) {
-          case 90:
-            section.pageSettings.rotate = PdfPageRotateAngle.rotateAngle90;
-            break;
-          case 180:
-            section.pageSettings.rotate = PdfPageRotateAngle.rotateAngle180;
-            break;
-          case 270:
-            section.pageSettings.rotate = PdfPageRotateAngle.rotateAngle270;
-            break;
-          case 0:
-          default:
-            section.pageSettings.rotate = PdfPageRotateAngle.rotateAngle0;
-            break;
-        }
-
-        final template = sourcePage.createTemplate();
-        final newPage = section.pages.add();
-        newPage.graphics.drawPdfTemplate(template, const Offset(0, 0), sourcePage.size);
-      }
-
-      sourceDoc.dispose();
-
-      final List<int> outputBytes = await destinationDoc.save();
-      destinationDoc.dispose();
+      // Run heavy PDF work on a background isolate
+      final Uint8List outputBytes = await compute(
+        isolateArrangePages,
+        ArrangePagesParams(inputBytes: state.fileBytes!, pages: arrangedPages),
+      );
 
       String targetPath;
       if (customOutputPath != null && customOutputPath.isNotEmpty) {

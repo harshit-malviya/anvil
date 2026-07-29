@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
+import '../../core/services/pdf_isolate_worker.dart';
 import 'pdf_merge_state.dart';
 
 final pdfMergeControllerProvider =
@@ -126,39 +126,11 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
       resetError: true,
       resetOutput: true,
     );
-    await Future.delayed(const Duration(milliseconds: 50));
 
     try {
-      final destinationDoc = PdfDocument();
-
-      for (int f = 0; f < state.files.length; f++) {
-        final item = state.files[f];
-        state = state.copyWith(
-          progressMessage: "Merging document ${f + 1} of ${state.files.length}…",
-        );
-        await Future.delayed(const Duration(milliseconds: 15));
-
-        final sourceDoc = PdfDocument(inputBytes: item.bytes);
-        for (int i = 0; i < sourceDoc.pages.count; i++) {
-          final page = sourceDoc.pages[i];
-          final section = destinationDoc.sections!.add();
-          section.pageSettings.size = page.size;
-          section.pageSettings.margins.all = 0;
-          if (page.size.width > page.size.height) {
-            section.pageSettings.orientation = PdfPageOrientation.landscape;
-          } else {
-            section.pageSettings.orientation = PdfPageOrientation.portrait;
-          }
-
-          final template = page.createTemplate();
-          final newPage = section.pages.add();
-          newPage.graphics.drawPdfTemplate(template, const Offset(0, 0), page.size);
-        }
-        sourceDoc.dispose();
-      }
-
-      final List<int> mergedBytes = await destinationDoc.save();
-      destinationDoc.dispose();
+      // Run heavy PDF work on a background isolate
+      final fileBytesList = state.files.map((f) => f.bytes).toList();
+      final Uint8List mergedBytes = await compute(isolateMergePdfs, fileBytesList);
 
       String targetPath;
       if (customOutputPath != null && customOutputPath.isNotEmpty) {

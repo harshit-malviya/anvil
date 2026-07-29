@@ -217,7 +217,6 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
       exportedCount: 0,
       skippedPages: const [],
     );
-    await Future.delayed(const Duration(milliseconds: 50));
 
     // Selected page indices in document order (0-indexed)
     final sortedPages = state.selectedPages.toList()..sort();
@@ -324,7 +323,6 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
             progressMessage: "Exporting page ${pageIdx + 1} (${i + 1} of ${sortedPages.length})…",
             progressPercent: progressRatio,
           );
-          await Future.delayed(const Duration(milliseconds: 15));
 
           Uint8List? imageBytes;
           if (_customRenderer != null) {

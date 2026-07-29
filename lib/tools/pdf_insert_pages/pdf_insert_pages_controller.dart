@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
+import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import 'pdf_insert_pages_state.dart';
 
@@ -237,14 +238,17 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
       resetError: true,
       resetOutput: true,
     );
-    await Future.delayed(const Duration(milliseconds: 50));
 
     try {
-      final List<int> resultBytes = await splicePages(
-        targetBytes: state.targetBytes!,
-        sourceBytes: state.sourceBytes!,
-        selectedSourceIndices: state.selectedSourcePageIndices,
-        insertionPoint: state.insertionPoint,
+      // Run heavy PDF work on a background isolate
+      final Uint8List resultBytes = await compute(
+        isolateInsertPages,
+        InsertPagesParams(
+          targetBytes: state.targetBytes!,
+          sourceBytes: state.sourceBytes!,
+          selectedSourceIndices: state.selectedSourcePageIndices,
+          insertionPoint: state.insertionPoint,
+        ),
       );
 
       String targetPath;
@@ -319,37 +323,16 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
     required List<int> selectedSourceIndices,
     required int insertionPoint,
   }) async {
-    final targetDoc = PdfDocument(inputBytes: targetBytes);
-    final sourceDoc = PdfDocument(inputBytes: sourceBytes);
-    final destinationDoc = PdfDocument();
-
-    // 1. Copy target pages from index 0 up to insertionPoint (inclusive)
-    if (insertionPoint >= 0) {
-      for (int i = 0; i <= insertionPoint && i < targetDoc.pages.count; i++) {
-        copyPageToDestination(targetDoc.pages[i], destinationDoc);
-      }
-    }
-
-    // 2. Copy selected source pages in chosen order
-    for (final srcIdx in selectedSourceIndices) {
-      if (srcIdx >= 0 && srcIdx < sourceDoc.pages.count) {
-        copyPageToDestination(sourceDoc.pages[srcIdx], destinationDoc);
-      }
-    }
-
-    // 3. Copy remaining target pages from insertionPoint + 1 to end
-    for (int i = insertionPoint + 1; i < targetDoc.pages.count; i++) {
-      if (i >= 0) {
-        copyPageToDestination(targetDoc.pages[i], destinationDoc);
-      }
-    }
-
-    targetDoc.dispose();
-    sourceDoc.dispose();
-
-    final List<int> resultBytes = await destinationDoc.save();
-    destinationDoc.dispose();
-    return Uint8List.fromList(resultBytes);
+    // Delegate to isolate worker for consistency
+    return compute(
+      isolateInsertPages,
+      InsertPagesParams(
+        targetBytes: targetBytes,
+        sourceBytes: sourceBytes,
+        selectedSourceIndices: selectedSourceIndices,
+        insertionPoint: insertionPoint,
+      ),
+    );
   }
 
   /// Helper to copy page with preserved dimensions, zero margins, and explicit orientation.

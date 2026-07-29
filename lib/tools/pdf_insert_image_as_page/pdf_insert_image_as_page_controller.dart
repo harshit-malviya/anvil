@@ -8,8 +8,8 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
+import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
-import '../pdf_insert_pages/pdf_insert_pages_controller.dart';
 import 'pdf_insert_image_as_page_state.dart';
 
 final pdfInsertImageAsPageControllerProvider =
@@ -235,7 +235,6 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
       resetError: true,
       resetOutput: true,
     );
-    await Future.delayed(const Duration(milliseconds: 50));
 
     try {
       // 1. Resolve page size and image rectangle
@@ -274,37 +273,20 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
         imgRect = Rect.fromLTWH(dx, dy, sw, sh);
       }
 
-      // 2. Create single-page PDF containing the image
-      final imgPdf = PdfDocument();
-      final section = imgPdf.sections!.add();
-      section.pageSettings.size = pageSize;
-      section.pageSettings.margins.all = 0;
-      if (pageSize.width > pageSize.height) {
-        section.pageSettings.orientation = PdfPageOrientation.landscape;
-      } else {
-        section.pageSettings.orientation = PdfPageOrientation.portrait;
-      }
-
-      final page = section.pages.add();
-
-      // Explicitly draw white background to flatten PNG transparency
-      page.graphics.drawRectangle(
-        brush: PdfSolidBrush(PdfColor(255, 255, 255)),
-        bounds: Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
-      );
-
-      final pdfImage = PdfBitmap(state.imageBytes!);
-      page.graphics.drawImage(pdfImage, imgRect);
-
-      final List<int> singlePagePdfBytes = await imgPdf.save();
-      imgPdf.dispose();
-
-      // 3. Splice single-page PDF into target document using shared logic
-      final List<int> resultBytes = await PdfInsertPagesController.splicePages(
-        targetBytes: state.targetBytes!,
-        sourceBytes: Uint8List.fromList(singlePagePdfBytes),
-        selectedSourceIndices: const [0],
-        insertionPoint: state.insertionPoint,
+      // 2. Run heavy PDF work on a background isolate
+      final Uint8List resultBytes = await compute(
+        isolateInsertImageAsPage,
+        InsertImageAsPageParams(
+          targetBytes: state.targetBytes!,
+          imageBytes: state.imageBytes!,
+          pageWidth: pageSize.width,
+          pageHeight: pageSize.height,
+          imgLeft: imgRect.left,
+          imgTop: imgRect.top,
+          imgWidth: imgRect.width,
+          imgHeight: imgRect.height,
+          insertionPoint: state.insertionPoint,
+        ),
       );
 
       String targetPath;

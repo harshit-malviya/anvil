@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
+import '../../core/services/pdf_isolate_worker.dart';
 import 'pdf_password_state.dart';
 
 final pdfPasswordControllerProvider =
@@ -168,39 +168,13 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       resetError: true,
       resetOutput: true,
     );
-    await Future.delayed(const Duration(milliseconds: 50));
 
     try {
-      final sourceDoc = PdfDocument(inputBytes: state.fileBytes!);
-      final destDoc = PdfDocument();
-
-      destDoc.security.userPassword = state.password;
-      destDoc.security.ownerPassword = state.password;
-      for (int i = 0; i < sourceDoc.pages.count; i++) {
-        state = state.copyWith(
-          progressMessage: "Encrypting page ${i + 1} of ${sourceDoc.pages.count}…",
-        );
-        await Future.delayed(const Duration(milliseconds: 15));
-
-        final sourcePage = sourceDoc.pages[i];
-        final section = destDoc.sections!.add();
-        section.pageSettings.size = sourcePage.size;
-        section.pageSettings.margins.all = 0;
-        if (sourcePage.size.width > sourcePage.size.height) {
-          section.pageSettings.orientation = PdfPageOrientation.landscape;
-        } else {
-          section.pageSettings.orientation = PdfPageOrientation.portrait;
-        }
-
-        final template = sourcePage.createTemplate();
-        final newPage = section.pages.add();
-        newPage.graphics.drawPdfTemplate(template, const Offset(0, 0), sourcePage.size);
-      }
-
-      sourceDoc.dispose();
-
-      final List<int> protectedBytes = await destDoc.save();
-      destDoc.dispose();
+      // Run heavy PDF work on a background isolate
+      final Uint8List protectedBytes = await compute(
+        isolateAddPassword,
+        AddPasswordParams(inputBytes: state.fileBytes!, password: state.password),
+      );
 
       final targetPath = await _resolveOutputPath(
         suffix: 'protected',
@@ -247,55 +221,13 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       resetError: true,
       resetOutput: true,
     );
-    await Future.delayed(const Duration(milliseconds: 50));
-
-    PdfDocument sourceDoc;
-    try {
-      sourceDoc = PdfDocument(
-        inputBytes: state.fileBytes!,
-        password: state.removalPassword,
-      );
-    } catch (e) {
-      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
-      if (elapsedMs < 600) {
-        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
-      }
-      state = state.copyWith(
-        isProcessing: false,
-        resetProgressMessage: true,
-        errorMessage: "Incorrect password — the file wasn't changed.",
-      );
-      return null;
-    }
 
     try {
-      final destDoc = PdfDocument();
-
-      for (int i = 0; i < sourceDoc.pages.count; i++) {
-        state = state.copyWith(
-          progressMessage: "Decrypting page ${i + 1} of ${sourceDoc.pages.count}…",
-        );
-        await Future.delayed(const Duration(milliseconds: 15));
-
-        final sourcePage = sourceDoc.pages[i];
-        final section = destDoc.sections!.add();
-        section.pageSettings.size = sourcePage.size;
-        section.pageSettings.margins.all = 0;
-        if (sourcePage.size.width > sourcePage.size.height) {
-          section.pageSettings.orientation = PdfPageOrientation.landscape;
-        } else {
-          section.pageSettings.orientation = PdfPageOrientation.portrait;
-        }
-
-        final template = sourcePage.createTemplate();
-        final newPage = section.pages.add();
-        newPage.graphics.drawPdfTemplate(template, const Offset(0, 0), sourcePage.size);
-      }
-
-      sourceDoc.dispose();
-
-      final List<int> unprotectedBytes = await destDoc.save();
-      destDoc.dispose();
+      // Run heavy PDF work on a background isolate
+      final Uint8List unprotectedBytes = await compute(
+        isolateRemovePassword,
+        RemovePasswordParams(inputBytes: state.fileBytes!, password: state.removalPassword),
+      );
 
       final targetPath = await _resolveOutputPath(
         suffix: 'unprotected',
@@ -318,15 +250,23 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
 
       return targetPath;
     } catch (e) {
-      sourceDoc.dispose();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
       }
+
+      // Check if it's a wrong password error
+      final errStr = e.toString().toLowerCase();
+      final isWrongPassword = errStr.contains('password') ||
+          errStr.contains('incorrect') ||
+          errStr.contains('invalid');
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
-        errorMessage: "Failed to remove protection: $e",
+        errorMessage: isWrongPassword
+            ? "Incorrect password — the file wasn't changed."
+            : "Failed to remove protection: $e",
       );
       return null;
     }

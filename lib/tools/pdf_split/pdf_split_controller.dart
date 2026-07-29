@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
+import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import 'pdf_split_state.dart';
 
@@ -301,7 +301,6 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       resetError: true,
       resetOutput: true,
     );
-    await Future.delayed(const Duration(milliseconds: 50));
 
     // Prepare target directory
     late Directory outputDir;
@@ -334,51 +333,30 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       return null;
     }
 
-    final List<String> createdFilePaths = [];
     final baseFileName =
         p.basenameWithoutExtension(state.file?.name ?? 'document');
 
     try {
-      final sourceDoc = PdfDocument(inputBytes: state.fileBytes!);
+      // Convert ranges to isolate-compatible format
+      final isolateRanges = ranges
+          .map((r) => SplitRange(startPage: r.startPage, endPage: r.endPage))
+          .toList();
 
-      for (int rIdx = 0; rIdx < ranges.length; rIdx++) {
-        state = state.copyWith(
-          progressMessage: "Splitting file ${rIdx + 1} of ${ranges.length}…",
-        );
-        await Future.delayed(const Duration(milliseconds: 15));
+      // Run heavy PDF work on a background isolate
+      final List<Uint8List> splitResults = await compute(
+        isolateSplitPdf,
+        SplitParams(inputBytes: state.fileBytes!, ranges: isolateRanges),
+      );
 
-        final range = ranges[rIdx];
-        final destDoc = PdfDocument();
-
-        for (int pIdx = range.startPage - 1; pIdx < range.endPage; pIdx++) {
-          final sourcePage = sourceDoc.pages[pIdx];
-          final section = destDoc.sections!.add();
-          section.pageSettings.size = sourcePage.size;
-          section.pageSettings.margins.all = 0;
-          if (sourcePage.size.width > sourcePage.size.height) {
-            section.pageSettings.orientation = PdfPageOrientation.landscape;
-          } else {
-            section.pageSettings.orientation = PdfPageOrientation.portrait;
-          }
-
-          final template = sourcePage.createTemplate();
-          final newPage = section.pages.add();
-          newPage.graphics
-              .drawPdfTemplate(template, const Offset(0, 0), sourcePage.size);
-        }
-
-        final List<int> pdfBytes = await destDoc.save();
-        destDoc.dispose();
-
+      // Write each result file on the main isolate (async I/O)
+      final List<String> createdFilePaths = [];
+      for (int rIdx = 0; rIdx < splitResults.length; rIdx++) {
         final fileName = '${baseFileName}_part${rIdx + 1}.pdf';
         final filePath = p.join(outputDir.path, fileName);
         final file = File(filePath);
-
-        await file.writeAsBytes(pdfBytes, flush: true);
+        await file.writeAsBytes(splitResults[rIdx], flush: true);
         createdFilePaths.add(filePath);
       }
-
-      sourceDoc.dispose();
 
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
@@ -395,14 +373,16 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       return outputDir.path;
     } catch (e) {
       // Rollback: delete any files written in this run
-      for (final filePath in createdFilePaths) {
-        try {
-          final f = File(filePath);
-          if (f.existsSync()) {
-            f.deleteSync();
+      try {
+        if (outputDir.existsSync()) {
+          final files = outputDir.listSync().whereType<File>();
+          for (final f in files) {
+            try {
+              f.deleteSync();
+            } catch (_) {}
           }
-        } catch (_) {}
-      }
+        }
+      } catch (_) {}
 
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {

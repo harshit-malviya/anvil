@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
+import '../../core/services/pdf_isolate_worker.dart';
 import 'pdf_compress_state.dart';
 
 final pdfCompressControllerProvider =
@@ -138,53 +138,27 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
       resetOutput: true,
       resetResultType: true,
     );
-    await Future.delayed(const Duration(milliseconds: 50));
 
     try {
-      final sourceDoc = PdfDocument(inputBytes: state.fileBytes!);
-      final destDoc = PdfDocument();
-
-      // ASSUMPTION: Preset level parameters for reproducible PDF compression:
-      // - Low: PdfCompressionLevel.normal (basic stream compression, preserves full vector fidelity)
-      // - Medium: PdfCompressionLevel.best (max stream compression)
-      // - High: PdfCompressionLevel.best (max stream compression & structure optimization)
+      // Map compression level to index for isolate
+      final int levelIndex;
       switch (state.level) {
         case CompressionLevel.low:
-          destDoc.compressionLevel = PdfCompressionLevel.normal;
+          levelIndex = 0;
           break;
         case CompressionLevel.medium:
-          destDoc.compressionLevel = PdfCompressionLevel.best;
+          levelIndex = 1;
           break;
         case CompressionLevel.high:
-          destDoc.compressionLevel = PdfCompressionLevel.best;
+          levelIndex = 2;
           break;
       }
 
-      for (int i = 0; i < sourceDoc.pages.count; i++) {
-        state = state.copyWith(
-          progressMessage: "Compressing page ${i + 1} of ${sourceDoc.pages.count}…",
-        );
-        await Future.delayed(const Duration(milliseconds: 15));
-
-        final sourcePage = sourceDoc.pages[i];
-        final section = destDoc.sections!.add();
-        section.pageSettings.size = sourcePage.size;
-        section.pageSettings.margins.all = 0;
-        if (sourcePage.size.width > sourcePage.size.height) {
-          section.pageSettings.orientation = PdfPageOrientation.landscape;
-        } else {
-          section.pageSettings.orientation = PdfPageOrientation.portrait;
-        }
-
-        final template = sourcePage.createTemplate();
-        final newPage = section.pages.add();
-        newPage.graphics.drawPdfTemplate(template, const Offset(0, 0), sourcePage.size);
-      }
-
-      sourceDoc.dispose();
-
-      final List<int> compressedBytes = await destDoc.save();
-      destDoc.dispose();
+      // Run heavy PDF work on a background isolate
+      final Uint8List compressedBytes = await compute(
+        isolateCompressPdf,
+        CompressParams(inputBytes: state.fileBytes!, levelIndex: levelIndex),
+      );
 
       final int outputLength = compressedBytes.length;
 
