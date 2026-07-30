@@ -476,84 +476,92 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
     final outputPath = state.outputPath!;
     final fileName = p.basename(outputPath);
 
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const SizedBox(height: 32.0),
-          const StampAnimation(
-            label: 'CREATED',
-          ),
-          const SizedBox(height: 24.0),
-          Text(
-            'PDF Document Created Successfully',
-            style: AppTypography.displayMedium(brightness),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12.0),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            decoration: BoxDecoration(
-              color: AppColors.cardBackground(brightness),
-              borderRadius: BorderRadius.circular(8.0),
-              border: Border.all(color: AppColors.pegGrey),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  fileName,
-                  style: AppTypography.bodyMedium(brightness).copyWith(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 4.0),
-                Text(
-                  outputPath,
-                  style: AppTypography.mono(brightness).copyWith(
-                    fontSize: 12.0,
-                    color: AppColors.text(brightness).withValues(alpha: 0.6),
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 32.0),
-          Wrap(
-            spacing: 12.0,
-            runSpacing: 12.0,
-            alignment: WrapAlignment.center,
+    return Center(
+      child: SingleChildScrollView(
+        child: SizedBox(
+          width: double.infinity,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              AppButton(
-                label: 'Save As...',
-                icon: Icons.save_alt_rounded,
-                onPressed: () => _handleSaveAs(outputPath),
+              const SizedBox(height: 32.0),
+              const StampAnimation(
+                label: 'CREATED',
               ),
-              AppButton(
-                label: 'Open Folder',
-                icon: Icons.folder_open_rounded,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => _fileService.openFolder(p.dirname(outputPath)),
+              const SizedBox(height: 24.0),
+              Text(
+                'PDF Document Created Successfully',
+                style: AppTypography.displayMedium(brightness),
+                textAlign: TextAlign.center,
               ),
-              if (Platform.isAndroid || Platform.isIOS)
-                AppButton(
-                  label: 'Share',
-                  icon: Icons.share_rounded,
-                  variant: AppButtonVariant.secondary,
-                  onPressed: () => _fileService.shareFile(outputPath),
+              const SizedBox(height: 12.0),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 550),
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBackground(brightness),
+                  borderRadius: BorderRadius.circular(8.0),
+                  border: Border.all(color: AppColors.pegGrey),
                 ),
-              AppButton(
-                label: 'Convert More Images',
-                icon: Icons.refresh_rounded,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => controller.clearImages(),
+                child: Column(
+                  children: [
+                    Text(
+                      fileName,
+                      style: AppTypography.bodyMedium(brightness).copyWith(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4.0),
+                    Text(
+                      outputPath,
+                      style: AppTypography.mono(brightness).copyWith(
+                        fontSize: 12.0,
+                        color: AppColors.text(brightness).withValues(alpha: 0.6),
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(height: 32.0),
+              Wrap(
+                spacing: 12.0,
+                runSpacing: 12.0,
+                alignment: WrapAlignment.center,
+                children: [
+                  AppButton(
+                    label: 'Save As...',
+                    icon: Icons.save_alt_rounded,
+                    onPressed: () => _handleSaveAs(outputPath),
+                  ),
+                  AppButton(
+                    label: 'Open Folder',
+                    icon: Icons.folder_open_rounded,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => _fileService.openFolder(p.dirname(outputPath)),
+                  ),
+                  if (Platform.isAndroid || Platform.isIOS)
+                    AppButton(
+                      label: 'Share',
+                      icon: Icons.share_rounded,
+                      variant: AppButtonVariant.secondary,
+                      onPressed: () => _fileService.shareFile(outputPath),
+                    ),
+                  AppButton(
+                    label: 'Convert More Images',
+                    icon: Icons.refresh_rounded,
+                    variant: AppButtonVariant.secondary,
+                    onPressed: () => controller.clearImages(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32.0),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
+
 }
