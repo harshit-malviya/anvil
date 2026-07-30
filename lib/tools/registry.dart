@@ -111,5 +111,24 @@ class ToolRegistry {
       isAvailable: true,
       keywords: ['add photo', 'add screenshot', 'missing page', 'add picture'],
     ),
+    ToolMetadata(
+      id: 'images_to_pdf',
+      title: 'Images to PDF',
+      description: 'Combine photo receipts, scans, or pictures into a single PDF document.',
+      icon: Icons.collections_outlined,
+      route: '/images-to-pdf',
+      isAvailable: true,
+      keywords: [
+        'photo to pdf',
+        'picture to pdf',
+        'jpg to pdf',
+        'png to pdf',
+        'image to pdf',
+        'scan',
+        'convert images',
+        'combine photos',
+      ],
+    ),
   ];
 }
+

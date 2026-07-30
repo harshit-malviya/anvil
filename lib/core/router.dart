@@ -8,6 +8,7 @@ import '../tools/pdf_to_image/pdf_to_image_screen.dart';
 import '../tools/pdf_password/pdf_password_screen.dart';
 import '../tools/pdf_insert_pages/pdf_insert_pages_screen.dart';
 import '../tools/pdf_insert_image_as_page/pdf_insert_image_as_page_screen.dart';
+import '../tools/images_to_pdf/images_to_pdf_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -48,5 +49,10 @@ final appRouter = GoRouter(
       path: '/pdf-insert-image-as-page',
       builder: (context, state) => const PdfInsertImageAsPageScreen(),
     ),
+    GoRoute(
+      path: '/images-to-pdf',
+      builder: (context, state) => const ImagesToPdfScreen(),
+    ),
   ],
 );
+

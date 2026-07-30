@@ -38,6 +38,17 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-07-30 — Session 16
+- Implemented Images to PDF feature (`FEATURE_images_to_pdf.md`):
+  - Extracted shared `ImageToPdfPageService` in `lib/core/services/image_to_pdf_page_service.dart` for image format validation (.png/.jpg/.jpeg), 3000px max dimension downscaling cap, and 400px preview thumbnail generation. Refactored `PdfInsertImageAsPageController` to use shared service.
+  - Added `ImagesToPdfParams` and `isolateImagesToPdf` in `lib/core/services/pdf_isolate_worker.dart` for background isolate PDF page generation with white background rectangle fill (flattening PNG transparency).
+  - Created `lib/tools/images_to_pdf/images_to_pdf_state.dart` with `ImageFileItem` model and state getters.
+  - Created `lib/tools/images_to_pdf/images_to_pdf_controller.dart` supporting image addition, format/readability validation, reordering, removal, clearing, and background isolate PDF creation with timestamped output file paths.
+  - Created `lib/tools/images_to_pdf/images_to_pdf_screen.dart` with file drop zone, virtualized reorderable list view (`ReorderableListView.builder`), progress overlay, stamp animation (`PDF CREATED`), and completion actions.
+  - Registered route `/images-to-pdf` in `lib/core/router.dart` and metadata with keywords in `lib/tools/registry.dart`.
+  - Created comprehensive unit test suite `test/tools/images_to_pdf/images_to_pdf_controller_test.dart` testing single/multi-image conversion, order preservation, unsupported format rejection, corrupted image rejection, 3000px downscale, mixed orientation sizing, reordering, item removal, and state resets.
+
+
 ## 2026-07-27 — Session 1
 - Scaffolded Flutter project per BUILD_SETUP.md targeting Windows and Android (`com.anvil`)
 - Configured pubspec dependencies: `flutter_riverpod`, `go_router`, `syncfusion_flutter_pdf`, `image`, `file_picker`, `google_fonts`, `mocktail`, `flutter_lints`
@@ -155,9 +166,15 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | PDF Insert Pages | `docs/PHASE 3/FEATURE_pdf_insert_pages.md` | Done | PDF Insert Pages controller, UI, live preview block, and test suite passing |
 | PDF Insert Image as Page | `docs/PHASE 3/FEATURE_pdf_insert_image_as_page_v2.md` | Done | Upgraded to v2 (N images batch insertion at shared point, reordering, test suite passing) |
 | Tool Search | `docs/PHASE 3/FEATURE_tool_search.md` | Done | Tool search controller, home screen filtering, and unit test suite passing |
+| Images to PDF | `docs/PHASE 3/FEATURE_images_to_pdf.md` | Done | Controller, UI, shared image service extraction, background isolate, and test suite passing |
 | Image tools (v2) | *(spec pending)* | Not started | |
 
 ## 5. Decisions log
+
+## 2026-07-30
+- Decision: Extracted `ImageToPdfPageService` to unify image format validation, 3000px downscaling, and preview thumbnail generation across `Insert Image as Page` and `Images to PDF` tools.
+- Decision: PDF pages generated from images retain each image's native aspect ratio and pixel dimensions (after downscaling cap), supporting mixed portrait and landscape pages within the same document without forcing uniform A4/Letter sizing.
+
 
 ## 2026-07-29
 - Decision: All Syncfusion PDF processing (`PdfDocument`, `createTemplate`, `drawPdfTemplate`, `.save()`) must run in background isolates via `compute()`, never on the main UI thread. `Future.delayed()` between loop iterations is not a viable alternative — Syncfusion calls are synchronous CPU-bound operations that block the event loop regardless of micro-delays.

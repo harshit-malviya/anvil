@@ -4,10 +4,10 @@ import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
+import '../../core/services/image_to_pdf_page_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import 'pdf_insert_image_as_page_state.dart';
@@ -20,12 +20,15 @@ final pdfInsertImageAsPageControllerProvider =
 class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageState> {
   final FileService _fileService;
   final PdfThumbnailService _thumbnailService;
+  final ImageToPdfPageService _imageService;
 
   PdfInsertImageAsPageController({
     FileService? fileService,
     PdfThumbnailService? thumbnailService,
+    ImageToPdfPageService? imageService,
   })  : _fileService = fileService ?? FileService(),
         _thumbnailService = thumbnailService ?? PdfThumbnailService(),
+        _imageService = imageService ?? ImageToPdfPageService(),
         super(const PdfInsertImageAsPageState());
 
   /// Load and validate target PDF document into which image pages will be inserted.
@@ -112,90 +115,39 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
     int counter = DateTime.now().microsecondsSinceEpoch;
 
     for (final platformFile in platformFiles) {
-      final ext = p.extension(platformFile.name).toLowerCase();
-      if (ext != '.jpg' && ext != '.jpeg' && ext != '.png') {
-        if (platformFiles.length == 1) {
-          errors.add("Only JPEG and PNG images are supported.");
+      try {
+        final result = await _imageService.processImageFile(platformFile);
+        final id = '${counter++}_${platformFile.name}';
+        newImages.add(ImageItemState(
+          id: id,
+          file: platformFile,
+          bytes: result.bytes,
+          thumbnail: result.thumbnail,
+          width: result.width,
+          height: result.height,
+        ));
+      } on FormatException catch (e) {
+        final ext = p.extension(platformFile.name).toLowerCase();
+        if (ext != '.jpg' && ext != '.jpeg' && ext != '.png') {
+          if (platformFiles.length == 1) {
+            errors.add("Only JPEG and PNG images are supported.");
+          } else {
+            errors.add("Only JPEG and PNG images are supported: ${platformFile.name} wasn't added.");
+          }
+        } else if (e.message.contains("permission denied")) {
+          if (platformFiles.length == 1) {
+            errors.add("Could not read '${platformFile.name}': permission denied or file unreadable.");
+          } else {
+            errors.add("This image couldn't be read and wasn't added: ${platformFile.name}.");
+          }
         } else {
-          errors.add("Only JPEG and PNG images are supported: ${platformFile.name} wasn't added.");
-        }
-        continue;
-      }
-
-      Uint8List? bytes = platformFile.bytes;
-      if (bytes == null && platformFile.path != null) {
-        final f = File(platformFile.path!);
-        if (f.existsSync()) {
-          try {
-            bytes = await f.readAsBytes();
-          } catch (_) {
-            if (platformFiles.length == 1) {
-              errors.add("Could not read '${platformFile.name}': permission denied or file unreadable.");
-            } else {
-              errors.add("This image couldn't be read and wasn't added: ${platformFile.name}.");
-            }
-            continue;
+          if (platformFiles.length == 1) {
+            errors.add("This image couldn't be read. Try a different file.");
+          } else {
+            errors.add("This image couldn't be read and wasn't added: ${platformFile.name}.");
           }
         }
       }
-
-      if (bytes == null || bytes.isEmpty) {
-        if (platformFiles.length == 1) {
-          errors.add("This image couldn't be read. Try a different file.");
-        } else {
-          errors.add("This image couldn't be read and wasn't added: ${platformFile.name}.");
-        }
-        continue;
-      }
-
-      img.Image? decoded;
-      try {
-        decoded = img.decodeImage(bytes);
-      } catch (_) {
-        decoded = null;
-      }
-
-      if (decoded == null) {
-        if (platformFiles.length == 1) {
-          errors.add("This image couldn't be read. Try a different file.");
-        } else {
-          errors.add("This image couldn't be read and wasn't added: ${platformFile.name}.");
-        }
-        continue;
-      }
-
-      // ASSUMPTION: Downscale oversized images to max dimension of 3000px to avoid PDF bloat while preserving clarity.
-      const maxDimension = 3000;
-      if (decoded.width > maxDimension || decoded.height > maxDimension) {
-        if (decoded.width >= decoded.height) {
-          decoded = img.copyResize(decoded, width: maxDimension, maintainAspect: true);
-        } else {
-          decoded = img.copyResize(decoded, height: maxDimension, maintainAspect: true);
-        }
-        if (ext == '.png') {
-          bytes = Uint8List.fromList(img.encodePng(decoded));
-        } else {
-          bytes = Uint8List.fromList(img.encodeJpg(decoded, quality: 90));
-        }
-      }
-
-      // Generate preview thumbnail for UI display
-      final previewImg = (decoded.width > 400 || decoded.height > 400)
-          ? (decoded.width >= decoded.height
-              ? img.copyResize(decoded, width: 400, maintainAspect: true)
-              : img.copyResize(decoded, height: 400, maintainAspect: true))
-          : decoded;
-      final thumbnailBytes = Uint8List.fromList(img.encodeJpg(previewImg, quality: 80));
-
-      final id = '${counter++}_${platformFile.name}';
-      newImages.add(ImageItemState(
-        id: id,
-        file: platformFile,
-        bytes: bytes,
-        thumbnail: thumbnailBytes,
-        width: decoded.width,
-        height: decoded.height,
-      ));
     }
 
     state = state.copyWith(

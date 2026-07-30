@@ -547,29 +547,12 @@ class ImagePageSpec {
 }
 
 /// Parameter container for insert-image-pages isolate.
-class InsertImagePagesParams {
-  final Uint8List targetBytes;
-  final List<ImagePageSpec> imageSpecs;
-  final int insertionPoint;
-
-  const InsertImagePagesParams({
-    required this.targetBytes,
-    required this.imageSpecs,
-    required this.insertionPoint,
-  });
-}
-
-/// Input: InsertImagePagesParams.
-/// Output: PDF bytes with image page(s) inserted.
-Future<Uint8List> isolateInsertImagePages(InsertImagePagesParams params) async {
-  if (params.imageSpecs.isEmpty) {
-    return params.targetBytes;
-  }
-
-  // 1. Create multi-page PDF containing all images
+/// Helper function to construct a multi-page PDF document from image page specs.
+Future<Uint8List> buildImagePdfBytes(List<ImagePageSpec> imageSpecs) async {
   final imgPdf = PdfDocument();
+  imgPdf.compressionLevel = PdfCompressionLevel.best;
 
-  for (final spec in params.imageSpecs) {
+  for (final spec in imageSpecs) {
     final section = imgPdf.sections!.add();
     final pageSize = Size(spec.pageWidth, spec.pageHeight);
     section.pageSettings.size = pageSize;
@@ -597,15 +580,67 @@ Future<Uint8List> isolateInsertImagePages(InsertImagePagesParams params) async {
 
   final List<int> imagePdfBytes = await imgPdf.save();
   imgPdf.dispose();
+  return Uint8List.fromList(imagePdfBytes);
+}
+
+/// Parameter container for insert-image-pages isolate.
+class InsertImagePagesParams {
+  final Uint8List targetBytes;
+  final List<ImagePageSpec> imageSpecs;
+  final int insertionPoint;
+
+  const InsertImagePagesParams({
+    required this.targetBytes,
+    required this.imageSpecs,
+    required this.insertionPoint,
+  });
+}
+
+/// Input: InsertImagePagesParams.
+/// Output: PDF bytes with image page(s) inserted.
+Future<Uint8List> isolateInsertImagePages(InsertImagePagesParams params) async {
+  if (params.imageSpecs.isEmpty) {
+    return params.targetBytes;
+  }
+
+  // 1. Create multi-page PDF containing all images
+  final Uint8List imagePdfBytes = await buildImagePdfBytes(params.imageSpecs);
 
   // 2. Splice image pages into target document
   final selectedIndices = List.generate(params.imageSpecs.length, (index) => index);
   final splicedResult = await isolateInsertPages(InsertPagesParams(
     targetBytes: params.targetBytes,
-    sourceBytes: Uint8List.fromList(imagePdfBytes),
+    sourceBytes: imagePdfBytes,
     selectedSourceIndices: selectedIndices,
     insertionPoint: params.insertionPoint,
   ));
 
   return splicedResult;
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// IMAGES TO PDF (build a new PDF document from multiple images)
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Parameter container for images-to-pdf isolate.
+class ImagesToPdfParams {
+  final List<ImagePageSpec> imageSpecs;
+
+  const ImagesToPdfParams({
+    required this.imageSpecs,
+  });
+}
+
+/// Input: ImagesToPdfParams.
+/// Output: Brand-new PDF document bytes generated from image specs.
+Future<Uint8List> isolateImagesToPdf(ImagesToPdfParams params) async {
+  if (params.imageSpecs.isEmpty) {
+    final emptyDoc = PdfDocument();
+    final bytes = await emptyDoc.save();
+    emptyDoc.dispose();
+    return Uint8List.fromList(bytes);
+  }
+
+  return buildImagePdfBytes(params.imageSpecs);
+}
+
