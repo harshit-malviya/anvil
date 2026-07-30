@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
+import 'package:pdfx/pdfx.dart' as pdfx;
 import '../../core/services/file_service.dart';
+import '../../core/services/pdf_thumbnail_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_button.dart';
@@ -111,6 +114,13 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
       return shouldDiscard ?? false;
     }
     return true;
+  }
+
+  void _showPagePreview(BuildContext context, int initialIndex) {
+    showDialog(
+      context: context,
+      builder: (context) => _PdfPagePreviewDialog(initialIndex: initialIndex),
+    );
   }
 
   @override
@@ -258,7 +268,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      '${state.originalPageCount} pages loaded • Drag cards to reorder',
+                      '${state.originalPageCount} pages loaded • Click page or zoom button to preview',
                       style: AppTypography.labelSmall(brightness).copyWith(
                         color: AppColors.text(brightness).withValues(alpha: 0.7),
                       ),
@@ -394,52 +404,73 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                 ),
                 const SizedBox(height: 8.0),
 
-                // Page Thumbnail Preview
+                // Page Thumbnail Preview (Clickable to open high-res preview)
                 Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4.0),
-                    child: Transform.rotate(
-                      angle: page.rotation * (math.pi / 180),
-                      child: Container(
-                        width: double.infinity,
-                        color: Colors.white,
-                        child: page.thumbnailBytes != null
-                            ? Image.memory(
-                                page.thumbnailBytes!,
-                                fit: BoxFit.contain,
-                              )
-                            : page.hasThumbnailError
-                                ? Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.insert_drive_file_outlined,
-                                          size: 36, color: AppColors.pegGrey),
-                                      const SizedBox(height: 4.0),
-                                      Text(
-                                        'Preview unavailable',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.grey.shade600,
+                  child: Tooltip(
+                    message: 'Click to preview page content',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => _showPagePreview(context, index),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4.0),
+                          child: Transform.rotate(
+                            angle: page.rotation * (math.pi / 180),
+                            child: Container(
+                              width: double.infinity,
+                              color: Colors.white,
+                              child: page.thumbnailBytes != null
+                                  ? Image.memory(
+                                      page.thumbnailBytes!,
+                                      fit: BoxFit.contain,
+                                    )
+                                  : page.hasThumbnailError
+                                      ? Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.insert_drive_file_outlined,
+                                                size: 36, color: AppColors.pegGrey),
+                                            const SizedBox(height: 4.0),
+                                            Text(
+                                              'Preview unavailable',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : const Center(
+                                          child: CircularProgressIndicator(strokeWidth: 2.0),
                                         ),
-                                      ),
-                                    ],
-                                  )
-                                : const Center(
-                                    child: CircularProgressIndicator(strokeWidth: 2.0),
-                                  ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 8.0),
 
-                // Action Bar: Rotate & Delete
+                // Action Bar: Preview, Rotate & Delete
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     IconButton(
+                      icon: const Icon(Icons.zoom_in_rounded),
+                      tooltip: 'Preview page content',
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      color: page.isDeleted
+                          ? AppColors.disabledText(brightness)
+                          : AppColors.anvilTeal,
+                      onPressed: () => _showPagePreview(context, index),
+                    ),
+                    IconButton(
                       icon: const Icon(Icons.rotate_right_rounded),
                       tooltip: 'Rotate 90° (${page.rotation}°)',
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
                       color: page.isDeleted ? AppColors.disabledText(brightness) : AppColors.anvilTeal,
                       onPressed: page.isDeleted ? null : () => controller.rotatePage(index),
                     ),
@@ -448,6 +479,8 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                         page.isDeleted ? Icons.undo_rounded : Icons.delete_outline_rounded,
                       ),
                       tooltip: page.isDeleted ? 'Undo deletion' : 'Delete page',
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
                       color: page.isDeleted ? AppColors.anvilTeal : AppColors.rustRed,
                       onPressed: () => controller.togglePageDeleted(index),
                     ),
@@ -630,3 +663,343 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
     );
   }
 }
+
+class _PdfPagePreviewDialog extends ConsumerStatefulWidget {
+  final int initialIndex;
+
+  const _PdfPagePreviewDialog({required this.initialIndex});
+
+  @override
+  ConsumerState<_PdfPagePreviewDialog> createState() => _PdfPagePreviewDialogState();
+}
+
+class _PdfPagePreviewDialogState extends ConsumerState<_PdfPagePreviewDialog> {
+  late int _currentIndex;
+  Uint8List? _highResImage;
+  bool _isLoadingHighRes = false;
+  final PdfThumbnailService _thumbnailService = PdfThumbnailService();
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _loadHighResPage();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadHighResPage() async {
+    final state = ref.read(pdfPageManagerControllerProvider);
+    if (state.fileBytes == null || _currentIndex < 0 || _currentIndex >= state.pages.length) return;
+
+    final page = state.pages[_currentIndex];
+    setState(() {
+      _isLoadingHighRes = true;
+      _highResImage = null;
+    });
+
+    try {
+      final highRes = await _thumbnailService.renderPage(
+        state.fileBytes!,
+        page.originalIndex,
+        targetDpi: 150,
+        format: pdfx.PdfPageImageFormat.jpeg,
+      );
+      if (mounted) {
+        setState(() {
+          _highResImage = highRes;
+          _isLoadingHighRes = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoadingHighRes = false;
+        });
+      }
+    }
+  }
+
+  void _goToPrevious() {
+    if (_currentIndex > 0) {
+      setState(() {
+        _currentIndex--;
+      });
+      _loadHighResPage();
+    }
+  }
+
+  void _goToNext() {
+    final state = ref.read(pdfPageManagerControllerProvider);
+    if (_currentIndex < state.pages.length - 1) {
+      setState(() {
+        _currentIndex++;
+      });
+      _loadHighResPage();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(pdfPageManagerControllerProvider);
+    final controller = ref.read(pdfPageManagerControllerProvider.notifier);
+    final brightness = Theme.of(context).brightness;
+
+    if (_currentIndex >= state.pages.length) {
+      _currentIndex = math.max(0, state.pages.length - 1);
+    }
+    if (state.pages.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final page = state.pages[_currentIndex];
+    final displayImage = _highResImage ?? page.thumbnailBytes;
+
+    return Dialog(
+      backgroundColor: AppColors.background(brightness),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        side: const BorderSide(color: AppColors.pegGrey, width: 1.0),
+      ),
+      child: KeyboardListener(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKeyEvent: (event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+              _goToPrevious();
+            } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+              _goToNext();
+            } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+              Navigator.of(context).pop();
+            }
+          }
+        },
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 700),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                // Dialog Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 10.0,
+                        runSpacing: 6.0,
+                        children: [
+                          const Icon(Icons.preview_rounded, color: AppColors.anvilTeal),
+                          Text(
+                            'Page ${_currentIndex + 1} of ${state.pages.length}',
+                            style: AppTypography.titleMedium(brightness).copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardBackground(brightness),
+                              borderRadius: BorderRadius.circular(4.0),
+                              border: Border.all(color: AppColors.pegGrey),
+                            ),
+                            child: Text(
+                              'ORIGINAL PAGE ${page.originalIndex + 1}',
+                              style: AppTypography.mono(brightness).copyWith(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (page.isDeleted)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+                              decoration: BoxDecoration(
+                                color: AppColors.rustRed.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4.0),
+                                border: Border.all(color: AppColors.rustRed),
+                              ),
+                              child: Text(
+                                'DELETED',
+                                style: AppTypography.mono(brightness).copyWith(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.rustRed,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      tooltip: 'Close preview (Esc)',
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24, thickness: 1, color: AppColors.pegGrey),
+
+                // Preview Body
+                Expanded(
+                  child: Row(
+                    children: [
+                      // Previous Page Navigation Button
+                      IconButton(
+                        icon: const Icon(Icons.chevron_left_rounded, size: 40),
+                        tooltip: 'Previous Page (Left Arrow)',
+                        color: _currentIndex > 0
+                            ? AppColors.text(brightness)
+                            : AppColors.disabledText(brightness),
+                        onPressed: _currentIndex > 0 ? _goToPrevious : null,
+                      ),
+                      const SizedBox(width: 8.0),
+
+                      // Main Interactive Zoomable Preview Area
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black12,
+                            borderRadius: BorderRadius.circular(8.0),
+                            border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.5)),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8.0),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                InteractiveViewer(
+                                  minScale: 0.5,
+                                  maxScale: 4.0,
+                                  child: Center(
+                                    child: displayImage != null
+                                        ? Transform.rotate(
+                                            angle: page.rotation * (math.pi / 180),
+                                            child: Image.memory(
+                                              displayImage,
+                                              fit: BoxFit.contain,
+                                            ),
+                                          )
+                                        : Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              const Icon(Icons.insert_drive_file_outlined,
+                                                  size: 48, color: AppColors.pegGrey),
+                                              const SizedBox(height: 8.0),
+                                              Text(
+                                                'Page preview unavailable',
+                                                style: AppTypography.bodyMedium(brightness),
+                                              ),
+                                            ],
+                                          ),
+                                  ),
+                                ),
+                                if (_isLoadingHighRes)
+                                  Positioned(
+                                    top: 16,
+                                    right: 16,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.7),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const SizedBox(
+                                            width: 12,
+                                            height: 12,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Loading HD...',
+                                            style: AppTypography.labelSmall(Brightness.dark).copyWith(
+                                              fontSize: 11,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8.0),
+
+                      // Next Page Navigation Button
+                      IconButton(
+                        icon: const Icon(Icons.chevron_right_rounded, size: 40),
+                        tooltip: 'Next Page (Right Arrow)',
+                        color: _currentIndex < state.pages.length - 1
+                            ? AppColors.text(brightness)
+                            : AppColors.disabledText(brightness),
+                        onPressed: _currentIndex < state.pages.length - 1 ? _goToNext : null,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16.0),
+
+                // Toolbar Actions inside Modal
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12.0,
+                  runSpacing: 12.0,
+                  children: [
+                    Text(
+                      'Pinch or scroll to zoom • Use arrow keys to navigate',
+                      style: AppTypography.labelSmall(brightness).copyWith(
+                        color: AppColors.text(brightness).withValues(alpha: 0.6),
+                      ),
+                    ),
+                    Wrap(
+                      spacing: 12.0,
+                      runSpacing: 8.0,
+                      children: [
+                        AppButton(
+                          label: 'Rotate (${page.rotation}°)',
+                          variant: AppButtonVariant.secondary,
+                          icon: Icons.rotate_right_rounded,
+                          onPressed: () => controller.rotatePage(_currentIndex),
+                        ),
+                        AppButton(
+                          label: page.isDeleted ? 'Undo Deletion' : 'Delete Page',
+                          variant: page.isDeleted
+                              ? AppButtonVariant.secondary
+                              : AppButtonVariant.destructive,
+                          icon: page.isDeleted
+                              ? Icons.undo_rounded
+                              : Icons.delete_outline_rounded,
+                          onPressed: () => controller.togglePageDeleted(_currentIndex),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
