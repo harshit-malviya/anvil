@@ -11,8 +11,7 @@ class FileService {
       type: FileType.custom,
       allowedExtensions: ['pdf'],
       allowMultiple: allowMultiple,
-      withData: true,
-      withReadStream: true,
+      withData: false,
     );
 
     if (result == null || result.files.isEmpty) {
@@ -27,8 +26,7 @@ class FileService {
       type: FileType.custom,
       allowedExtensions: ['jpg', 'jpeg', 'png'],
       allowMultiple: allowMultiple,
-      withData: true,
-      withReadStream: true,
+      withData: false,
     );
 
     if (result == null || result.files.isEmpty) {
