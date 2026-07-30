@@ -60,6 +60,85 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
     }
   }
 
+  void _showImagePreviewDialog(BuildContext context, ImageFileItem item) {
+    final brightness = Theme.of(context).brightness;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: AppColors.background(brightness),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+        insetPadding: const EdgeInsets.all(24.0),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 800, maxHeight: 700),
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Dialog Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.fileName,
+                          style: AppTypography.titleMedium(brightness).copyWith(fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2.0),
+                        Text(
+                          '${item.width} × ${item.height} px • ${_formatBytes(item.fileSizeBytes)}',
+                          style: AppTypography.mono(brightness).copyWith(
+                            fontSize: 12,
+                            color: AppColors.text(brightness).withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    color: AppColors.text(brightness).withValues(alpha: 0.6),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const Divider(height: 24.0),
+
+              // Image Preview Area
+              Expanded(
+                child: Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8.0),
+                    child: Image.memory(
+                      item.bytes,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16.0),
+              Align(
+                alignment: Alignment.centerRight,
+                child: AppButton(
+                  label: 'Close Preview',
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   String _formatBytes(int bytes) {
     if (bytes <= 0) return '0 B';
     if (bytes < 1024) return '$bytes B';
@@ -99,7 +178,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                     ? _buildSuccessView(context, state, controller)
                     : state.images.isEmpty
                         ? _buildEmptyDropZone(context)
-                        : _buildImageList(context, state, controller),
+                        : _buildImageGridView(context, state, controller),
               ),
             ],
           ),
@@ -152,7 +231,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
     );
   }
 
-  Widget _buildImageList(BuildContext context, ImagesToPdfState state, ImagesToPdfController controller) {
+  Widget _buildImageGridView(BuildContext context, ImagesToPdfState state, ImagesToPdfController controller) {
     final brightness = Theme.of(context).brightness;
 
     return Column(
@@ -192,73 +271,20 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
           ),
         ),
 
-        // Virtualized Reorderable List
+        // Grid View of Image Cards
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.cardBackground(brightness),
-              borderRadius: BorderRadius.circular(12.0),
-              border: Border.all(color: AppColors.pegGrey),
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 220,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.75,
             ),
-            child: ReorderableListView.builder(
-              buildDefaultDragHandles: false,
-              padding: const EdgeInsets.all(8.0),
-              itemCount: state.images.length,
-              onReorderItem: (oldIndex, newIndex) => controller.reorderImages(oldIndex, newIndex),
-              itemBuilder: (context, index) {
-                final item = state.images[index];
-                return Container(
-                  key: ValueKey(item.id),
-                  margin: const EdgeInsets.symmetric(vertical: 4.0),
-                  decoration: BoxDecoration(
-                    color: AppColors.background(brightness),
-                    borderRadius: BorderRadius.circular(8.0),
-                    border: Border.all(color: AppColors.pegGrey),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-                    leading: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ReorderableDragStartListener(
-                          index: index,
-                          child: Icon(
-                            Icons.drag_indicator_rounded,
-                            color: AppColors.text(brightness).withValues(alpha: 0.6),
-                          ),
-                        ),
-                        const SizedBox(width: 12.0),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6.0),
-                          child: Image.memory(
-                            item.thumbnail,
-                            width: 48.0,
-                            height: 48.0,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ],
-                    ),
-                    title: Text(
-                      item.fileName,
-                      style: AppTypography.bodyMedium(brightness),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      '${item.width} × ${item.height} px • ${_formatBytes(item.fileSizeBytes)}',
-                      style: AppTypography.mono(brightness).copyWith(fontSize: 12.0),
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20.0),
-                      color: AppColors.text(brightness).withValues(alpha: 0.6),
-                      onPressed: () => controller.removeImage(item.id),
-                      tooltip: 'Remove image',
-                    ),
-                  ),
-                );
-              },
-            ),
+            itemCount: state.images.length,
+            itemBuilder: (context, index) {
+              final item = state.images[index];
+              return _buildImageCard(context, index, item, state, brightness, controller);
+            },
           ),
         ),
 
@@ -276,6 +302,172 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildImageCard(
+    BuildContext context,
+    int index,
+    ImageFileItem item,
+    ImagesToPdfState state,
+    Brightness brightness,
+    ImagesToPdfController controller,
+  ) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8.0),
+        side: const BorderSide(color: AppColors.pegGrey, width: 1.0),
+      ),
+      color: AppColors.cardBackground(brightness),
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          children: [
+            // Top Badge & Move Controls
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary(brightness).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4.0),
+                  ),
+                  child: Text(
+                    'PAGE ${index + 1}',
+                    style: AppTypography.mono(brightness).copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.secondary(brightness),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    if (index > 0)
+                      InkWell(
+                        onTap: () => controller.reorderImages(index, index - 1),
+                        borderRadius: BorderRadius.circular(4.0),
+                        child: Padding(
+                          padding: const EdgeInsets.all(2.0),
+                          child: Icon(Icons.arrow_left_rounded,
+                              size: 20, color: AppColors.text(brightness).withValues(alpha: 0.7)),
+                        ),
+                      ),
+                    if (index < state.images.length - 1)
+                      InkWell(
+                        onTap: () => controller.reorderImages(index, index + 2),
+                        borderRadius: BorderRadius.circular(4.0),
+                        child: Padding(
+                          padding: const EdgeInsets.all(2.0),
+                          child: Icon(Icons.arrow_right_rounded,
+                              size: 20, color: AppColors.text(brightness).withValues(alpha: 0.7)),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 6.0),
+
+            // Image Thumbnail Preview with Clickable Preview Action
+            Expanded(
+              child: Stack(
+                children: [
+                  GestureDetector(
+                    onTap: () => _showImagePreviewDialog(context, item),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6.0),
+                      child: Container(
+                        width: double.infinity,
+                        color: Colors.black12,
+                        child: Image.memory(
+                          item.thumbnail,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Material(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(4.0),
+                      child: InkWell(
+                        onTap: () => _showImagePreviewDialog(context, item),
+                        borderRadius: BorderRadius.circular(4.0),
+                        child: const Padding(
+                          padding: EdgeInsets.all(4.0),
+                          child: Icon(
+                            Icons.visibility_outlined,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6.0),
+
+            // File Info
+            Text(
+              item.fileName,
+              style: AppTypography.bodyMedium(brightness).copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              '${item.width} × ${item.height} px • ${_formatBytes(item.fileSizeBytes)}',
+              style: AppTypography.mono(brightness).copyWith(
+                fontSize: 10,
+                color: AppColors.text(brightness).withValues(alpha: 0.6),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6.0),
+
+            // Remove Button
+            InkWell(
+              onTap: () => controller.removeImage(item.id),
+              borderRadius: BorderRadius.circular(4.0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                decoration: BoxDecoration(
+                  color: AppColors.emberCopper.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4.0),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.close_rounded, size: 14, color: AppColors.emberCopper),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Remove',
+                      style: AppTypography.bodySmall(brightness).copyWith(
+                        fontSize: 11,
+                        color: AppColors.emberCopper,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
