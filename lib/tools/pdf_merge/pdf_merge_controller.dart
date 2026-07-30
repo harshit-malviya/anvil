@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
+import '../../core/services/pdf_validation_service.dart';
 import 'pdf_merge_state.dart';
 
 import 'dart:ui' as ui;
@@ -92,28 +93,21 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         continue;
       }
 
-      try {
-        final doc = PdfDocument(inputBytes: bytes);
-        final pageCount = doc.pages.count;
-        doc.dispose();
-
+      final valInfo = PdfValidationService.validate(bytes);
+      if (valInfo.isValid) {
         final item = PdfMergeItem(
           id: '${DateTime.now().microsecondsSinceEpoch}_${pf.name}_${newValidItems.length}',
           path: pf.path,
           name: pf.name,
           sizeBytes: bytes.length,
-          pageCount: pageCount,
+          pageCount: valInfo.pageCount,
           bytes: bytes,
         );
-
         newValidItems.add(item);
-      } catch (e) {
-        final errStr = e.toString().toLowerCase();
-        if (errStr.contains('password') || errStr.contains('encrypted') || errStr.contains('security')) {
-          firstError ??= "This file is password-protected and can't be merged. Remove the password first.";
-        } else {
-          firstError ??= "File '${pf.name}' appears corrupted or unreadable.";
-        }
+      } else if (valInfo.isPasswordProtected) {
+        firstError ??= "This file is password-protected and can't be merged. Remove the password first.";
+      } else {
+        firstError ??= "File '${pf.name}' appears corrupted or unreadable.";
       }
     }
 
@@ -309,7 +303,7 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         state = state.copyWith(
           isProcessing: false,
           resetProgressMessage: true,
-          errorMessage: "Merge failed: $e",
+          errorMessage: "This merge couldn't be completed — the file may be damaged or too complex. Try removing problem files and merging again.",
         );
       }
       return null;

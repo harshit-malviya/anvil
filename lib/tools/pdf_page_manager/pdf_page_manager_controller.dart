@@ -3,10 +3,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
+import '../../core/services/pdf_validation_service.dart';
 import 'pdf_page_manager_state.dart';
 
 final pdfPageManagerControllerProvider =
@@ -56,28 +56,24 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       return;
     }
 
-    int pageCount = 0;
-    try {
-      final doc = PdfDocument(inputBytes: bytes);
-      pageCount = doc.pages.count;
-      doc.dispose();
-    } catch (e) {
-      final errStr = e.toString().toLowerCase();
-      if (errStr.contains('password') || errStr.contains('encrypted') || errStr.contains('security')) {
-        state = state.copyWith(
-          isProcessing: false,
-          resetProgressMessage: true,
-          errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
-        );
-      } else {
-        state = state.copyWith(
-          isProcessing: false,
-          resetProgressMessage: true,
-          errorMessage: "File '${platformFile.name}' appears corrupted or unreadable.",
-        );
-      }
+    final valInfo = PdfValidationService.validate(bytes);
+    if (valInfo.isPasswordProtected) {
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
+      );
+      return;
+    } else if (valInfo.isCorrupted) {
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage: "File '${platformFile.name}' appears corrupted or unreadable.",
+      );
       return;
     }
+
+    final pageCount = valInfo.pageCount;
 
     if (pageCount == 0) {
       state = state.copyWith(
@@ -297,7 +293,7 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
-        errorMessage: "Failed to apply page changes: $e",
+        errorMessage: "Couldn't apply page changes — the file may be damaged. Try a different PDF.",
       );
       return null;
     }

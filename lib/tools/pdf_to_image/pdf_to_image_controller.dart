@@ -7,6 +7,7 @@ import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
+import '../../core/services/pdf_validation_service.dart';
 import 'pdf_to_image_state.dart';
 
 typedef PageRenderer = Future<Uint8List?> Function(
@@ -73,30 +74,31 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
     int pageCount = 0;
     double firstWidth = 612.0;
     double firstHeight = 792.0;
-    try {
-      final doc = PdfDocument(inputBytes: bytes);
-      pageCount = doc.pages.count;
-      if (pageCount > 0) {
+    final valInfo = PdfValidationService.validate(bytes);
+    if (valInfo.isPasswordProtected) {
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
+      );
+      return;
+    } else if (valInfo.isCorrupted) {
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage: "File '${platformFile.name}' appears corrupted or unreadable.",
+      );
+      return;
+    }
+
+    pageCount = valInfo.pageCount;
+    if (pageCount > 0) {
+      try {
+        final doc = PdfDocument(inputBytes: bytes);
         firstWidth = doc.pages[0].size.width;
         firstHeight = doc.pages[0].size.height;
-      }
-      doc.dispose();
-    } catch (e) {
-      final errStr = e.toString().toLowerCase();
-      if (errStr.contains('password') || errStr.contains('encrypted') || errStr.contains('security')) {
-        state = state.copyWith(
-          isProcessing: false,
-          resetProgressMessage: true,
-          errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
-        );
-      } else {
-        state = state.copyWith(
-          isProcessing: false,
-          resetProgressMessage: true,
-          errorMessage: "File '${platformFile.name}' appears corrupted or unreadable.",
-        );
-      }
-      return;
+        doc.dispose();
+      } catch (_) {}
     }
 
     if (pageCount == 0) {
@@ -416,7 +418,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         isProcessing: false,
         resetProgressMessage: true,
         resetProgressPercent: true,
-        errorMessage: "Failed to export images: $e",
+        errorMessage: "Image export couldn't be completed — the PDF may be damaged or use unsupported content.",
       );
       return null;
     }

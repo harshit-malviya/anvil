@@ -3,10 +3,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
+import '../../core/services/pdf_validation_service.dart';
 import 'pdf_split_state.dart';
 
 final pdfSplitControllerProvider =
@@ -62,32 +62,26 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       return;
     }
 
-    int pageCount = 0;
-    try {
-      final doc = PdfDocument(inputBytes: bytes);
-      pageCount = doc.pages.count;
-      doc.dispose();
-    } catch (e) {
-      final errStr = e.toString().toLowerCase();
-      if (errStr.contains('password') ||
-          errStr.contains('encrypted') ||
-          errStr.contains('security')) {
-        state = state.copyWith(
-          isProcessing: false,
-          resetProgressMessage: true,
-          errorMessage:
-              "This file is password-protected and can't be modified. Remove the password first.",
-        );
-      } else {
-        state = state.copyWith(
-          isProcessing: false,
-          resetProgressMessage: true,
-          errorMessage:
-              "File '${platformFile.name}' appears corrupted or unreadable.",
-        );
-      }
+    final valInfo = PdfValidationService.validate(bytes);
+    if (valInfo.isPasswordProtected) {
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage:
+            "This file is password-protected and can't be modified. Remove the password first.",
+      );
+      return;
+    } else if (valInfo.isCorrupted) {
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage:
+            "File '${platformFile.name}' appears corrupted or unreadable.",
+      );
       return;
     }
+
+    final pageCount = valInfo.pageCount;
 
     if (pageCount == 0) {
       state = state.copyWith(
@@ -371,19 +365,32 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       );
 
       return outputDir.path;
+    } on OutOfMemoryError {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage: "This operation is too large to process on this device.",
+      );
+      return null;
+    } on FileSystemException catch (e) {
+      _rollbackOutputDir(outputDir);
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage:
+            "Split failed partway through and was rolled back — no partial files were kept. Couldn't save split files — ${e.message}.",
+      );
+      return null;
     } catch (e) {
-      // Rollback: delete any files written in this run
-      try {
-        if (outputDir.existsSync()) {
-          final files = outputDir.listSync().whereType<File>();
-          for (final f in files) {
-            try {
-              f.deleteSync();
-            } catch (_) {}
-          }
-        }
-      } catch (_) {}
-
+      _rollbackOutputDir(outputDir);
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -393,10 +400,23 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         isProcessing: false,
         resetProgressMessage: true,
         errorMessage:
-            "Split failed partway through and was rolled back — no partial files were kept. Failure: $e",
+            "Split failed — the PDF may be damaged or too complex. Try a different PDF.",
       );
       return null;
     }
+  }
+
+  void _rollbackOutputDir(Directory outputDir) {
+    try {
+      if (outputDir.existsSync()) {
+        final files = outputDir.listSync().whereType<File>();
+        for (final f in files) {
+          try {
+            f.deleteSync();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
   }
 
   @visibleForTesting

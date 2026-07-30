@@ -213,7 +213,7 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
-        errorMessage: "Failed to create PDF from images: $e",
+        errorMessage: "Couldn't create PDF from images. One or more image files may be damaged.",
       );
       return null;
     }

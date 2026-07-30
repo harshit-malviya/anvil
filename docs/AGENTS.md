@@ -38,6 +38,15 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-07-30 — Session 17
+- Completed PDF Tools Audit (`TASK_audit_isolate_error_handling.md`, `TASK_audit_edge_case_fidelity.md`, `TASK_audit_error_message_consistency.md`):
+  - Created shared static utility `PdfValidationService` in `lib/core/services/pdf_validation_service.dart` and dedicated test suite `test/core/services/pdf_validation_service_test.dart` (6 tests).
+  - Consolidated password/corrupted PDF validation across 8 PDF tool controllers.
+  - Hardened isolate error handling (`OutOfMemoryError`, `FileSystemException`) across all PDF tool controllers.
+  - Separated `PdfSplitController` isolate processing errors from disk write errors with automatic output rollback.
+  - Swept all 10 controllers to eliminate raw `Exception.toString()` output in user-facing error messages, replacing them with actionable plain-language text adhering to DESIGN_SYSTEM.md §5.
+  - Re-verified all edge case spec rows across all 10 tools — 100% pass rate. All 115 tests passing cleanly.
+
 ## 2026-07-30 — Session 16
 - Implemented Images to PDF feature (`FEATURE_images_to_pdf.md`):
   - Extracted shared `ImageToPdfPageService` in `lib/core/services/image_to_pdf_page_service.dart` for image format validation (.png/.jpg/.jpeg), 3000px max dimension downscaling cap, and 400px preview thumbnail generation. Refactored `PdfInsertImageAsPageController` to use shared service.
@@ -172,6 +181,9 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 ## 5. Decisions log
 
 ## 2026-07-30
+- Decision: Centralized password-protected and corrupted PDF validation into a static utility class `PdfValidationService` (`lib/core/services/pdf_validation_service.dart`) with dedicated unit test coverage (`test/core/services/pdf_validation_service_test.dart`), eliminating 8 duplicate implementations across PDF controllers.
+- Decision: Replaced all raw `$e` / `Exception.toString()` messages across controllers with bold, plain-language, actionable error text.
+- Decision: Separated `PdfSplitController` isolate execution failures from file I/O write failures to prevent misleading "rolled back" messaging when processing fails before any files are written to disk.
 - Decision: Extracted `ImageToPdfPageService` to unify image format validation, 3000px downscaling, and preview thumbnail generation across `Insert Image as Page` and `Images to PDF` tools.
 - Decision: PDF pages generated from images retain each image's native aspect ratio and pixel dimensions (after downscaling cap), supporting mixed portrait and landscape pages within the same document without forcing uniform A4/Letter sizing.
 

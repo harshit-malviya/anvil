@@ -8,6 +8,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
+import '../../core/services/pdf_validation_service.dart';
 import 'pdf_insert_pages_state.dart';
 
 final pdfInsertPagesControllerProvider =
@@ -52,47 +53,44 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
       return;
     }
 
-    try {
-      final doc = PdfDocument(inputBytes: bytes);
-      final pageCount = doc.pages.count;
-      doc.dispose();
-
-      if (pageCount == 0) {
-        state = state.copyWith(
-          errorMessage: "File '${platformFile.name}' contains no pages.",
-          resetError: false,
-        );
-        return;
-      }
-
-      final thumbnails = await _thumbnailService.generateThumbnails(bytes);
-
-      // ASSUMPTION: Insertion point defaults to 'at the end' (after the last target page) once target file is loaded.
-      final defaultInsertionPoint = pageCount - 1;
-
+    final valInfo = PdfValidationService.validate(bytes);
+    if (valInfo.isPasswordProtected) {
       state = state.copyWith(
-        targetFile: platformFile,
-        targetBytes: bytes,
-        targetThumbnails: thumbnails,
-        targetPageCount: pageCount,
-        insertionPoint: defaultInsertionPoint,
-        resetError: true,
-        resetOutput: true,
+        errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
+        resetError: false,
       );
-    } catch (e) {
-      final errStr = e.toString().toLowerCase();
-      if (errStr.contains('password') || errStr.contains('encrypted') || errStr.contains('security')) {
-        state = state.copyWith(
-          errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
-          resetError: false,
-        );
-      } else {
-        state = state.copyWith(
-          errorMessage: "File '${platformFile.name}' appears corrupted or unreadable.",
-          resetError: false,
-        );
-      }
+      return;
+    } else if (valInfo.isCorrupted) {
+      state = state.copyWith(
+        errorMessage: "File '${platformFile.name}' appears corrupted or unreadable.",
+        resetError: false,
+      );
+      return;
     }
+
+    final pageCount = valInfo.pageCount;
+    if (pageCount == 0) {
+      state = state.copyWith(
+        errorMessage: "File '${platformFile.name}' contains no pages.",
+        resetError: false,
+      );
+      return;
+    }
+
+    final thumbnails = await _thumbnailService.generateThumbnails(bytes);
+
+    // ASSUMPTION: Insertion point defaults to 'at the end' (after the last target page) once target file is loaded.
+    final defaultInsertionPoint = pageCount - 1;
+
+    state = state.copyWith(
+      targetFile: platformFile,
+      targetBytes: bytes,
+      targetThumbnails: thumbnails,
+      targetPageCount: pageCount,
+      insertionPoint: defaultInsertionPoint,
+      resetError: true,
+      resetOutput: true,
+    );
   }
 
   /// Load and validate source PDF document from which pages will be taken.
@@ -121,45 +119,42 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
       return;
     }
 
-    try {
-      final doc = PdfDocument(inputBytes: bytes);
-      final pageCount = doc.pages.count;
-      doc.dispose();
-
-      if (pageCount == 0) {
-        state = state.copyWith(
-          errorMessage: "Source file '${platformFile.name}' contains no pages.",
-          resetError: false,
-        );
-        return;
-      }
-
-      final thumbnails = await _thumbnailService.generateThumbnails(bytes);
-      final allIndices = List<int>.generate(pageCount, (i) => i);
-
+    final valInfo = PdfValidationService.validate(bytes);
+    if (valInfo.isPasswordProtected) {
       state = state.copyWith(
-        sourceFile: platformFile,
-        sourceBytes: bytes,
-        sourceThumbnails: thumbnails,
-        sourcePageCount: pageCount,
-        selectedSourcePageIndices: allIndices,
-        resetError: true,
-        resetOutput: true,
+        errorMessage: "Source file is password-protected. Remove password before inserting pages.",
+        resetError: false,
       );
-    } catch (e) {
-      final errStr = e.toString().toLowerCase();
-      if (errStr.contains('password') || errStr.contains('encrypted') || errStr.contains('security')) {
-        state = state.copyWith(
-          errorMessage: "Source file is password-protected. Remove password before inserting pages.",
-          resetError: false,
-        );
-      } else {
-        state = state.copyWith(
-          errorMessage: "Source file '${platformFile.name}' appears corrupted or unreadable.",
-          resetError: false,
-        );
-      }
+      return;
+    } else if (valInfo.isCorrupted) {
+      state = state.copyWith(
+        errorMessage: "Source file '${platformFile.name}' appears corrupted or unreadable.",
+        resetError: false,
+      );
+      return;
     }
+
+    final pageCount = valInfo.pageCount;
+    if (pageCount == 0) {
+      state = state.copyWith(
+        errorMessage: "Source file '${platformFile.name}' contains no pages.",
+        resetError: false,
+      );
+      return;
+    }
+
+    final thumbnails = await _thumbnailService.generateThumbnails(bytes);
+    final allIndices = List<int>.generate(pageCount, (i) => i);
+
+    state = state.copyWith(
+      sourceFile: platformFile,
+      sourceBytes: bytes,
+      sourceThumbnails: thumbnails,
+      sourcePageCount: pageCount,
+      selectedSourcePageIndices: allIndices,
+      resetError: true,
+      resetOutput: true,
+    );
   }
 
   /// Toggle selection of a page in the source document.
@@ -309,7 +304,7 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
-        errorMessage: "Page insertion failed: $e",
+        errorMessage: "Page insertion couldn't be completed — one of the files may be damaged. Try different source files.",
       );
       return null;
     }

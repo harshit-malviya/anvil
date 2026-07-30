@@ -3,9 +3,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
+import '../../core/services/pdf_validation_service.dart';
 import 'pdf_password_state.dart';
 
 final pdfPasswordControllerProvider =
@@ -59,29 +59,18 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       return;
     }
 
-    bool isProtected = false;
-    int pageCount = 0;
+    final valInfo = PdfValidationService.validate(bytes);
+    final bool isProtected = valInfo.isPasswordProtected;
+    final int pageCount = valInfo.pageCount;
 
-    try {
-      final doc = PdfDocument(inputBytes: bytes);
-      pageCount = doc.pages.count;
-      doc.dispose();
-      isProtected = false;
-    } catch (e) {
-      final errStr = e.toString().toLowerCase();
-      if (errStr.contains('password') ||
-          errStr.contains('encrypted') ||
-          errStr.contains('security')) {
-        isProtected = true;
-      } else {
-        state = state.copyWith(
-          isProcessing: false,
-          resetProgressMessage: true,
-          errorMessage:
-              "File '${platformFile.name}' appears corrupted or unreadable.",
-        );
-        return;
-      }
+    if (valInfo.isCorrupted) {
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage:
+            "File '${platformFile.name}' appears corrupted or unreadable.",
+      );
+      return;
     }
 
     if (!isProtected && pageCount == 0) {
@@ -196,6 +185,28 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       );
 
       return targetPath;
+    } on OutOfMemoryError {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage: "This operation is too large to process on this device.",
+      );
+      return null;
+    } on FileSystemException catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
+      );
+      return null;
     } catch (e) {
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
@@ -204,7 +215,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
-        errorMessage: "Failed to protect PDF: $e",
+        errorMessage: "Couldn't add password protection — the file may be damaged. Try a different PDF.",
       );
       return null;
     }
@@ -249,6 +260,28 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       );
 
       return targetPath;
+    } on OutOfMemoryError {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage: "This operation is too large to process on this device.",
+      );
+      return null;
+    } on FileSystemException catch (e) {
+      final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
+      if (elapsedMs < 600) {
+        await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
+      }
+      state = state.copyWith(
+        isProcessing: false,
+        resetProgressMessage: true,
+        errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
+      );
+      return null;
     } catch (e) {
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
@@ -266,7 +299,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         resetProgressMessage: true,
         errorMessage: isWrongPassword
             ? "Incorrect password — the file wasn't changed."
-            : "Failed to remove protection: $e",
+            : "Couldn't remove password protection. Make sure the password is correct and the file isn't damaged.",
       );
       return null;
     }

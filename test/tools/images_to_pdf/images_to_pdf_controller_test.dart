@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:anvil/tools/images_to_pdf/images_to_pdf_controller.dart';
-import 'package:anvil/tools/images_to_pdf/images_to_pdf_state.dart';
 
 Uint8List createValidJpgImage({int width = 200, int height = 100, img.Color? color}) {
   final image = img.Image(width: width, height: height);
