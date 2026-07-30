@@ -114,9 +114,9 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
       margin: const EdgeInsets.only(bottom: 16.0),
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
-        color: AppColors.emberCopper.withOpacity(0.12),
+        color: AppColors.emberCopper.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8.0),
-        border: Border.all(color: AppColors.emberCopper.withOpacity(0.4)),
+        border: Border.all(color: AppColors.emberCopper.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
@@ -130,7 +130,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.close_rounded, size: 18.0),
-            color: AppColors.textMuted(brightness),
+            color: AppColors.text(brightness).withValues(alpha: 0.6),
             onPressed: () => controller.clearError(),
           ),
         ],
@@ -139,15 +139,14 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
   }
 
   Widget _buildEmptyDropZone(BuildContext context) {
-    final controller = ref.read(imagesToPdfControllerProvider.notifier);
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 400),
         child: FileDropZone(
-          onFilesDropped: (files) => controller.addImages(files),
-          allowedExtensions: const ['jpg', 'jpeg', 'png'],
-          title: 'Drop images here or click to browse',
-          subtitle: 'Supports JPG, JPEG, and PNG images',
+          onTap: _pickAndAddImages,
+          label: 'Drop images here or click to browse',
+          sublabel: 'Supports JPG, JPEG, and PNG images',
+          icon: Icons.add_photo_alternate_outlined,
         ),
       ),
     );
@@ -166,7 +165,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
             children: [
               Text(
                 '${state.images.length} ${state.images.length == 1 ? "Image" : "Images"}',
-                style: AppTypography.titleSmall(brightness),
+                style: AppTypography.titleMedium(brightness),
               ),
               Row(
                 children: [
@@ -175,7 +174,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                     icon: const Icon(Icons.add_photo_alternate_rounded, size: 18.0),
                     label: const Text('Add Images'),
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.anvilTeal,
+                      foregroundColor: AppColors.secondary(brightness),
                     ),
                   ),
                   const SizedBox(width: 8.0),
@@ -184,7 +183,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                     icon: const Icon(Icons.clear_all_rounded, size: 18.0),
                     label: const Text('Clear All'),
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textMuted(brightness),
+                      foregroundColor: AppColors.text(brightness).withValues(alpha: 0.6),
                     ),
                   ),
                 ],
@@ -199,21 +198,22 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
             decoration: BoxDecoration(
               color: AppColors.cardBackground(brightness),
               borderRadius: BorderRadius.circular(12.0),
-              border: Border.all(color: AppColors.cardBorder(brightness)),
+              border: Border.all(color: AppColors.pegGrey),
             ),
             child: ReorderableListView.builder(
+              buildDefaultDragHandles: false,
               padding: const EdgeInsets.all(8.0),
               itemCount: state.images.length,
-              onReorder: (oldIndex, newIndex) => controller.reorderImages(oldIndex, newIndex),
+              onReorderItem: (oldIndex, newIndex) => controller.reorderImages(oldIndex, newIndex),
               itemBuilder: (context, index) {
                 final item = state.images[index];
                 return Container(
                   key: ValueKey(item.id),
                   margin: const EdgeInsets.symmetric(vertical: 4.0),
                   decoration: BoxDecoration(
-                    color: AppColors.surface(brightness),
+                    color: AppColors.background(brightness),
                     borderRadius: BorderRadius.circular(8.0),
-                    border: Border.all(color: AppColors.cardBorder(brightness)),
+                    border: Border.all(color: AppColors.pegGrey),
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
@@ -224,7 +224,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                           index: index,
                           child: Icon(
                             Icons.drag_indicator_rounded,
-                            color: AppColors.textMuted(brightness),
+                            color: AppColors.text(brightness).withValues(alpha: 0.6),
                           ),
                         ),
                         const SizedBox(width: 12.0),
@@ -251,7 +251,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                     ),
                     trailing: IconButton(
                       icon: const Icon(Icons.close_rounded, size: 20.0),
-                      color: AppColors.textMuted(brightness),
+                      color: AppColors.text(brightness).withValues(alpha: 0.6),
                       onPressed: () => controller.removeImage(item.id),
                       tooltip: 'Remove image',
                     ),
@@ -291,13 +291,12 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
         children: [
           const SizedBox(height: 32.0),
           const StampAnimation(
-            text: 'PDF CREATED',
-            color: AppColors.anvilTeal,
+            label: 'CREATED',
           ),
           const SizedBox(height: 24.0),
           Text(
             'PDF Document Created Successfully',
-            style: AppTypography.titleLarge(brightness),
+            style: AppTypography.displayMedium(brightness),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12.0),
@@ -306,7 +305,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
             decoration: BoxDecoration(
               color: AppColors.cardBackground(brightness),
               borderRadius: BorderRadius.circular(8.0),
-              border: Border.all(color: AppColors.cardBorder(brightness)),
+              border: Border.all(color: AppColors.pegGrey),
             ),
             child: Column(
               children: [
@@ -320,7 +319,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                   outputPath,
                   style: AppTypography.mono(brightness).copyWith(
                     fontSize: 12.0,
-                    color: AppColors.textMuted(brightness),
+                    color: AppColors.text(brightness).withValues(alpha: 0.6),
                   ),
                   textAlign: TextAlign.center,
                   maxLines: 2,
@@ -343,20 +342,20 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
               AppButton(
                 label: 'Open Folder',
                 icon: Icons.folder_open_rounded,
-                isSecondary: true,
+                variant: AppButtonVariant.secondary,
                 onPressed: () => _fileService.openFolder(p.dirname(outputPath)),
               ),
               if (Platform.isAndroid || Platform.isIOS)
                 AppButton(
                   label: 'Share',
                   icon: Icons.share_rounded,
-                  isSecondary: true,
+                  variant: AppButtonVariant.secondary,
                   onPressed: () => _fileService.shareFile(outputPath),
                 ),
               AppButton(
                 label: 'Convert More Images',
                 icon: Icons.refresh_rounded,
-                isSecondary: true,
+                variant: AppButtonVariant.secondary,
                 onPressed: () => controller.clearImages(),
               ),
             ],
