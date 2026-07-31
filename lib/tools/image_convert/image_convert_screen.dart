@@ -1,13 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
+import '../../core/services/file_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
+import '../../core/widgets/task_progress_dialog.dart';
 import 'image_convert_controller.dart';
 import 'image_convert_state.dart';
 
@@ -19,6 +21,8 @@ class ImageConvertScreen extends ConsumerStatefulWidget {
 }
 
 class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
+  final FileService _fileService = FileService();
+
   String _formatBytes(int bytes) {
     if (bytes <= 0) return '0 B';
     if (bytes < 1024) return '$bytes B';
@@ -29,15 +33,57 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
   }
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'tiff', 'webp'],
-      allowMultiple: false,
-      withData: false,
-    );
-    if (result != null && result.files.isNotEmpty) {
-      ref.read(imageConvertControllerProvider.notifier).loadImage(result.files.first);
+    final files = await _fileService.pickImageFiles(allowMultiple: false);
+    if (files.isNotEmpty) {
+      ref.read(imageConvertControllerProvider.notifier).loadImage(files.first);
     }
+  }
+
+  Future<void> _handleConvert() async {
+    final controller = ref.read(imageConvertControllerProvider.notifier);
+    await showTaskProgressDialog<void>(
+      context: context,
+      title: 'Converting Image',
+      defaultMessage: 'Encoding image format…',
+      task: () => controller.convert(),
+    );
+  }
+
+  Future<void> _handleSaveAs(String currentOutputPath) async {
+    final savedPath = await _fileService.saveFile(
+      defaultFileName: p.basename(currentOutputPath),
+      bytes: [],
+    );
+
+    if (savedPath != null && mounted) {
+      try {
+        final src = File(currentOutputPath);
+        if (src.existsSync()) {
+          await src.copy(savedPath);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('File saved to $savedPath'),
+                backgroundColor: AppColors.anvilTeal,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not save file: $e'),
+              backgroundColor: AppColors.rustRed,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _handleShare(String currentOutputPath) async {
+    await _fileService.shareFile(currentOutputPath);
   }
 
   @override
@@ -51,87 +97,106 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
       appBar: AppBar(
         title: Text(
           'Image Format Convert',
-          style: AppTypography.titleMedium(brightness),
+          style: AppTypography.displayMedium(brightness),
         ),
-        backgroundColor: AppColors.background(brightness),
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_rounded, color: AppColors.text(brightness)),
           onPressed: () => context.go('/'),
         ),
+        actions: [
+          if (state.hasFile)
+            IconButton(
+              tooltip: 'Reset',
+              icon: const Icon(Icons.refresh),
+              onPressed: controller.reset,
+            ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!state.hasFile && !state.isSuccess) ...[
-                Expanded(
-                  child: FileDropZone(
-                    onTap: _pickFile,
-                    label: 'Drop image file here or click to browse',
-                    sublabel: 'Supports PNG, JPEG, BMP, GIF, TIFF, WebP',
-                    icon: Icons.image_outlined,
-                  ),
-                ),
-                if (state.errorMessage != null) ...[
-                  const SizedBox(height: 16),
-                  _buildErrorBanner(state.errorMessage!, brightness),
-                ],
-              ] else if (state.isSuccess) ...[
-                Expanded(child: _buildSuccessView(state, controller, brightness)),
-              ] else ...[
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildSourceCard(state, controller, brightness),
-                        const SizedBox(height: 24),
-                        _buildTargetFormatSection(state, controller, brightness),
-                        if (state.targetFormat == ImageOutputFormat.jpeg) ...[
-                          const SizedBox(height: 24),
-                          _buildJpegQualitySection(state, controller, brightness),
-                        ],
-                        if (state.hasAlpha &&
-                            state.targetFormat == ImageOutputFormat.jpeg) ...[
-                          const SizedBox(height: 16),
-                          _buildNoticeBanner(
-                            icon: Icons.info_outline_rounded,
-                            color: AppColors.sparkYellow,
-                            message:
-                                'JPEG does not support transparency. Transparent areas will become white.',
-                            brightness: brightness,
-                          ),
-                        ],
-                        if (state.isAnimated) ...[
-                          const SizedBox(height: 16),
-                          _buildNoticeBanner(
-                            icon: Icons.motion_photos_on_rounded,
-                            color: AppColors.sparkYellow,
-                            message:
-                                'This is an animated image — only the first frame will be converted.',
-                            brightness: brightness,
-                          ),
-                        ],
-                        if (state.errorMessage != null) ...[
-                          const SizedBox(height: 16),
-                          _buildErrorBanner(state.errorMessage!, brightness),
-                        ],
-                        const SizedBox(height: 24),
-                        _buildSummaryCard(state, brightness),
-                      ],
-                    ),
-                  ),
-                ),
+              if (state.errorMessage != null)
+                _buildErrorBanner(state.errorMessage!, brightness),
+              Expanded(
+                child: !state.hasFile
+                    ? _buildEmptyDropZone(brightness)
+                    : state.isSuccess
+                        ? _buildSuccessView(state, controller, brightness)
+                        : _buildConvertForm(state, controller, brightness),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyDropZone(Brightness brightness) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
+        child: FileDropZone(
+          onTap: _pickFile,
+          label: 'Drop image file here or click to browse',
+          sublabel: 'Supports PNG, JPEG, BMP, GIF, TIFF, and WebP images',
+          icon: Icons.transform_rounded,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConvertForm(
+      ImageConvertState state, ImageConvertController controller, Brightness brightness) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSourceCard(state, controller, brightness),
+              const SizedBox(height: 24),
+              _buildTargetFormatSection(state, controller, brightness),
+              if (state.targetFormat == ImageOutputFormat.jpeg) ...[
+                const SizedBox(height: 24),
+                _buildJpegQualitySection(state, controller, brightness),
+              ],
+              if (state.hasAlpha && state.targetFormat == ImageOutputFormat.jpeg) ...[
                 const SizedBox(height: 16),
-                AppButton(
-                  label: 'Convert Image',
-                  isLoading: state.isProcessing,
-                  onPressed: state.isProcessing ? null : () => controller.convert(),
+                _buildNoticeBanner(
+                  icon: Icons.info_outline_rounded,
+                  color: AppColors.sparkYellow,
+                  message:
+                      'JPEG does not support transparency. Transparent areas will become white.',
+                  brightness: brightness,
                 ),
               ],
+              if (state.isAnimated) ...[
+                const SizedBox(height: 16),
+                _buildNoticeBanner(
+                  icon: Icons.motion_photos_on_rounded,
+                  color: AppColors.sparkYellow,
+                  message:
+                      'This is an animated image — only the first frame will be converted.',
+                  brightness: brightness,
+                ),
+              ],
+              const SizedBox(height: 24),
+              _buildSummaryCard(state, brightness),
+              const SizedBox(height: 32),
+              AppButton(
+                label: 'Convert Image',
+                icon: Icons.transform_rounded,
+                variant: AppButtonVariant.primary,
+                isLoading: state.isProcessing,
+                onPressed: state.isProcessing ? null : _handleConvert,
+              ),
             ],
           ),
         ),
@@ -142,21 +207,21 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
   Widget _buildSourceCard(
       ImageConvertState state, ImageConvertController controller, Brightness brightness) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.cardBackground(brightness),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.disabledBorder(brightness)),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.pegGrey),
       ),
       child: Row(
         children: [
           if (state.thumbnailBytes != null)
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
               child: Image.memory(
                 state.thumbnailBytes!,
-                width: 72,
-                height: 72,
+                width: 64,
+                height: 64,
                 fit: BoxFit.cover,
               ),
             ),
@@ -167,36 +232,47 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
               children: [
                 Text(
                   state.file?.name ?? 'Selected Image',
-                  style: AppTypography.titleMedium(brightness),
+                  style: AppTypography.bodyLarge(brightness).copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Wrap(
                   spacing: 12,
                   runSpacing: 4,
                   children: [
                     Text(
                       'Format: ${state.detectedFormat ?? "Unknown"}',
-                      style: AppTypography.mono(brightness).copyWith(fontSize: 12),
+                      style: AppTypography.mono(brightness).copyWith(
+                        fontSize: 12,
+                        color: AppColors.text(brightness).withValues(alpha: 0.7),
+                      ),
                     ),
                     Text(
                       '${state.width} × ${state.height} px',
-                      style: AppTypography.mono(brightness).copyWith(fontSize: 12),
+                      style: AppTypography.mono(brightness).copyWith(
+                        fontSize: 12,
+                        color: AppColors.text(brightness).withValues(alpha: 0.7),
+                      ),
                     ),
                     Text(
                       _formatBytes(state.fileSize),
-                      style: AppTypography.mono(brightness).copyWith(fontSize: 12),
+                      style: AppTypography.mono(brightness).copyWith(
+                        fontSize: 12,
+                        color: AppColors.text(brightness).withValues(alpha: 0.7),
+                      ),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(Icons.swap_horiz_rounded, color: AppColors.primary(brightness)),
-            tooltip: 'Choose a different image',
+          TextButton.icon(
             onPressed: state.isProcessing ? null : _pickFile,
+            icon: const Icon(Icons.swap_horiz, size: 18),
+            label: const Text('Change'),
           ),
         ],
       ),
@@ -206,16 +282,19 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
   Widget _buildTargetFormatSection(
       ImageConvertState state, ImageConvertController controller, Brightness brightness) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.cardBackground(brightness),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.disabledBorder(brightness)),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.pegGrey),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Target Format', style: AppTypography.titleMedium(brightness)),
+          Text(
+            'TARGET FORMAT',
+            style: AppTypography.labelSmall(brightness),
+          ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -260,11 +339,11 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
   Widget _buildJpegQualitySection(
       ImageConvertState state, ImageConvertController controller, Brightness brightness) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.cardBackground(brightness),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.disabledBorder(brightness)),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.pegGrey),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,12 +351,15 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('JPEG Quality', style: AppTypography.titleMedium(brightness)),
+              Text(
+                'JPEG QUALITY',
+                style: AppTypography.labelSmall(brightness),
+              ),
               Text(
                 '${state.jpegQuality}%',
                 style: AppTypography.mono(brightness).copyWith(
-                  color: AppColors.primary(brightness),
                   fontWeight: FontWeight.bold,
+                  color: AppColors.primary(brightness),
                 ),
               ),
             ],
@@ -308,18 +390,18 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color),
       ),
       child: Row(
         children: [
           Icon(icon, color: color, size: 20),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: AppTypography.bodySmall(brightness),
+              style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 13),
             ),
           ),
         ],
@@ -329,22 +411,25 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
 
   Widget _buildErrorBanner(String message, Brightness brightness) {
     return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16.0),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.rustRed.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.rustRed.withValues(alpha: 0.4)),
+        color: AppColors.rustRed.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: const Border(
+          left: BorderSide(color: AppColors.rustRed, width: 4),
+        ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.rustRed, size: 22),
-          const SizedBox(width: 10),
+          const Icon(Icons.error_outline, color: AppColors.rustRed),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: AppTypography.bodySmall(brightness).copyWith(
-                color: AppColors.rustRed,
-                fontWeight: FontWeight.w600,
+              style: AppTypography.bodyMedium(brightness).copyWith(
+                color: AppColors.text(brightness),
               ),
             ),
           ),
@@ -355,10 +440,11 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
 
   Widget _buildSummaryCard(ImageConvertState state, Brightness brightness) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.disabledBackground(brightness),
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.pegGrey.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -373,7 +459,10 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
           ),
           Text(
             state.targetFormat.displayName,
-            style: AppTypography.titleMedium(brightness).copyWith(color: AppColors.primary(brightness)),
+            style: AppTypography.bodyMedium(brightness).copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary(brightness),
+            ),
           ),
         ],
       ),
@@ -386,65 +475,168 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
     final originalSizeStr = _formatBytes(state.fileSize);
     final outputSizeStr = _formatBytes(state.outputSize ?? 0);
 
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const SizedBox(height: 24),
-          const StampAnimation(label: 'CONVERTED'),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.cardBackground(brightness),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.disabledBorder(brightness)),
+    final double sizeDiff = ((state.outputSize ?? 0) - state.fileSize).toDouble();
+    final double percentChange =
+        state.fileSize > 0 ? (sizeDiff / state.fileSize) * 100 : 0.0;
+    final bool isSmaller = sizeDiff < 0;
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const StampAnimation(label: 'CONVERTED'),
+            const SizedBox(height: 24),
+            Text(
+              'Image Conversion Complete!',
+              style: AppTypography.displayMedium(brightness),
+              textAlign: TextAlign.center,
             ),
-            child: Column(
-              children: [
-                Text(fileName, style: AppTypography.displayMedium(brightness)),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Size: $originalSizeStr → $outputSizeStr',
-                      style: AppTypography.mono(brightness),
+            const SizedBox(height: 16),
+
+            // Size & File Info Comparison Card matching PDF tools
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: BoxDecoration(
+                color: AppColors.cardBackground(brightness),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.pegGrey),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    fileName,
+                    style: AppTypography.bodyLarge(brightness).copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        originalSizeStr,
+                        style: AppTypography.mono(brightness).copyWith(
+                          fontSize: 16,
+                          color: AppColors.text(brightness).withValues(alpha: 0.6),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        color: AppColors.primary(brightness),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        outputSizeStr,
+                        style: AppTypography.mono(brightness).copyWith(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary(brightness),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (sizeDiff != 0) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: (isSmaller ? AppColors.anvilTeal : AppColors.emberCopper)
+                            .withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${percentChange.abs().toStringAsFixed(0)}% ${isSmaller ? "smaller" : "larger"}',
+                        style: AppTypography.mono(brightness).copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isSmaller ? AppColors.anvilTeal : AppColors.emberCopper,
+                        ),
+                      ),
                     ),
                   ],
+                ],
+              ),
+            ),
+
+            if (state.outputPath != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Saved to:',
+                style: AppTypography.labelSmall(brightness),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.pegGrey.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6.0),
+                  border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.3)),
+                ),
+                child: SelectableText(
+                  state.outputPath!,
+                  style: AppTypography.mono(brightness).copyWith(
+                    fontSize: 12,
+                    color: AppColors.text(brightness),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 28),
+
+            // Final Action Buttons matching all PDF tools (Open Folder, Save As..., Share, Convert Another Image)
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: [
+                AppButton(
+                  label: 'Open Folder',
+                  icon: Icons.folder_open_rounded,
+                  variant: AppButtonVariant.primary,
+                  onPressed: () {
+                    if (state.outputPath != null) {
+                      _fileService.openFolder(p.dirname(state.outputPath!));
+                    }
+                  },
+                ),
+                AppButton(
+                  label: 'Save As…',
+                  icon: Icons.save_alt_rounded,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () {
+                    if (state.outputPath != null) {
+                      _handleSaveAs(state.outputPath!);
+                    }
+                  },
+                ),
+                AppButton(
+                  label: 'Share',
+                  icon: Icons.share_rounded,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () {
+                    if (state.outputPath != null) {
+                      _handleShare(state.outputPath!);
+                    }
+                  },
+                ),
+                AppButton(
+                  label: 'Convert Another Image',
+                  icon: Icons.refresh,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: controller.reset,
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AppButton(
-                label: 'Open Folder',
-                icon: Icons.folder_open_rounded,
-                variant: AppButtonVariant.secondary,
-                onPressed: () => controller.openFolder(),
-              ),
-              const SizedBox(width: 16),
-              AppButton(
-                label: 'Save As...',
-                icon: Icons.save_alt_rounded,
-                variant: AppButtonVariant.primary,
-                onPressed: () => controller.saveAs(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          TextButton.icon(
-            onPressed: () => controller.reset(),
-            icon: Icon(Icons.refresh_rounded, color: AppColors.primary(brightness)),
-            label: Text(
-              'Convert Another Image',
-              style: AppTypography.bodyMedium(brightness).copyWith(color: AppColors.primary(brightness)),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

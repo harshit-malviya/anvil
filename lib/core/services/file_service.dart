@@ -20,11 +20,11 @@ class FileService {
     return result.files;
   }
 
-  /// Open OS file picker for selecting Image files (JPEG, PNG).
+  /// Open OS file picker for selecting Image files (JPEG, PNG, BMP, GIF, TIFF, WebP).
   Future<List<PlatformFile>> pickImageFiles({bool allowMultiple = false}) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png'],
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'tiff', 'webp'],
       allowMultiple: allowMultiple,
       withData: false,
     );
@@ -39,19 +39,23 @@ class FileService {
   Future<String?> saveFile({
     required String defaultFileName,
     required List<int> bytes,
+    List<String>? allowedExtensions,
   }) async {
+    final ext = p.extension(defaultFileName).replaceAll('.', '').toLowerCase();
     final outputPath = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save Merged PDF',
+      dialogTitle: 'Save File As',
       fileName: defaultFileName,
       type: FileType.custom,
-      allowedExtensions: ['pdf'],
+      allowedExtensions: allowedExtensions ?? (ext.isNotEmpty ? [ext] : ['pdf']),
     );
 
     if (outputPath == null) return null;
 
-    final file = File(outputPath);
-    await file.writeAsBytes(bytes, flush: true);
-    return file.path;
+    if (bytes.isNotEmpty) {
+      final file = File(outputPath);
+      await file.writeAsBytes(bytes, flush: true);
+    }
+    return outputPath;
   }
 
   /// Share file on Android or desktop.
