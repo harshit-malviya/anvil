@@ -52,6 +52,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-07-31 — Session 21
+- Implemented Sprint 3 Image Compress (`FEATURE_image_compress.md`, `PRD_image_tools_v2.md`):
+  - Created `CompressionLevel` (`low`, `medium`, `high`), `CompressionResultType` (`normalSuccess`, `minimalReduction`, `outputLarger`), and `ImageCompressState` in `lib/tools/image_compress/image_compress_state.dart`.
+  - Created `ImageCompressController` in `lib/tools/image_compress/image_compress_controller.dart` featuring background isolate worker (`isolateImageCompressWorker`), format-specific quality encoding (JPEG: 85/65/40, PNG: zlib 3/6/9, GIF/BMP/TIFF), WebP input rejection due to read-only encoder limitations, EXIF orientation baking (`img.bakeOrientation`), size reduction comparison logic, and file save/folder actions.
+  - Created `ImageCompressScreen` in `lib/tools/image_compress/image_compress_screen.dart` with single image drop zone, thumbnail preview card with mono specs, compression level selector, progress overlay, stamp animation (`COMPRESSED`), size comparison card (original -> compressed size badge), minimal reduction efficiency note, output larger guard message, and completion save/folder actions.
+  - Registered route `/image-compress` in `lib/core/router.dart` and tool metadata in `lib/tools/registry.dart`.
+  - Created unit test suite `test/tools/image_compress/image_compress_controller_test.dart` (10 unit tests passing cleanly). All 150 workspace tests passing with 0 lint errors.
+
 ## 2026-07-31 — Session 20
 - Implemented Sprint 2 Image Resize (`FEATURE_image_resize.md`, `PRD_image_tools_v2.md`):
   - Created `ResizeMode` (`exactDimensions`, `percentage`, `preset`), `ImagePreset` (HD, Full HD, 4K, Square, Story, Web banner), and immutable `ImageResizeState` in `lib/tools/image_resize/image_resize_state.dart`.
@@ -221,11 +229,15 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | Images to PDF | `docs/PHASE 3/FEATURE_images_to_pdf.md` | Done | Controller, UI, shared image service extraction, background isolate, and test suite passing |
 | Image Format Convert | `FEATURE_image_convert.md` | Done | Controller, UI, isolate worker, transparency flattening, unit tests passing |
 | Image Resize | `docs/V2/02_Image_Resizer/FEATURE_image_resize.md` | Done | Controller, UI, background isolate worker, ratio lock, presets, unit tests passing |
-| Image Compress | *(spec pending)* | Not started | Sprint 3 |
+| Image Compress | `docs/V2/03_Image_Compress/FEATURE_image_compress.md` | Done | Controller, UI, background isolate worker, format-specific quality encoding, size comparison result types, unit tests passing |
 
 ## 5. Decisions log
 
 ## 2026-07-31
+- Decision: JPEG compression levels map to concrete quality values: Low=85 (minimal reduction, high visual quality), Medium=65 (balanced), High=40 (maximum reduction).
+- Decision: PNG compression levels map to zlib compression levels: Low=level 3, Medium=level 6, High=level 9.
+- Decision: WebP inputs are rejected with a clear user message because package:image 4.x has a read-only WebP decoder with no WebP encoder support.
+- Decision: Output size comparison categorizes results into `normalSuccess` (reduction >= 5%), `minimalReduction` (reduction < 5%), or `outputLarger` (compressed size >= original size), guarding against presenting a worse output file as a success.
 - Decision: Resizing interpolation uses high-quality `img.Interpolation.cubic` in the background isolate worker.
 - Decision: EXIF orientation is automatically baked into the image (`img.bakeOrientation`) before resizing so mobile photo orientation is preserved right-side up.
 - Decision: Presets apply preset width as starting width when aspect ratio lock is ON, recalculating target height from source aspect ratio. When aspect ratio lock is OFF, preset exact width & height both apply.

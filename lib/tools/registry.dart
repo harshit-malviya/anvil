@@ -181,6 +181,24 @@ class ToolRegistry {
       ],
       category: ToolCategory.image,
     ),
+    ToolMetadata(
+      id: 'image_compress',
+      title: 'Compress Image',
+      description: "Reduce image file size while preserving pixel dimensions and format.",
+      icon: Icons.compress_rounded,
+      route: '/image-compress',
+      isAvailable: true,
+      keywords: [
+        'compress',
+        'shrink file size',
+        'smaller image',
+        'reduce file size',
+        'photo compress',
+        'jpg compress',
+        'png compress',
+      ],
+      category: ToolCategory.image,
+    ),
   ];
 }
 
