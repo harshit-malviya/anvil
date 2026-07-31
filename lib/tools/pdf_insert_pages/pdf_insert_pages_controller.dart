@@ -19,12 +19,15 @@ final pdfInsertPagesControllerProvider =
 class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
   final FileService _fileService;
   final PdfThumbnailService _thumbnailService;
+  final PdfValidationService _validationService;
 
   PdfInsertPagesController({
     FileService? fileService,
     PdfThumbnailService? thumbnailService,
+    PdfValidationService? validationService,
   })  : _fileService = fileService ?? FileService(),
         _thumbnailService = thumbnailService ?? PdfThumbnailService(),
+        _validationService = validationService ?? const PdfValidationService(),
         super(const PdfInsertPagesState());
 
   /// Load and validate target PDF document into which pages will be inserted.
@@ -53,7 +56,7 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
       return;
     }
 
-    final valInfo = PdfValidationService.validate(bytes);
+    final valInfo = _validationService.validate(bytes);
     if (valInfo.isPasswordProtected) {
       state = state.copyWith(
         errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
@@ -119,7 +122,7 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
       return;
     }
 
-    final valInfo = PdfValidationService.validate(bytes);
+    final valInfo = _validationService.validate(bytes);
     if (valInfo.isPasswordProtected) {
       state = state.copyWith(
         errorMessage: "Source file is password-protected. Remove password before inserting pages.",

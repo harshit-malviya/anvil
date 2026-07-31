@@ -16,9 +16,13 @@ final pdfPageManagerControllerProvider =
 
 class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
   final FileService _fileService;
+  final PdfValidationService _validationService;
 
-  PdfPageManagerController({FileService? fileService})
-      : _fileService = fileService ?? FileService(),
+  PdfPageManagerController({
+    FileService? fileService,
+    PdfValidationService? validationService,
+  })  : _fileService = fileService ?? FileService(),
+        _validationService = validationService ?? const PdfValidationService(),
         super(const PdfPageManagerState());
 
   /// Load and validate a single PDF document.
@@ -56,7 +60,7 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       return;
     }
 
-    final valInfo = PdfValidationService.validate(bytes);
+    final valInfo = _validationService.validate(bytes);
     if (valInfo.isPasswordProtected) {
       state = state.copyWith(
         isProcessing: false,

@@ -17,12 +17,15 @@ final pdfSplitControllerProvider =
 class PdfSplitController extends StateNotifier<PdfSplitState> {
   final PdfThumbnailService _thumbnailService;
   final FileService _fileService;
+  final PdfValidationService _validationService;
 
   PdfSplitController({
     PdfThumbnailService? thumbnailService,
     FileService? fileService,
+    PdfValidationService? validationService,
   })  : _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _fileService = fileService ?? FileService(),
+        _validationService = validationService ?? const PdfValidationService(),
         super(const PdfSplitState());
 
   /// Load and validate a single PDF document.
@@ -62,7 +65,7 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       return;
     }
 
-    final valInfo = PdfValidationService.validate(bytes);
+    final valInfo = _validationService.validate(bytes);
     if (valInfo.isPasswordProtected) {
       state = state.copyWith(
         isProcessing: false,

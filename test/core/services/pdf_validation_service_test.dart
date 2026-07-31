@@ -34,12 +34,14 @@ Uint8List _createCorruptedPdf() {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  late PdfValidationService service;
   late Uint8List validSinglePagePdf;
   late Uint8List validMultiPagePdf;
   late Uint8List protectedPdf;
   late Uint8List corruptedPdf;
 
   setUpAll(() async {
+    service = const PdfValidationService();
     validSinglePagePdf = await _createValidPdf(pagesCount: 1);
     validMultiPagePdf = await _createValidPdf(pagesCount: 5);
     protectedPdf = await _createProtectedPdf();
@@ -48,7 +50,7 @@ void main() {
 
   group('PdfValidationService', () {
     test('returns valid result and correct page count for single-page PDF', () {
-      final info = PdfValidationService.validate(validSinglePagePdf);
+      final info = service.validate(validSinglePagePdf);
 
       expect(info.result, PdfValidationResult.valid);
       expect(info.isValid, isTrue);
@@ -58,7 +60,7 @@ void main() {
     });
 
     test('returns valid result and correct page count for multi-page PDF', () {
-      final info = PdfValidationService.validate(validMultiPagePdf);
+      final info = service.validate(validMultiPagePdf);
 
       expect(info.result, PdfValidationResult.valid);
       expect(info.isValid, isTrue);
@@ -66,7 +68,7 @@ void main() {
     });
 
     test('returns passwordProtected result for encrypted PDF', () {
-      final info = PdfValidationService.validate(protectedPdf);
+      final info = service.validate(protectedPdf);
 
       expect(info.result, PdfValidationResult.passwordProtected);
       expect(info.isPasswordProtected, isTrue);
@@ -76,7 +78,7 @@ void main() {
     });
 
     test('returns corrupted result for non-PDF garbage bytes', () {
-      final info = PdfValidationService.validate(corruptedPdf);
+      final info = service.validate(corruptedPdf);
 
       expect(info.result, PdfValidationResult.corrupted);
       expect(info.isCorrupted, isTrue);
@@ -86,7 +88,7 @@ void main() {
     });
 
     test('returns corrupted result for null bytes', () {
-      final info = PdfValidationService.validate(null);
+      final info = service.validate(null);
 
       expect(info.result, PdfValidationResult.corrupted);
       expect(info.isCorrupted, isTrue);
@@ -94,7 +96,7 @@ void main() {
     });
 
     test('returns corrupted result for empty Uint8List', () {
-      final info = PdfValidationService.validate(Uint8List(0));
+      final info = service.validate(Uint8List(0));
 
       expect(info.result, PdfValidationResult.corrupted);
       expect(info.isCorrupted, isTrue);

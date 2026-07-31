@@ -15,9 +15,13 @@ final pdfPasswordControllerProvider =
 
 class PdfPasswordController extends StateNotifier<PdfPasswordState> {
   final FileService _fileService;
+  final PdfValidationService _validationService;
 
-  PdfPasswordController({FileService? fileService})
-      : _fileService = fileService ?? FileService(),
+  PdfPasswordController({
+    FileService? fileService,
+    PdfValidationService? validationService,
+  })  : _fileService = fileService ?? FileService(),
+        _validationService = validationService ?? const PdfValidationService(),
         super(const PdfPasswordState());
 
   /// Load and inspect a PDF file to detect password protection.
@@ -59,7 +63,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       return;
     }
 
-    final valInfo = PdfValidationService.validate(bytes);
+    final valInfo = _validationService.validate(bytes);
     final bool isProtected = valInfo.isPasswordProtected;
     final int pageCount = valInfo.pageCount;
 

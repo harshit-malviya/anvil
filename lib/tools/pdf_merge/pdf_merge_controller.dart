@@ -64,9 +64,13 @@ final pdfMergeControllerProvider =
 
 class PdfMergeController extends StateNotifier<PdfMergeState> {
   final FileService _fileService;
+  final PdfValidationService _validationService;
 
-  PdfMergeController({FileService? fileService})
-      : _fileService = fileService ?? FileService(),
+  PdfMergeController({
+    FileService? fileService,
+    PdfValidationService? validationService,
+  })  : _fileService = fileService ?? FileService(),
+        _validationService = validationService ?? const PdfValidationService(),
         super(const PdfMergeState());
 
   /// Validate and add PDF files to state list.
@@ -93,7 +97,7 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         continue;
       }
 
-      final valInfo = PdfValidationService.validate(bytes);
+      final valInfo = _validationService.validate(bytes);
       if (valInfo.isValid) {
         final item = PdfMergeItem(
           id: '${DateTime.now().microsecondsSinceEpoch}_${pf.name}_${newValidItems.length}',

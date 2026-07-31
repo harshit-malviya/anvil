@@ -26,14 +26,17 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
   final PdfThumbnailService _thumbnailService;
   final PageRenderer? _customRenderer;
   final FileService _fileService;
+  final PdfValidationService _validationService;
 
   PdfToImageController({
     PdfThumbnailService? thumbnailService,
     PageRenderer? customRenderer,
     FileService? fileService,
+    PdfValidationService? validationService,
   })  : _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _customRenderer = customRenderer,
         _fileService = fileService ?? FileService(),
+        _validationService = validationService ?? const PdfValidationService(),
         super(const PdfToImageState());
 
   /// Load and validate a single PDF document.
@@ -74,7 +77,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
     int pageCount = 0;
     double firstWidth = 612.0;
     double firstHeight = 792.0;
-    final valInfo = PdfValidationService.validate(bytes);
+    final valInfo = _validationService.validate(bytes);
     if (valInfo.isPasswordProtected) {
       state = state.copyWith(
         isProcessing: false,

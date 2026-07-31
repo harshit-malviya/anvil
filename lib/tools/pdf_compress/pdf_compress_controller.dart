@@ -15,9 +15,13 @@ final pdfCompressControllerProvider =
 
 class PdfCompressController extends StateNotifier<PdfCompressState> {
   final FileService _fileService;
+  final PdfValidationService _validationService;
 
-  PdfCompressController({FileService? fileService})
-      : _fileService = fileService ?? FileService(),
+  PdfCompressController({
+    FileService? fileService,
+    PdfValidationService? validationService,
+  })  : _fileService = fileService ?? FileService(),
+        _validationService = validationService ?? const PdfValidationService(),
         super(const PdfCompressState());
 
   /// Load and validate a single PDF document.
@@ -58,7 +62,7 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
       return;
     }
 
-    final valInfo = PdfValidationService.validate(bytes);
+    final valInfo = _validationService.validate(bytes);
     if (valInfo.isPasswordProtected) {
       state = state.copyWith(
         isProcessing: false,

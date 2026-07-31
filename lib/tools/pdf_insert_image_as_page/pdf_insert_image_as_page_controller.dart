@@ -22,14 +22,17 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
   final FileService _fileService;
   final PdfThumbnailService _thumbnailService;
   final ImageToPdfPageService _imageService;
+  final PdfValidationService _validationService;
 
   PdfInsertImageAsPageController({
     FileService? fileService,
     PdfThumbnailService? thumbnailService,
     ImageToPdfPageService? imageService,
+    PdfValidationService? validationService,
   })  : _fileService = fileService ?? FileService(),
         _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _imageService = imageService ?? ImageToPdfPageService(),
+        _validationService = validationService ?? const PdfValidationService(),
         super(const PdfInsertImageAsPageState());
 
   /// Load and validate target PDF document into which image pages will be inserted.
@@ -58,7 +61,7 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
       return;
     }
 
-    final valInfo = PdfValidationService.validate(bytes);
+    final valInfo = _validationService.validate(bytes);
     if (valInfo.isPasswordProtected) {
       state = state.copyWith(
         errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
