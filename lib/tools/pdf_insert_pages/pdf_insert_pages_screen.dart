@@ -422,14 +422,14 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.emberCopper.withValues(alpha: 0.2),
+                        color: AppColors.primary(brightness).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         'TARGET PDF',
                         style: AppTypography.labelSmall(brightness).copyWith(
                           fontSize: 10,
-                          color: AppColors.emberCopper,
+                          color: AppColors.primary(brightness),
                         ),
                       ),
                     ),
@@ -703,7 +703,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
               color: AppColors.cardBackground(brightness),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: isInsertionAnchor ? AppColors.emberCopper : AppColors.pegGrey,
+                color: isInsertionAnchor ? AppColors.primary(brightness) : AppColors.pegGrey,
                 width: isInsertionAnchor ? 2.5 : 1.0,
               ),
             ),
@@ -758,7 +758,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.emberCopper,
+                        color: AppColors.primary(brightness),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(

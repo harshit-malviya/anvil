@@ -10,6 +10,7 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_dialog.dart';
+import '../../tools/registry.dart';
 import 'image_convert_controller.dart';
 import 'image_convert_state.dart';
 
@@ -49,7 +50,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
     );
   }
 
-  Future<void> _handleSaveAs(String currentOutputPath) async {
+  Future<void> _handleSaveAs(String currentOutputPath, Color familyAccent) async {
     final savedPath = await _fileService.saveFile(
       defaultFileName: p.basename(currentOutputPath),
       bytes: [],
@@ -64,7 +65,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('File saved to $savedPath'),
-                backgroundColor: AppColors.anvilTeal,
+                backgroundColor: familyAccent,
               ),
             );
           }
@@ -89,6 +90,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final familyAccent = AppColors.familyAccent(ToolCategory.image, brightness);
     final state = ref.watch(imageConvertControllerProvider);
     final controller = ref.read(imageConvertControllerProvider.notifier);
 
@@ -126,8 +128,8 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                 child: !state.hasFile
                     ? _buildEmptyDropZone(brightness)
                     : state.isSuccess
-                        ? _buildSuccessView(state, controller, brightness)
-                        : _buildConvertForm(state, controller, brightness),
+                        ? _buildSuccessView(state, controller, brightness, familyAccent)
+                        : _buildConvertForm(state, controller, brightness, familyAccent),
               ),
             ],
           ),
@@ -151,7 +153,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
   }
 
   Widget _buildConvertForm(
-      ImageConvertState state, ImageConvertController controller, Brightness brightness) {
+      ImageConvertState state, ImageConvertController controller, Brightness brightness, Color familyAccent) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600),
@@ -162,10 +164,10 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
             children: [
               _buildSourceCard(state, controller, brightness),
               const SizedBox(height: 24),
-              _buildTargetFormatSection(state, controller, brightness),
+              _buildTargetFormatSection(state, controller, brightness, familyAccent),
               if (state.targetFormat == ImageOutputFormat.jpeg) ...[
                 const SizedBox(height: 24),
-                _buildJpegQualitySection(state, controller, brightness),
+                _buildJpegQualitySection(state, controller, brightness, familyAccent),
               ],
               if (state.hasAlpha && state.targetFormat == ImageOutputFormat.jpeg) ...[
                 const SizedBox(height: 16),
@@ -188,12 +190,13 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                 ),
               ],
               const SizedBox(height: 24),
-              _buildSummaryCard(state, brightness),
+              _buildSummaryCard(state, brightness, familyAccent),
               const SizedBox(height: 32),
               AppButton(
                 label: 'Convert Image',
                 icon: Icons.transform_rounded,
                 variant: AppButtonVariant.primary,
+                color: familyAccent,
                 isLoading: state.isProcessing,
                 onPressed: state.isProcessing ? null : _handleConvert,
               ),
@@ -280,7 +283,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
   }
 
   Widget _buildTargetFormatSection(
-      ImageConvertState state, ImageConvertController controller, Brightness brightness) {
+      ImageConvertState state, ImageConvertController controller, Brightness brightness, Color familyAccent) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -310,7 +313,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                   label: Text(format.displayName),
                   selected: isSelected,
                   disabledColor: AppColors.disabledBackground(brightness),
-                  selectedColor: AppColors.primary(brightness),
+                  selectedColor: familyAccent,
                   backgroundColor: AppColors.cardBackground(brightness),
                   labelStyle: TextStyle(
                     color: isSelected
@@ -337,7 +340,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
   }
 
   Widget _buildJpegQualitySection(
-      ImageConvertState state, ImageConvertController controller, Brightness brightness) {
+      ImageConvertState state, ImageConvertController controller, Brightness brightness, Color familyAccent) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -359,7 +362,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                 '${state.jpegQuality}%',
                 style: AppTypography.mono(brightness).copyWith(
                   fontWeight: FontWeight.bold,
-                  color: AppColors.primary(brightness),
+                  color: familyAccent,
                 ),
               ),
             ],
@@ -369,7 +372,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
             min: 10,
             max: 100,
             divisions: 18,
-            activeColor: AppColors.primary(brightness),
+            activeColor: familyAccent,
             inactiveColor: AppColors.disabledBorder(brightness),
             label: '${state.jpegQuality}%',
             onChanged: state.isProcessing
@@ -438,7 +441,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
     );
   }
 
-  Widget _buildSummaryCard(ImageConvertState state, Brightness brightness) {
+  Widget _buildSummaryCard(ImageConvertState state, Brightness brightness, Color familyAccent) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
@@ -455,13 +458,13 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.primary(brightness)),
+            child: Icon(Icons.arrow_forward_rounded, size: 18, color: familyAccent),
           ),
           Text(
             state.targetFormat.displayName,
             style: AppTypography.bodyMedium(brightness).copyWith(
               fontWeight: FontWeight.bold,
-              color: AppColors.primary(brightness),
+              color: familyAccent,
             ),
           ),
         ],
@@ -470,7 +473,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
   }
 
   Widget _buildSuccessView(
-      ImageConvertState state, ImageConvertController controller, Brightness brightness) {
+      ImageConvertState state, ImageConvertController controller, Brightness brightness, Color familyAccent) {
     final fileName = p.basename(state.outputPath!);
     final originalSizeStr = _formatBytes(state.fileSize);
     final outputSizeStr = _formatBytes(state.outputSize ?? 0);
@@ -486,7 +489,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const StampAnimation(label: 'CONVERTED'),
+            StampAnimation(label: 'CONVERTED', color: familyAccent),
             const SizedBox(height: 24),
             Text(
               'Image Conversion Complete!',
@@ -526,7 +529,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                       const SizedBox(width: 12),
                       Icon(
                         Icons.arrow_forward_rounded,
-                        color: AppColors.primary(brightness),
+                        color: familyAccent,
                       ),
                       const SizedBox(width: 12),
                       Text(
@@ -534,7 +537,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                         style: AppTypography.mono(brightness).copyWith(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.primary(brightness),
+                          color: familyAccent,
                         ),
                       ),
                     ],
@@ -544,7 +547,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: (isSmaller ? AppColors.anvilTeal : AppColors.emberCopper)
+                        color: (isSmaller ? familyAccent : AppColors.emberCopper)
                             .withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -552,7 +555,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                         '${percentChange.abs().toStringAsFixed(0)}% ${isSmaller ? "smaller" : "larger"}',
                         style: AppTypography.mono(brightness).copyWith(
                           fontWeight: FontWeight.bold,
-                          color: isSmaller ? AppColors.anvilTeal : AppColors.emberCopper,
+                          color: isSmaller ? familyAccent : AppColors.emberCopper,
                         ),
                       ),
                     ),
@@ -601,6 +604,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                   label: 'Open Folder',
                   icon: Icons.folder_open_rounded,
                   variant: AppButtonVariant.primary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _fileService.openFolder(p.dirname(state.outputPath!));
@@ -613,7 +617,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                   variant: AppButtonVariant.secondary,
                   onPressed: () {
                     if (state.outputPath != null) {
-                      _handleSaveAs(state.outputPath!);
+                      _handleSaveAs(state.outputPath!, familyAccent);
                     }
                   },
                 ),

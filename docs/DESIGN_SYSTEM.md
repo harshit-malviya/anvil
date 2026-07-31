@@ -28,14 +28,18 @@ Named, not generic — use these exact roles:
 | `paperCard` | `#F7F6F2` | Card/surface background (light mode) |
 | `steelCard` | `#1F2327` | Card/surface background (dark mode) |
 | `emberCopper` | `#B5502D` | Primary action color (buttons, active states, stamp mark) |
-| `anvilTeal` | `#3A6B6B` | Secondary accent — links, secondary buttons, selected states |
+| `anvilBlue` | `#357ABD` | Secondary accent / Image family accent color |
 | `sparkYellow` | `#E8B33D` | Warning / in-progress states only — used sparingly |
 | `rustRed` | `#A63A2E` | Error states only |
 | `pegGrey` | `#C7C4BC` | Borders, dividers, disabled states |
 
 Dark mode: swap `workshopGrey`→`forgeBlack`, `paperCard`→`steelCard`, `ink`→`#EDEBE6`. Accent
-colors (`emberCopper`, `anvilTeal`) stay the same in both modes for brand consistency, but raise
+colors (`emberCopper`, `anvilBlue`) stay the same in both modes for brand consistency, but raise
 their luminance ~8% in dark mode so they don't look muddy.
+
+**Tool Family Accents (`AppColors.familyAccent(category)`):**
+- **PDF Tools (`ToolCategory.pdf`)**: `emberCopper` (`#B5502D` / dark `#C75D37`)
+- **Image Tools (`ToolCategory.image`)**: `anvilBlue` (`#357ABD` / dark `#498ED1`)
 
 **Do not use:** `#D97757` (or near-variants), warm cream `#F4F1EA` backgrounds paired with serif
 display type, or near-black-with-neon-accent — these read as generic AI-generated defaults.
@@ -71,9 +75,7 @@ Type scale (use consistently, don't introduce ad-hoc sizes):
 
 ## 5. Component patterns
 
-**Tool Card** (home screen grid): icon in a 40x40 rounded square with `pegGrey` background,
-tool name in `titleMedium`, one-line description in `bodyMedium` at 70% opacity. Entire card is
-tappable, subtle `emberCopper` border appears on hover/focus (desktop) or press (mobile).
+**Tool Card** (home screen grid): icon color follows tool family accent color (`familyAccent`), housed in a 40x40 rounded square with neutral background (`pegGrey` tint / `steelCard`). Tool name in `titleMedium`, one-line description in `bodyMedium` at 70% opacity. Entire card is tappable, subtle family accent border appears on hover/focus (desktop) or press (mobile).
 
 **File Drop Zone**: dashed 1.5px `pegGrey` border, centered icon + "Drop files here or click to
 browse" in `bodyMedium`. On drag-over (Windows), border becomes solid `emberCopper` and background

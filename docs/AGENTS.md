@@ -53,6 +53,13 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
 ## 2026-07-31 — Session 18
+- Implemented Visual Differentiation (`TASK_visual_differentiation.md`):
+  - Added `ToolCategory` enum (`pdf` vs `image`) and `category` field to `ToolMetadata` in `lib/tools/registry.dart`.
+  - Added `AppColors.familyAccent(ToolCategory, [Brightness])` color token resolver in `lib/core/theme/app_colors.dart` (`emberCopper` for PDF tools, `anvilBlue` light blue for Image tools).
+  - Updated `ToolCard` so icon colors follow tool family accent colors while icon container background stays neutral (`pegGrey` tint / `steelCard`). Wired card hover/focus borders to use family accent color.
+  - Updated `HomeScreen` to group tool grid into two ordered sections: "PDF TOOLS" followed by "IMAGE TOOLS" (24px top / 12px bottom header spacing).
+  - Updated `AppButton`, `StampAnimation`, `ImageConvertScreen`, `ImagesToPdfScreen`, `PdfInsertPagesScreen`, and `PdfInsertImageAsPageScreen` to use family accent color tokens.
+  - Updated `DESIGN_SYSTEM.md` (§2 & §5) and test suite `test/home/tool_search_controller_test.dart`.
 - Implemented Sprint 1 Image Format Convert (`FEATURE_image_convert.md`, `PRD_image_tools_v2.md`):
   - Created `ImageOutputFormat` enum and `ImageConvertState` in `lib/tools/image_convert/image_convert_state.dart`.
   - Created `ImageConvertController` in `lib/tools/image_convert/image_convert_controller.dart` featuring magic-byte format detection (PNG, JPEG, BMP, GIF, TIFF, WebP), `compute()` background isolate image encoding, JPEG transparency flattening onto white background, animated GIF/WebP first-frame extraction, JPEG quality adjustment, and error handling.
@@ -204,6 +211,9 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 ## 5. Decisions log
 
 ## 2026-07-31
+- Decision: Tool families are visually differentiated by family accent colors resolved via `AppColors.familyAccent(category, brightness)` (`emberCopper` for PDF tools, `anvilBlue` light blue `#357ABD` / `#498ED1` for Image tools).
+- Decision: Tool card icons follow their tool family accent color, housed inside a neutral icon container background (`pegGrey` tint / `steelCard`). Card hover/focus borders use family accent color.
+- Decision: Home screen tool grid groups tools by category into ordered sections ("PDF TOOLS" followed by "IMAGE TOOLS") with fixed spacing (24px top, 12px bottom).
 - Decision: WebP input images are decoded successfully, but WebP is excluded as a target output format due to `package:image` 4.x asymmetric support (read-only WebP decoding, no WebP encoder).
 - Decision: Transparent areas in PNG, GIF, BMP, or TIFF source images are automatically flattened onto a solid white background when converting to JPEG, displaying an inline notification to the user pre-conversion.
 - Decision: Animated GIF and WebP source files extract and convert only the first frame, displaying an inline notification to the user pre-conversion.

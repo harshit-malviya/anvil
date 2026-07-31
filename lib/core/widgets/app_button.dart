@@ -14,6 +14,7 @@ class AppButton extends StatelessWidget {
   final AppButtonVariant variant;
   final IconData? icon;
   final bool isLoading;
+  final Color? color;
 
   const AppButton({
     super.key,
@@ -22,13 +23,16 @@ class AppButton extends StatelessWidget {
     this.variant = AppButtonVariant.primary,
     this.icon,
     this.isLoading = false,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final isDisabled = onPressed == null && !isLoading;
-    final textAndIconColor = _getTextAndIconColor(brightness, isDisabled);
+    final primaryColor = color ?? AppColors.primary(brightness);
+    final secondaryColor = color ?? AppColors.secondary(brightness);
+    final textAndIconColor = _getTextAndIconColor(brightness, isDisabled, primaryColor, secondaryColor);
 
     Widget buttonChild = Row(
       mainAxisSize: MainAxisSize.min,
@@ -41,7 +45,7 @@ class AppButton extends StatelessWidget {
             child: CircularProgressIndicator(
               strokeWidth: 2,
               valueColor: AlwaysStoppedAnimation<Color>(
-                variant == AppButtonVariant.primary ? Colors.white : AppColors.primary(brightness),
+                variant == AppButtonVariant.primary ? Colors.white : primaryColor,
               ),
             ),
           ),
@@ -65,10 +69,10 @@ class AppButton extends StatelessWidget {
         return ElevatedButton(
           onPressed: isLoading ? null : onPressed,
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary(brightness),
+            backgroundColor: primaryColor,
             foregroundColor: Colors.white,
             disabledBackgroundColor: isLoading
-                ? AppColors.primary(brightness)
+                ? primaryColor
                 : AppColors.disabledBackground(brightness),
             disabledForegroundColor: AppColors.disabledText(brightness),
             minimumSize: const Size(120, 44),
@@ -84,12 +88,12 @@ class AppButton extends StatelessWidget {
         return OutlinedButton(
           onPressed: isLoading ? null : onPressed,
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.secondary(brightness),
+            foregroundColor: secondaryColor,
             disabledForegroundColor: AppColors.disabledText(brightness),
             side: BorderSide(
               color: isDisabled
                   ? AppColors.disabledBorder(brightness)
-                  : AppColors.secondary(brightness),
+                  : secondaryColor,
               width: 1.5,
             ),
             minimumSize: const Size(120, 44),
@@ -122,7 +126,8 @@ class AppButton extends StatelessWidget {
     }
   }
 
-  Color _getTextAndIconColor(Brightness brightness, bool isDisabled) {
+  Color _getTextAndIconColor(
+      Brightness brightness, bool isDisabled, Color primaryColor, Color secondaryColor) {
     if (isDisabled) {
       return AppColors.disabledText(brightness);
     }
@@ -130,7 +135,7 @@ class AppButton extends StatelessWidget {
       case AppButtonVariant.primary:
         return Colors.white;
       case AppButtonVariant.secondary:
-        return AppColors.secondary(brightness);
+        return secondaryColor;
       case AppButtonVariant.destructive:
         return AppColors.rustRed;
     }

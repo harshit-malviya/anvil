@@ -26,11 +26,12 @@ class _ToolCardState extends State<ToolCard> {
     final brightness = Theme.of(context).brightness;
     final isAvailable = widget.tool.isAvailable;
     final isHighlighted = _isHovered || _isFocused;
+    final familyAccent = AppColors.familyAccent(widget.tool.category, brightness);
 
     final borderColor = !isAvailable
         ? AppColors.disabledBorder(brightness)
         : (isHighlighted
-            ? AppColors.primary(brightness)
+            ? familyAccent
             : (brightness == Brightness.dark
                 ? AppColors.pegGrey.withValues(alpha: 0.2)
                 : AppColors.pegGrey));
@@ -46,11 +47,11 @@ class _ToolCardState extends State<ToolCard> {
         child: InkWell(
           onTap: isAvailable ? widget.onTap : null,
           borderRadius: BorderRadius.circular(6.0),
-          hoverColor: AppColors.primary(brightness).withValues(alpha: 0.05),
-          splashColor: AppColors.primary(brightness).withValues(alpha: 0.1),
+          hoverColor: familyAccent.withValues(alpha: 0.05),
+          splashColor: familyAccent.withValues(alpha: 0.1),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(6.0),
               border: Border.all(
@@ -68,14 +69,14 @@ class _ToolCardState extends State<ToolCard> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        width: 34,
-                        height: 34,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
                           color: !isAvailable
                               ? AppColors.disabledBackground(brightness)
                               : (brightness == Brightness.dark
                                   ? AppColors.steelCard
-                                  : AppColors.pegGrey.withValues(alpha: 0.4)),
+                                  : AppColors.pegGrey.withValues(alpha: 0.35)),
                           borderRadius: BorderRadius.circular(6.0),
                           border: Border.all(
                             color: !isAvailable
@@ -87,7 +88,7 @@ class _ToolCardState extends State<ToolCard> {
                           widget.tool.icon,
                           size: 18,
                           color: isAvailable
-                              ? AppColors.primary(brightness)
+                              ? familyAccent
                               : AppColors.disabledText(brightness),
                         ),
                       ),

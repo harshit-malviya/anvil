@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../tools/registry.dart';
 
 /// Workshop color tokens for Anvil as defined in DESIGN_SYSTEM.md.
 abstract class AppColors {
@@ -14,14 +15,16 @@ abstract class AppColors {
 
   // Brand & Accent Tokens (Light)
   static const Color emberCopper = Color(0xFFB5502D);
-  static const Color anvilTeal = Color(0xFF3A6B6B);
+  static const Color anvilBlue = Color(0xFF357ABD);
+  static const Color anvilTeal = anvilBlue;
   static const Color sparkYellow = Color(0xFFE8B33D);
   static const Color rustRed = Color(0xFFA63A2E);
   static const Color pegGrey = Color(0xFFC7C4BC);
 
   // Brand & Accent Tokens (+8% luminance for Dark Mode)
   static const Color emberCopperDark = Color(0xFFC75D37);
-  static const Color anvilTealDark = Color(0xFF457C7C);
+  static const Color anvilBlueDark = Color(0xFF498ED1);
+  static const Color anvilTealDark = anvilBlueDark;
 
   // Convenient Theme Getters
   static Color background(Brightness brightness) =>
@@ -37,7 +40,12 @@ abstract class AppColors {
       brightness == Brightness.dark ? emberCopperDark : emberCopper;
 
   static Color secondary(Brightness brightness) =>
-      brightness == Brightness.dark ? anvilTealDark : anvilTeal;
+      brightness == Brightness.dark ? anvilBlueDark : anvilBlue;
+
+  static Color familyAccent(ToolCategory category, [Brightness brightness = Brightness.light]) =>
+      category == ToolCategory.pdf
+          ? (brightness == Brightness.dark ? emberCopperDark : emberCopper)
+          : (brightness == Brightness.dark ? anvilBlueDark : anvilBlue);
 
   // Disabled State Tokens
   static Color disabledBackground(Brightness brightness) =>

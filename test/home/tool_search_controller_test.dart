@@ -12,6 +12,7 @@ void main() {
       icon: Icons.picture_as_pdf,
       route: '/pdf-merge',
       keywords: ['combine', 'join', 'attach', 'put together', 'one file'],
+      category: ToolCategory.pdf,
     ),
     const ToolMetadata(
       id: 'pdf_compress',
@@ -20,6 +21,7 @@ void main() {
       icon: Icons.compress,
       route: '/pdf-compress',
       keywords: ['shrink', 'reduce size', 'smaller', 'make smaller', 'file size'],
+      category: ToolCategory.pdf,
     ),
     const ToolMetadata(
       id: 'custom_tool',
@@ -28,6 +30,7 @@ void main() {
       icon: Icons.build,
       route: '/custom-tool',
       keywords: [], // Empty keywords list edge case
+      category: ToolCategory.pdf,
     ),
   ];
 

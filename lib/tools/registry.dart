@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// Categories of tools in Anvil.
+enum ToolCategory { pdf, image }
+
 /// Metadata definition for tools registered in Anvil.
 class ToolMetadata {
   final String id;
@@ -9,6 +12,7 @@ class ToolMetadata {
   final String route;
   final bool isAvailable;
   final List<String> keywords;
+  final ToolCategory category;
 
   const ToolMetadata({
     required this.id,
@@ -18,6 +22,7 @@ class ToolMetadata {
     required this.route,
     this.isAvailable = true,
     this.keywords = const [],
+    required this.category,
   });
 }
 
@@ -32,6 +37,7 @@ class ToolRegistry {
       route: '/pdf-merge',
       isAvailable: true,
       keywords: ['combine', 'join', 'attach', 'put together', 'one file'],
+      category: ToolCategory.pdf,
     ),
     ToolMetadata(
       id: 'pdf_page_manager',
@@ -49,6 +55,7 @@ class ToolRegistry {
         'sideways',
         'upside down',
       ],
+      category: ToolCategory.pdf,
     ),
     ToolMetadata(
       id: 'pdf_split',
@@ -58,6 +65,7 @@ class ToolRegistry {
       route: '/pdf-split',
       isAvailable: true,
       keywords: ['separate', 'break apart', 'cut', 'divide', 'extract pages'],
+      category: ToolCategory.pdf,
     ),
     ToolMetadata(
       id: 'pdf_compress',
@@ -67,6 +75,7 @@ class ToolRegistry {
       route: '/pdf-compress',
       isAvailable: true,
       keywords: ['shrink', 'reduce size', 'smaller', 'make smaller', 'file size'],
+      category: ToolCategory.pdf,
     ),
     ToolMetadata(
       id: 'pdf_to_image',
@@ -83,6 +92,7 @@ class ToolRegistry {
         'export as image',
         'convert to picture',
       ],
+      category: ToolCategory.pdf,
     ),
     ToolMetadata(
       id: 'pdf_password',
@@ -92,6 +102,7 @@ class ToolRegistry {
       route: '/pdf-password',
       isAvailable: true,
       keywords: ['lock', 'unlock', 'protect', 'encrypt', 'secure', 'remove password'],
+      category: ToolCategory.pdf,
     ),
     ToolMetadata(
       id: 'pdf_insert_pages',
@@ -101,6 +112,7 @@ class ToolRegistry {
       route: '/pdf-insert-pages',
       isAvailable: true,
       keywords: ['add pages', 'combine part', 'insert'],
+      category: ToolCategory.pdf,
     ),
     ToolMetadata(
       id: 'pdf_insert_image_as_page',
@@ -110,6 +122,7 @@ class ToolRegistry {
       route: '/pdf-insert-image-as-page',
       isAvailable: true,
       keywords: ['add photo', 'add screenshot', 'missing page', 'add picture'],
+      category: ToolCategory.pdf,
     ),
     ToolMetadata(
       id: 'images_to_pdf',
@@ -128,6 +141,7 @@ class ToolRegistry {
         'convert images',
         'combine photos',
       ],
+      category: ToolCategory.pdf,
     ),
     ToolMetadata(
       id: 'image_convert',
@@ -145,6 +159,7 @@ class ToolRegistry {
         'change file type',
         'picture converter',
       ],
+      category: ToolCategory.image,
     ),
   ];
 }

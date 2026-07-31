@@ -6,11 +6,13 @@ import '../theme/app_typography.dart';
 class StampAnimation extends StatefulWidget {
   final String label;
   final VoidCallback? onComplete;
+  final Color? color;
 
   const StampAnimation({
     super.key,
     this.label = 'DONE',
     this.onComplete,
+    this.color,
   });
 
   @override
@@ -71,7 +73,7 @@ class _StampAnimationState extends State<StampAnimation>
     final mediaQuery = MediaQuery.of(context);
     final reduceMotion = mediaQuery.accessibleNavigation || mediaQuery.disableAnimations;
     final brightness = Theme.of(context).brightness;
-    final stampColor = AppColors.primary(brightness);
+    final stampColor = widget.color ?? AppColors.primary(brightness);
 
     if (reduceMotion) {
       return Container(

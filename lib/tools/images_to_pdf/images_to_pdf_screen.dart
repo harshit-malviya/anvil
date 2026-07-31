@@ -194,22 +194,23 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
 
   Widget _buildErrorBanner(BuildContext context, String errorMessage, ImagesToPdfController controller) {
     final brightness = Theme.of(context).brightness;
+    final primaryColor = AppColors.primary(brightness);
     return Container(
       margin: const EdgeInsets.only(bottom: 16.0),
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
-        color: AppColors.emberCopper.withValues(alpha: 0.12),
+        color: primaryColor.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8.0),
-        border: Border.all(color: AppColors.emberCopper.withValues(alpha: 0.4)),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.emberCopper),
+          Icon(Icons.error_outline_rounded, color: primaryColor),
           const SizedBox(width: 12.0),
           Expanded(
             child: Text(
               errorMessage,
-              style: AppTypography.bodySmall(brightness).copyWith(color: AppColors.emberCopper),
+              style: AppTypography.bodySmall(brightness).copyWith(color: primaryColor),
             ),
           ),
           IconButton(
@@ -450,19 +451,19 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 4.0),
                 decoration: BoxDecoration(
-                  color: AppColors.emberCopper.withValues(alpha: 0.1),
+                  color: AppColors.primary(brightness).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4.0),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.close_rounded, size: 14, color: AppColors.emberCopper),
+                    Icon(Icons.close_rounded, size: 14, color: AppColors.primary(brightness)),
                     const SizedBox(width: 4),
                     Text(
                       'Remove',
                       style: AppTypography.bodySmall(brightness).copyWith(
                         fontSize: 11,
-                        color: AppColors.emberCopper,
+                        color: AppColors.primary(brightness),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
