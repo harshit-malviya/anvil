@@ -10,6 +10,7 @@ Future<T?> showTaskProgressDialog<T>({
   required Future<T?> Function() task,
   String Function()? getMessage,
   double? Function()? getProgressPercent,
+  Color? color,
 }) async {
   return showDialog<T>(
     context: context,
@@ -22,6 +23,7 @@ Future<T?> showTaskProgressDialog<T>({
         task: task,
         getMessage: getMessage,
         getProgressPercent: getProgressPercent,
+        color: color,
       );
     },
   );
@@ -33,6 +35,7 @@ class TaskProgressDialog<T> extends StatefulWidget {
   final Future<T?> Function() task;
   final String Function()? getMessage;
   final double? Function()? getProgressPercent;
+  final Color? color;
 
   const TaskProgressDialog({
     super.key,
@@ -41,6 +44,7 @@ class TaskProgressDialog<T> extends StatefulWidget {
     required this.task,
     this.getMessage,
     this.getProgressPercent,
+    this.color,
   });
 
   @override
@@ -87,6 +91,7 @@ class _TaskProgressDialogState<T> extends State<TaskProgressDialog<T>> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final accentColor = widget.color ?? AppColors.primary(brightness);
 
     return PopScope(
       canPop: false,
@@ -109,12 +114,12 @@ class _TaskProgressDialogState<T> extends State<TaskProgressDialog<T>> {
                     Container(
                       padding: const EdgeInsets.all(10.0),
                       decoration: BoxDecoration(
-                        color: AppColors.primary(brightness).withValues(alpha: 0.12),
+                        color: accentColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8.0),
                       ),
                       child: Icon(
                         Icons.hourglass_top_rounded,
-                        color: AppColors.primary(brightness),
+                        color: accentColor,
                         size: 24,
                       ),
                     ),
@@ -134,6 +139,7 @@ class _TaskProgressDialogState<T> extends State<TaskProgressDialog<T>> {
                   isVisible: true,
                   message: widget.getMessage?.call() ?? widget.defaultMessage,
                   progressPercent: widget.getProgressPercent?.call(),
+                  color: accentColor,
                 ),
               ],
             ),

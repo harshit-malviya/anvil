@@ -77,20 +77,15 @@ Type scale (use consistently, don't introduce ad-hoc sizes):
 
 **Tool Card** (home screen grid): icon color follows tool family accent color (`familyAccent`), housed in a 40x40 rounded square with neutral background (`pegGrey` tint / `steelCard`). Tool name in `titleMedium`, one-line description in `bodyMedium` at 70% opacity. Entire card is tappable, subtle family accent border appears on hover/focus (desktop) or press (mobile).
 
-**File Drop Zone**: dashed 1.5px `pegGrey` border, centered icon + "Drop files here or click to
-browse" in `bodyMedium`. On drag-over (Windows), border becomes solid `emberCopper` and background
-tints 5% ember. This component is shared across all tools — build once in `core/widgets/`.
+**File Drop Zone**: dashed 1.5px `pegGrey` border, centered icon + "Drop files here or click to browse" in `bodyMedium`. Icon and active drag-over/hover borders use the tool's family accent color (`familyAccent`). Shared component in `core/widgets/`.
 
-**Primary Button**: filled `emberCopper`, white text, 6px radius, 44px min height (touch target).
-**Secondary Button**: outline `anvilTeal`, `anvilTeal` text.
-**Destructive action** (e.g. "Delete page," "Remove file"): outline `rustRed`, `rustRed` text —
-never filled red for destructive actions, filled is reserved for the primary path only.
+**Primary Button**: filled family accent color (`familyAccent` — `emberCopper` for PDF tools, `anvilBlue` for Image tools), white text, 6px radius, 44px min height (touch target).
+**Secondary Button**: outline `anvilBlue`, `anvilBlue` text.
+**Destructive action** (e.g. "Delete page," "Remove file"): outline `rustRed`, `rustRed` text — never filled red for destructive actions, filled is reserved for the primary path only.
 
-**Progress/Processing state**: linear progress bar in `emberCopper` beneath the action button,
-label above it states exactly what's happening ("Merging 3 files…" not "Processing…").
+**Progress/Processing state**: modal dialog (`showTaskProgressDialog`) or linear progress bar (`TaskProgressBar`) in family accent color (`familyAccent`), pulse animation lerping to accent tint, label above it states exactly what's happening.
 
-**Success state**: the stamp interaction described in §1, then a `bodyMedium` confirmation line
-with the output filename and a "Save As" / "Open folder" pair of actions.
+**Success state**: the stamp interaction in family accent color, size comparison card with family accent border and arrow, saved output path box, and action buttons.
 
 **Error state**: `rustRed` left-border card, bold one-line summary of what failed, a `bodyMedium`
 plain-language explanation, and — where possible — a concrete next step ("This PDF appears

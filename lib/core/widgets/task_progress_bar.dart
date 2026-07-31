@@ -6,12 +6,14 @@ class TaskProgressBar extends StatefulWidget {
   final bool isVisible;
   final String? message;
   final double? progressPercent;
+  final Color? color;
 
   const TaskProgressBar({
     super.key,
     required this.isVisible,
     this.message,
     this.progressPercent,
+    this.color,
   });
 
   @override
@@ -40,7 +42,7 @@ class _TaskProgressBarState extends State<TaskProgressBar>
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final primaryColor = AppColors.primary(brightness);
+    final primaryColor = widget.color ?? AppColors.primary(brightness);
 
     return AnimatedSize(
       duration: const Duration(milliseconds: 250),
@@ -76,7 +78,7 @@ class _TaskProgressBarState extends State<TaskProgressBar>
                                 return LinearProgressIndicator(
                                   color: Color.lerp(
                                     primaryColor,
-                                    AppColors.anvilTeal,
+                                    primaryColor.withValues(alpha: 0.5),
                                     _pulseController.value,
                                   ),
                                   backgroundColor: AppColors.pegGrey.withValues(alpha: 0.3),

@@ -9,6 +9,7 @@ class FileDropZone extends StatefulWidget {
   final String sublabel;
   final IconData icon;
   final bool isDragOver;
+  final Color? color;
 
   const FileDropZone({
     super.key,
@@ -17,6 +18,7 @@ class FileDropZone extends StatefulWidget {
     this.sublabel = 'Supports PDF files',
     this.icon = Icons.cloud_upload_outlined,
     this.isDragOver = false,
+    this.color,
   });
 
   @override
@@ -30,10 +32,11 @@ class _FileDropZoneState extends State<FileDropZone> {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final active = widget.isDragOver || _isHovered;
+    final accentColor = widget.color ?? AppColors.primary(brightness);
 
-    final borderColor = active ? AppColors.primary(brightness) : AppColors.pegGrey;
+    final borderColor = active ? accentColor : AppColors.pegGrey;
     final backgroundColor = active
-        ? AppColors.primary(brightness).withValues(alpha: 0.05)
+        ? accentColor.withValues(alpha: 0.05)
         : AppColors.cardBackground(brightness);
 
     return InkWell(
@@ -63,13 +66,13 @@ class _FileDropZoneState extends State<FileDropZone> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primary(brightness).withValues(alpha: 0.1),
+                  color: accentColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   widget.icon,
                   size: 32,
-                  color: AppColors.primary(brightness),
+                  color: accentColor,
                 ),
               ),
               const SizedBox(height: 16),

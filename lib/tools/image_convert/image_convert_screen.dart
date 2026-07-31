@@ -40,12 +40,13 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
     }
   }
 
-  Future<void> _handleConvert() async {
+  Future<void> _handleConvert(Color familyAccent) async {
     final controller = ref.read(imageConvertControllerProvider.notifier);
     await showTaskProgressDialog<void>(
       context: context,
       title: 'Converting Image',
       defaultMessage: 'Encoding image format…',
+      color: familyAccent,
       task: () => controller.convert(),
     );
   }
@@ -126,7 +127,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                 _buildErrorBanner(state.errorMessage!, brightness),
               Expanded(
                 child: !state.hasFile
-                    ? _buildEmptyDropZone(brightness)
+                    ? _buildEmptyDropZone(brightness, familyAccent)
                     : state.isSuccess
                         ? _buildSuccessView(state, controller, brightness, familyAccent)
                         : _buildConvertForm(state, controller, brightness, familyAccent),
@@ -138,7 +139,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
     );
   }
 
-  Widget _buildEmptyDropZone(Brightness brightness) {
+  Widget _buildEmptyDropZone(Brightness brightness, Color familyAccent) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
@@ -147,6 +148,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
           label: 'Drop image file here or click to browse',
           sublabel: 'Supports PNG, JPEG, BMP, GIF, TIFF, and WebP images',
           icon: Icons.transform_rounded,
+          color: familyAccent,
         ),
       ),
     );
@@ -198,7 +200,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                 variant: AppButtonVariant.primary,
                 color: familyAccent,
                 isLoading: state.isProcessing,
-                onPressed: state.isProcessing ? null : _handleConvert,
+                onPressed: state.isProcessing ? null : () => _handleConvert(familyAccent),
               ),
             ],
           ),
@@ -498,13 +500,13 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Size & File Info Comparison Card matching PDF tools
+            // Size & File Info Comparison Card matching PDF tools with family accent border
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               decoration: BoxDecoration(
                 color: AppColors.cardBackground(brightness),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.pegGrey),
+                border: Border.all(color: familyAccent.withValues(alpha: 0.35)),
               ),
               child: Column(
                 children: [
@@ -577,9 +579,9 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppColors.pegGrey.withValues(alpha: 0.15),
+                  color: familyAccent.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(6.0),
-                  border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.3)),
+                  border: Border.all(color: familyAccent.withValues(alpha: 0.3)),
                 ),
                 child: SelectableText(
                   state.outputPath!,
