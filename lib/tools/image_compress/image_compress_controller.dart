@@ -17,13 +17,19 @@ final imageCompressControllerProvider =
 class ImageCompressParams {
   final Uint8List inputBytes;
   final String sourceFileName;
+  final CompressionMode mode;
   final CompressionLevel level;
+  final int minSizeBytes;
+  final int maxSizeBytes;
   final String outputPath;
 
   ImageCompressParams({
     required this.inputBytes,
     required this.sourceFileName,
+    required this.mode,
     required this.level,
+    required this.minSizeBytes,
+    required this.maxSizeBytes,
     required this.outputPath,
   });
 }
@@ -34,12 +40,14 @@ class ImageCompressResult {
   final int outputSize;
   final int outputWidth;
   final int outputHeight;
+  final bool landedInRange;
 
   ImageCompressResult({
     required this.outputPath,
     required this.outputSize,
     required this.outputWidth,
     required this.outputHeight,
+    this.landedInRange = false,
   });
 }
 
@@ -62,59 +70,23 @@ Future<ImageCompressResult> isolateImageCompressWorker(ImageCompressParams param
   final origH = decoded.height;
 
   final ext = p.extension(params.sourceFileName).toLowerCase();
-  Uint8List encodedBytes;
 
-  switch (ext) {
-    case '.jpg':
-    case '.jpeg':
-      // // ASSUMPTION: Quality mapping for JPEG compression:
-      // Low: 85 (minimal reduction, high visual quality)
-      // Medium: 65 (balanced quality & file size reduction)
-      // High: 40 (maximum size reduction)
-      int quality;
-      switch (params.level) {
-        case CompressionLevel.low:
-          quality = 85;
-          break;
-        case CompressionLevel.medium:
-          quality = 65;
-          break;
-        case CompressionLevel.high:
-          quality = 40;
-          break;
-      }
-      encodedBytes = Uint8List.fromList(img.encodeJpg(decoded, quality: quality));
-      break;
-    case '.png':
-      // // ASSUMPTION: Zlib compression level mapping for PNG compression:
-      // Low: level 3, Medium: level 6, High: level 9
-      int zlibLevel;
-      switch (params.level) {
-        case CompressionLevel.low:
-          zlibLevel = 3;
-          break;
-        case CompressionLevel.medium:
-          zlibLevel = 6;
-          break;
-        case CompressionLevel.high:
-          zlibLevel = 9;
-          break;
-      }
-      encodedBytes = Uint8List.fromList(img.encodePng(decoded, level: zlibLevel));
-      break;
-    case '.bmp':
-      encodedBytes = Uint8List.fromList(img.encodeBmp(decoded));
-      break;
-    case '.gif':
-      encodedBytes = Uint8List.fromList(img.encodeGif(decoded));
-      break;
-    case '.tif':
-    case '.tiff':
-      encodedBytes = Uint8List.fromList(img.encodeTiff(decoded));
-      break;
-    default:
-      encodedBytes = Uint8List.fromList(img.encodePng(decoded));
-      break;
+  Uint8List encodedBytes;
+  bool landedInRange = false;
+
+  if (params.mode == CompressionMode.qualityLevel) {
+    // Quality Level Mode
+    encodedBytes = _encodeByQualityLevel(decoded, ext, params.level);
+  } else {
+    // Target Size Range Mode (Binary search / optimization)
+    final searchResult = _encodeByTargetRange(
+      decoded,
+      ext,
+      params.minSizeBytes,
+      params.maxSizeBytes,
+    );
+    encodedBytes = searchResult.bytes;
+    landedInRange = searchResult.landedInRange;
   }
 
   final outFile = File(params.outputPath);
@@ -125,7 +97,149 @@ Future<ImageCompressResult> isolateImageCompressWorker(ImageCompressParams param
     outputSize: encodedBytes.length,
     outputWidth: origW,
     outputHeight: origH,
+    landedInRange: landedInRange,
   );
+}
+
+Uint8List _encodeByQualityLevel(img.Image decoded, String ext, CompressionLevel level) {
+  switch (ext) {
+    case '.jpg':
+    case '.jpeg':
+      int quality;
+      switch (level) {
+        case CompressionLevel.low:
+          quality = 85;
+          break;
+        case CompressionLevel.medium:
+          quality = 65;
+          break;
+        case CompressionLevel.high:
+          quality = 40;
+          break;
+      }
+      return Uint8List.fromList(img.encodeJpg(decoded, quality: quality));
+    case '.png':
+      int zlibLevel;
+      switch (level) {
+        case CompressionLevel.low:
+          zlibLevel = 3;
+          break;
+        case CompressionLevel.medium:
+          zlibLevel = 6;
+          break;
+        case CompressionLevel.high:
+          zlibLevel = 9;
+          break;
+      }
+      return Uint8List.fromList(img.encodePng(decoded, level: zlibLevel));
+    case '.bmp':
+      return Uint8List.fromList(img.encodeBmp(decoded));
+    case '.gif':
+      return Uint8List.fromList(img.encodeGif(decoded));
+    case '.tif':
+    case '.tiff':
+      return Uint8List.fromList(img.encodeTiff(decoded));
+    default:
+      return Uint8List.fromList(img.encodePng(decoded));
+  }
+}
+
+class _RangeSearchResult {
+  final Uint8List bytes;
+  final bool landedInRange;
+
+  _RangeSearchResult(this.bytes, this.landedInRange);
+}
+
+_RangeSearchResult _encodeByTargetRange(
+  img.Image decoded,
+  String ext,
+  int minSizeBytes,
+  int maxSizeBytes,
+) {
+  if (ext == '.jpg' || ext == '.jpeg') {
+    // Binary search over JPEG quality [1..100], max 8 iterations
+    int low = 1;
+    int high = 100;
+    Uint8List? bestBytes;
+    int bestDistance = 999999999;
+    bool foundInRange = false;
+
+    for (int iter = 0; iter < 8; iter++) {
+      if (low > high) break;
+      final mid = (low + high) ~/ 2;
+      final bytes = Uint8List.fromList(img.encodeJpg(decoded, quality: mid));
+      final size = bytes.length;
+
+      if (size >= minSizeBytes && size <= maxSizeBytes) {
+        bestBytes = bytes;
+        foundInRange = true;
+        break;
+      }
+
+      // Calculate distance to closest target bound
+      int dist;
+      if (size < minSizeBytes) {
+        dist = minSizeBytes - size;
+        low = mid + 1; // Needs higher quality for larger size
+      } else {
+        dist = size - maxSizeBytes;
+        high = mid - 1; // Needs lower quality for smaller size
+      }
+
+      if (bestBytes == null || dist < bestDistance) {
+        bestDistance = dist;
+        bestBytes = bytes;
+      }
+    }
+
+    bestBytes ??= Uint8List.fromList(img.encodeJpg(decoded, quality: 50));
+    return _RangeSearchResult(bestBytes, foundInRange);
+  } else if (ext == '.png') {
+    // PNG search: palette quantization + zlib compression levels
+    final colorCounts = [256, 128, 64, 32, 16];
+    Uint8List? bestBytes;
+    int bestDistance = 999999999;
+    bool foundInRange = false;
+
+    int attempts = 0;
+    for (final numColors in colorCounts) {
+      if (attempts >= 8) break;
+      attempts++;
+
+      // Quantize image to reduced color palette
+      final quantized = img.quantize(decoded, numberOfColors: numColors);
+      final bytes = Uint8List.fromList(img.encodePng(quantized, level: 9));
+      final size = bytes.length;
+
+      if (size >= minSizeBytes && size <= maxSizeBytes) {
+        bestBytes = bytes;
+        foundInRange = true;
+        break;
+      }
+
+      int dist;
+      if (size < minSizeBytes) {
+        dist = minSizeBytes - size;
+      } else {
+        dist = size - maxSizeBytes;
+      }
+
+      if (bestBytes == null || dist < bestDistance) {
+        bestDistance = dist;
+        bestBytes = bytes;
+      }
+    }
+
+    bestBytes ??= Uint8List.fromList(img.encodePng(decoded, level: 9));
+    return _RangeSearchResult(bestBytes, foundInRange);
+  } else {
+    // Default fallback for BMP/GIF/TIFF
+    final bytes = _encodeByQualityLevel(decoded, ext, CompressionLevel.medium);
+    final size = bytes.length;
+    final inRange = size >= minSizeBytes && size <= maxSizeBytes;
+    return _RangeSearchResult(bytes, inRange);
+  }
 }
 
 class ImageCompressController extends StateNotifier<ImageCompressState> {
@@ -139,7 +253,6 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
 
     final ext = p.extension(platformFile.name).toLowerCase();
     if (ext == '.webp') {
-      // // ASSUMPTION: WebP input rejected due to package:image 4.x read-only WebP decoder
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "WebP format compression is not supported. Supported formats: PNG, JPEG, BMP, GIF, TIFF.",
@@ -223,10 +336,41 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
     );
   }
 
-  /// Change active compression level.
+  /// Change active compression mode.
+  void setMode(CompressionMode mode) {
+    if (state.mode == mode) return;
+    state = state.copyWith(mode: mode, clearError: true);
+  }
+
+  /// Change active compression level (Quality Level mode).
   void setCompressionLevel(CompressionLevel level) {
     if (state.level == level) return;
     state = state.copyWith(level: level, clearError: true);
+  }
+
+  /// Set minimum target size (Target Size Range mode). Enforces 5 KB floor.
+  void setMinSize(double value, SizeUnit unit) {
+    double clampedValue = value;
+    if (unit == SizeUnit.kb && value < 5.0) {
+      clampedValue = 5.0;
+    } else if (unit == SizeUnit.mb && value < (5.0 / 1024.0)) {
+      clampedValue = 5.0 / 1024.0;
+    }
+
+    state = state.copyWith(
+      minSizeValue: clampedValue,
+      minSizeUnit: unit,
+      clearError: true,
+    );
+  }
+
+  /// Set maximum target size (Target Size Range mode).
+  void setMaxSize(double value, SizeUnit unit) {
+    state = state.copyWith(
+      maxSizeValue: value,
+      maxSizeUnit: unit,
+      clearError: true,
+    );
   }
 
   /// Perform image compression via background isolate worker.
@@ -249,6 +393,46 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         return;
       }
 
+      if (state.mode == CompressionMode.targetSizeRange) {
+        // Validation 1: Min size below hard floor
+        if (state.minSizeBytes < ImageCompressState.minFloorBytes) {
+          state = state.copyWith(
+            isProcessing: false,
+            errorMessage: "Minimum can't be set below 5 KB",
+          );
+          return;
+        }
+
+        // Validation 2: Max <= Min
+        if (!state.isRangeValid) {
+          state = state.copyWith(
+            isProcessing: false,
+            errorMessage: "Maximum must be greater than minimum",
+          );
+          return;
+        }
+
+        // Validation 3: Original file size is smaller than target minimum
+        if (state.originalSizeBytes < state.minSizeBytes) {
+          state = state.copyWith(
+            isProcessing: false,
+            resultType: CompressionResultType.smallerThanMin,
+          );
+          return;
+        }
+
+        // Validation 4: Original file size is already inside target range
+        if (state.originalSizeBytes >= state.minSizeBytes &&
+            state.originalSizeBytes <= state.maxSizeBytes) {
+          state = state.copyWith(
+            isProcessing: false,
+            compressedSizeBytes: state.originalSizeBytes,
+            resultType: CompressionResultType.alreadyInRange,
+          );
+          return;
+        }
+      }
+
       final defaultDir =
           await _fileService.getDefaultOutputDirectory(sourceFilePath: state.file!.path);
       final outputDir = defaultDir.path;
@@ -260,23 +444,34 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
       final params = ImageCompressParams(
         inputBytes: inputBytes,
         sourceFileName: state.file!.name,
+        mode: state.mode,
         level: state.level,
+        minSizeBytes: state.minSizeBytes,
+        maxSizeBytes: state.maxSizeBytes,
         outputPath: defaultOutputPath,
       );
 
       final result = await compute(isolateImageCompressWorker, params);
 
-      // Determine result type based on size reduction comparison
+      // Determine result type
       CompressionResultType resultType;
-      if (result.outputSize >= state.originalSizeBytes) {
-        resultType = CompressionResultType.outputLarger;
-      } else {
-        final diff = state.originalSizeBytes - result.outputSize;
-        final pct = (diff / state.originalSizeBytes * 100);
-        if (pct < 5.0) {
-          resultType = CompressionResultType.minimalReduction;
+      if (state.mode == CompressionMode.targetSizeRange) {
+        if (result.landedInRange) {
+          resultType = CompressionResultType.inRangeSuccess;
         } else {
-          resultType = CompressionResultType.normalSuccess;
+          resultType = CompressionResultType.closestEffort;
+        }
+      } else {
+        if (result.outputSize >= state.originalSizeBytes) {
+          resultType = CompressionResultType.outputLarger;
+        } else {
+          final diff = state.originalSizeBytes - result.outputSize;
+          final pct = (diff / state.originalSizeBytes * 100);
+          if (pct < 5.0) {
+            resultType = CompressionResultType.minimalReduction;
+          } else {
+            resultType = CompressionResultType.normalSuccess;
+          }
         }
       }
 

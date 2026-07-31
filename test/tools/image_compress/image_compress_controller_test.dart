@@ -75,6 +75,7 @@ void main() {
       expect(state.isLoaded, isFalse);
       expect(state.file, isNull);
       expect(state.errorMessage, isNull);
+      expect(state.mode, equals(CompressionMode.qualityLevel));
       expect(state.level, equals(CompressionLevel.medium));
       expect(state.resultType, isNull);
     });
@@ -140,12 +141,12 @@ void main() {
       expect(state.errorMessage, contains("couldn't be read"));
     });
 
-    test('setCompressionLevel updates level state', () async {
-      controller.setCompressionLevel(CompressionLevel.high);
-      expect(controller.state.level, equals(CompressionLevel.high));
+    test('setMinSize enforces 5 KB hard floor', () {
+      controller.setMinSize(2.0, SizeUnit.kb);
+      expect(controller.state.minSizeValue, equals(5.0));
 
-      controller.setCompressionLevel(CompressionLevel.low);
-      expect(controller.state.level, equals(CompressionLevel.low));
+      controller.setMinSize(10.0, SizeUnit.kb);
+      expect(controller.state.minSizeValue, equals(10.0));
     });
 
     test('compress on JPEG at High level compresses file and preserves pixel dimensions', () async {
@@ -196,21 +197,66 @@ void main() {
       expect(decodedCompressed.height, equals(100));
     });
 
-    test('compress categorizes outputLarger if compressed result >= original size', () async {
-      // Create small low-quality JPEG
-      final smallJpg = createTestJpg(width: 50, height: 50, quality: 30);
+    test('compress in Target Size Range mode lands in target range', () async {
       final file = PlatformFile(
-        name: 'small.jpg',
-        size: smallJpg.length,
-        bytes: smallJpg,
+        name: 'sample.jpg',
+        size: testJpgBytes.length,
+        bytes: testJpgBytes,
       );
 
       await controller.loadImage(file);
-      controller.setCompressionLevel(CompressionLevel.low); // Quality 85 will be larger than quality 30 input
+      controller.setMode(CompressionMode.targetSizeRange);
+      controller.setMinSize(5.0, SizeUnit.kb);
+      controller.setMaxSize(20.0, SizeUnit.kb);
+
       await controller.compress();
 
       final state = controller.state;
-      expect(state.resultType, equals(CompressionResultType.outputLarger));
+      expect(state.resultType, equals(CompressionResultType.inRangeSuccess));
+      expect(state.compressedSizeBytes, greaterThanOrEqualTo(5 * 1024));
+      expect(state.compressedSizeBytes, lessThanOrEqualTo(20 * 1024));
+    });
+
+    test('compress in Target Size Range mode detects original already inside target range', () async {
+      final file = PlatformFile(
+        name: 'sample.jpg',
+        size: testJpgBytes.length,
+        bytes: testJpgBytes,
+      );
+
+      await controller.loadImage(file);
+      controller.setMode(CompressionMode.targetSizeRange);
+
+      final origKb = testJpgBytes.length / 1024.0;
+      controller.setMinSize(origKb - 5, SizeUnit.kb);
+      controller.setMaxSize(origKb + 5, SizeUnit.kb);
+
+      await controller.compress();
+
+      final state = controller.state;
+      expect(state.resultType, equals(CompressionResultType.alreadyInRange));
+      expect(state.outputPath, isNull);
+    });
+
+    test('compress in Target Size Range mode detects original smaller than minimum', () async {
+      final file = PlatformFile(
+        name: 'sample.jpg',
+        size: testJpgBytes.length,
+        bytes: testJpgBytes,
+      );
+
+      await controller.loadImage(file);
+      controller.setMode(CompressionMode.targetSizeRange);
+
+      final origKb = testJpgBytes.length / 1024.0;
+      controller.setMinSize(origKb + 50, SizeUnit.kb);
+      controller.setMaxSize(origKb + 100, SizeUnit.kb);
+
+      await controller.compress();
+
+      final state = controller.state;
+      expect(state.resultType, equals(CompressionResultType.smallerThanMin));
+      expect(state.outputPath, isNull);
     });
 
     test('saveAs, openFolder, and reset work as expected', () async {

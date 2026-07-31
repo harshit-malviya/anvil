@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
@@ -23,15 +24,26 @@ class ImageCompressScreen extends ConsumerStatefulWidget {
 
 class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
   final FileService _fileService = FileService();
+  final TextEditingController _minController = TextEditingController(text: '100');
+  final TextEditingController _maxController = TextEditingController(text: '500');
 
-  Future<void> _handleCompress(Color familyAccent) async {
+  @override
+  void dispose() {
+    _minController.dispose();
+    _maxController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleCompress(Color familyAccent, ImageCompressState state) async {
     final controller = ref.read(imageCompressControllerProvider.notifier);
+    final isRangeMode = state.mode == CompressionMode.targetSizeRange;
+
     await showTaskProgressDialog<void>(
       context: context,
-      title: 'Compressing Image',
-      defaultMessage: 'Reducing file size…',
+      title: isRangeMode ? 'Finding Right Size' : 'Compressing Image',
+      defaultMessage: isRangeMode ? 'Finding the right size…' : 'Reducing file size…',
       color: familyAccent,
-      getMessage: () => 'Reducing file size…',
+      getMessage: () => isRangeMode ? 'Finding the right size…' : 'Reducing file size…',
       task: () => controller.compress(),
     );
   }
@@ -176,6 +188,9 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
 
   Widget _buildCompressForm(BuildContext context, ImageCompressState state,
       Brightness brightness, ImageCompressController controller, Color familyAccent) {
+    final isRangeMode = state.mode == CompressionMode.targetSizeRange;
+    final isButtonEnabled = !state.isProcessing && (!isRangeMode || state.isRangeValid);
+
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Center(
@@ -185,7 +200,7 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Current File Preview Card
+              // Preview File Card
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -283,58 +298,223 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              // Compression Level Selector
+              // Compression Mode Selector
               Text(
-                'COMPRESSION LEVEL',
+                'COMPRESSION MODE',
                 style: AppTypography.labelSmall(brightness),
               ),
               const SizedBox(height: 8),
-              SegmentedButton<CompressionLevel>(
+              SegmentedButton<CompressionMode>(
                 segments: const [
-                  ButtonSegment<CompressionLevel>(
-                    value: CompressionLevel.low,
-                    label: Text('Low'),
-                    icon: Icon(Icons.image_outlined),
-                  ),
-                  ButtonSegment<CompressionLevel>(
-                    value: CompressionLevel.medium,
-                    label: Text('Medium'),
+                  ButtonSegment<CompressionMode>(
+                    value: CompressionMode.qualityLevel,
+                    label: Text('Quality Level'),
                     icon: Icon(Icons.tune),
                   ),
-                  ButtonSegment<CompressionLevel>(
-                    value: CompressionLevel.high,
-                    label: Text('High'),
-                    icon: Icon(Icons.compress),
+                  ButtonSegment<CompressionMode>(
+                    value: CompressionMode.targetSizeRange,
+                    label: Text('Target Size Range'),
+                    icon: Icon(Icons.line_weight),
                   ),
                 ],
-                selected: {state.level},
-                onSelectionChanged: (Set<CompressionLevel> newSelection) {
-                  controller.setCompressionLevel(newSelection.first);
+                selected: {state.mode},
+                onSelectionChanged: (Set<CompressionMode> newSelection) {
+                  controller.setMode(newSelection.first);
                 },
               ),
 
-              const SizedBox(height: 12),
-              Text(
-                'Compression reduces image quality to save space. Dimensions and format stay the same.',
-                style: AppTypography.bodyMedium(brightness).copyWith(
-                  fontSize: 12,
-                  color: AppColors.text(brightness).withValues(alpha: 0.6),
+              const SizedBox(height: 20),
+
+              if (state.mode == CompressionMode.qualityLevel) ...[
+                // Quality Level Preset Cards
+                Text(
+                  'COMPRESSION LEVEL',
+                  style: AppTypography.labelSmall(brightness),
                 ),
-                textAlign: TextAlign.center,
-              ),
+                const SizedBox(height: 8),
+                SegmentedButton<CompressionLevel>(
+                  segments: const [
+                    ButtonSegment<CompressionLevel>(
+                      value: CompressionLevel.low,
+                      label: Text('Low'),
+                      icon: Icon(Icons.image_outlined),
+                    ),
+                    ButtonSegment<CompressionLevel>(
+                      value: CompressionLevel.medium,
+                      label: Text('Medium'),
+                      icon: Icon(Icons.tune),
+                    ),
+                    ButtonSegment<CompressionLevel>(
+                      value: CompressionLevel.high,
+                      label: Text('High'),
+                      icon: Icon(Icons.compress),
+                    ),
+                  ],
+                  selected: {state.level},
+                  onSelectionChanged: (Set<CompressionLevel> newSelection) {
+                    controller.setCompressionLevel(newSelection.first);
+                  },
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Compression reduces image quality to save space. Dimensions and format stay the same.',
+                  style: AppTypography.bodyMedium(brightness).copyWith(
+                    fontSize: 12,
+                    color: AppColors.text(brightness).withValues(alpha: 0.6),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ] else ...[
+                // Target Size Range Form
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'MINIMUM SIZE',
+                            style: AppTypography.labelSmall(brightness),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _minController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    border: const OutlineInputBorder(),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(color: familyAccent),
+                                    ),
+                                  ),
+                                  onChanged: (val) {
+                                    final d = double.tryParse(val) ?? 0;
+                                    controller.setMinSize(d, state.minSizeUnit);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              DropdownButton<SizeUnit>(
+                                value: state.minSizeUnit,
+                                items: SizeUnit.values
+                                    .map((u) => DropdownMenuItem(
+                                          value: u,
+                                          child: Text(u.displayName),
+                                        ))
+                                    .toList(),
+                                onChanged: (u) {
+                                  if (u != null) {
+                                    controller.setMinSize(state.minSizeValue, u);
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'MAXIMUM SIZE',
+                            style: AppTypography.labelSmall(brightness),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _maxController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    border: const OutlineInputBorder(),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(color: familyAccent),
+                                    ),
+                                  ),
+                                  onChanged: (val) {
+                                    final d = double.tryParse(val) ?? 0;
+                                    controller.setMaxSize(d, state.maxSizeUnit);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              DropdownButton<SizeUnit>(
+                                value: state.maxSizeUnit,
+                                items: SizeUnit.values
+                                    .map((u) => DropdownMenuItem(
+                                          value: u,
+                                          child: Text(u.displayName),
+                                        ))
+                                    .toList(),
+                                onChanged: (u) {
+                                  if (u != null) {
+                                    controller.setMaxSize(state.maxSizeValue, u);
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
 
-              const SizedBox(height: 32),
+                if (state.isMinBelowFloor) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    "Minimum can't be set below 5 KB",
+                    style: AppTypography.bodySmall(brightness).copyWith(
+                      color: AppColors.sparkYellow,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
 
-              // Compress Primary Action Button
+                if (!state.isRangeValid) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Maximum must be greater than minimum',
+                    style: AppTypography.bodySmall(brightness).copyWith(
+                      color: AppColors.rustRed,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 12),
+                Text(
+                  "We'll find the compression level that lands your image inside this size range.",
+                  style: AppTypography.bodyMedium(brightness).copyWith(
+                    fontSize: 12,
+                    color: AppColors.text(brightness).withValues(alpha: 0.6),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+
+              const SizedBox(height: 28),
+
+              // Compress Primary Button
               AppButton(
-                label: 'Compress Image',
+                label: isRangeMode ? 'Compress to Target Size' : 'Compress Image',
                 icon: Icons.compress_rounded,
                 variant: AppButtonVariant.primary,
                 color: familyAccent,
                 isLoading: state.isProcessing,
-                onPressed: state.isProcessing ? null : () => _handleCompress(familyAccent),
+                onPressed: isButtonEnabled ? () => _handleCompress(familyAccent, state) : null,
               ),
             ],
           ),
@@ -345,8 +525,13 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
 
   Widget _buildSuccessView(BuildContext context, ImageCompressState state,
       Brightness brightness, ImageCompressController controller, Color familyAccent) {
-    final isOutputLarger = state.resultType == CompressionResultType.outputLarger;
-    final isMinimal = state.resultType == CompressionResultType.minimalReduction;
+    final res = state.resultType;
+    final isOutputLarger = res == CompressionResultType.outputLarger;
+    final isMinimal = res == CompressionResultType.minimalReduction;
+    final isAlreadyInRange = res == CompressionResultType.alreadyInRange;
+    final isSmallerThanMin = res == CompressionResultType.smallerThanMin;
+    final isClosestEffort = res == CompressionResultType.closestEffort;
+    final isNoOutputFile = isAlreadyInRange || isSmallerThanMin;
 
     return Center(
       child: SingleChildScrollView(
@@ -354,10 +539,13 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            StampAnimation(label: 'COMPRESSED', color: familyAccent),
+            StampAnimation(
+              label: isNoOutputFile ? 'INFO' : 'COMPRESSED',
+              color: familyAccent,
+            ),
             const SizedBox(height: 24),
             Text(
-              'Image Compression Complete!',
+              isNoOutputFile ? 'Target Range Evaluation' : 'Image Compression Complete!',
               style: AppTypography.displayMedium(brightness),
               textAlign: TextAlign.center,
             ),
@@ -378,10 +566,52 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
-                        'Compression didn\'t reduce the size for this file. Your original hasn\'t been changed.',
-                        style: AppTypography.bodyMedium(brightness).copyWith(
-                          fontSize: 14,
-                        ),
+                        "Compression didn't reduce the size for this file. Your original hasn't been changed.",
+                        style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (isAlreadyInRange) ...[
+              Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: familyAccent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: familyAccent),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, color: familyAccent, size: 24),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Your image is already within your target range (${state.formattedOriginalSize}, target ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize}) — no changes needed.',
+                        style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (isSmallerThanMin) ...[
+              Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.rustRed.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.rustRed),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: AppColors.rustRed, size: 24),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'This image is already smaller than your minimum size (${state.formattedOriginalSize}, target min ${state.formattedMinTargetSize}). Lower the minimum or use the original file.',
+                        style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 14),
                       ),
                     ),
                   ],
@@ -427,23 +657,51 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: familyAccent.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        '${state.reductionPercentage.toStringAsFixed(0)}% smaller',
+                        res == CompressionResultType.inRangeSuccess
+                            ? 'Compressed to ${state.formattedCompressedSize} — within your ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize} target'
+                            : '${state.reductionPercentage.toStringAsFixed(0)}% smaller',
                         style: AppTypography.mono(brightness).copyWith(
                           fontWeight: FontWeight.bold,
                           color: familyAccent,
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ],
                 ),
               ),
+
+              if (isClosestEffort) ...[
+                const SizedBox(height: 16),
+                Container(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.sparkYellow.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.sparkYellow),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, color: AppColors.sparkYellow),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "Couldn't land exactly in your target range — closest we could get is ${state.formattedCompressedSize} (target was ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize}).",
+                          style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               if (isMinimal) ...[
                 const SizedBox(height: 16),
                 Container(
@@ -460,10 +718,8 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'This image is already efficient — there wasn\'t much to compress.',
-                          style: AppTypography.bodyMedium(brightness).copyWith(
-                            fontSize: 13,
-                          ),
+                          "This image is already efficient — there wasn't much to compress.",
+                          style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 13),
                         ),
                       ),
                     ],
@@ -472,7 +728,7 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
               ],
             ],
 
-            if (state.outputPath != null && !isOutputLarger) ...[
+            if (state.outputPath != null && !isOutputLarger && !isNoOutputFile) ...[
               const SizedBox(height: 16),
               Text(
                 'Saved to:',
@@ -507,7 +763,7 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
               runSpacing: 12,
               alignment: WrapAlignment.center,
               children: [
-                if (!isOutputLarger) ...[
+                if (!isOutputLarger && !isNoOutputFile) ...[
                   AppButton(
                     label: 'Open Folder',
                     icon: Icons.folder_open_rounded,
@@ -545,7 +801,7 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
                 AppButton(
                   label: 'Compress Another Image',
                   icon: Icons.refresh,
-                  variant: isOutputLarger ? AppButtonVariant.primary : AppButtonVariant.secondary,
+                  variant: (isOutputLarger || isNoOutputFile) ? AppButtonVariant.primary : AppButtonVariant.secondary,
                   color: familyAccent,
                   onPressed: controller.reset,
                 ),
