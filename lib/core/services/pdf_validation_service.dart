@@ -24,8 +24,12 @@ class PdfValidationInfo {
 }
 
 class PdfValidationService {
-  /// Validates a PDF byte array.
-  /// Returns [PdfValidationInfo] indicating whether the PDF is valid, password-protected, or corrupted.
+  const PdfValidationService();
+
+  /// Instance method for dependency injection when needed.
+  PdfValidationInfo validatePdf(Uint8List? bytes) => validate(bytes);
+
+  /// Static method for direct validation without instantiation.
   static PdfValidationInfo validate(Uint8List? bytes) {
     if (bytes == null || bytes.isEmpty) {
       return const PdfValidationInfo(

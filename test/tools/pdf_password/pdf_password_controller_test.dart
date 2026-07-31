@@ -241,5 +241,25 @@ void main() {
 
       tempDir.deleteSync(recursive: true);
     });
+
+    test('Add Password file system save error: handles FileSystemException cleanly', () async {
+      final invalidPath = '${Platform.isWindows ? "Z:" : ""}/non_existent_dir_12345/output.pdf';
+
+      final pf = PlatformFile(
+        name: 'unprotected.pdf',
+        size: samplePdfBytes.length,
+        bytes: samplePdfBytes,
+      );
+      await controller.loadDocument(pf, overrideBytes: samplePdfBytes);
+
+      controller.setPassword('secretKey123');
+      controller.setConfirmPassword('secretKey123');
+
+      final result = await controller.submit(customOutputPath: invalidPath);
+
+      final state = controller.testState;
+      expect(result, isNull);
+      expect(state.errorMessage, contains("Couldn't save the file"));
+    });
   });
 }
