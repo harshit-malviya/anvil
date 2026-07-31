@@ -11,6 +11,9 @@ Anvil — a free, offline, open-source utility app (PDF tools, image tools) for 
 built in Flutter. Full product vision: `PROJECT_OVERVIEW.md`. Visual identity: `DESIGN_SYSTEM.md`.
 Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 
+> v2 image tools are sequenced via `PRD_image_tools_v2.md` — one sprint per tool, gated through
+> Scope → Implement → Test → Debug → Audit. Read it before starting any `FEATURE_image_*.md`.
+
 ## 2. Standing rules (never violate these, even under a specific feature request)
 
 1. No network calls for core functionality — the app is offline-first, always
@@ -38,7 +41,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
-## 2026-07-30 — Session 17
+## 2026-07-31 — Session 18
+- Implemented Sprint 1 Image Format Convert (`FEATURE_image_convert.md`, `PRD_image_tools_v2.md`):
+  - Created `ImageOutputFormat` enum and `ImageConvertState` in `lib/tools/image_convert/image_convert_state.dart`.
+  - Created `ImageConvertController` in `lib/tools/image_convert/image_convert_controller.dart` featuring magic-byte format detection (PNG, JPEG, BMP, GIF, TIFF, WebP), `compute()` background isolate image encoding, JPEG transparency flattening onto white background, animated GIF/WebP first-frame extraction, JPEG quality adjustment, and error handling.
+  - Created `ImageConvertScreen` in `lib/tools/image_convert/image_convert_screen.dart` with drag-drop zone, thumbnail preview card with mono specs, format pill selector (disabling same-format selection), JPEG quality slider, inline transparency and animation notices, stamp animation (`CONVERTED`), and output save/folder actions.
+  - Registered route `/image-convert` in `lib/core/router.dart` and metadata in `lib/tools/registry.dart`.
+  - Updated `PROJECT_OVERVIEW.md` and `AGENTS.md` per `PATCH_notes_for_v2_kickoff.md`.
+  - Created unit test suite `test/tools/image_convert/image_convert_controller_test.dart` (9 unit tests passing cleanly). All 124 workspace tests passing with 0 lint errors.
 - Completed PDF Tools Audit (`TASK_audit_isolate_error_handling.md`, `TASK_audit_edge_case_fidelity.md`, `TASK_audit_error_message_consistency.md`):
   - Created shared static utility `PdfValidationService` in `lib/core/services/pdf_validation_service.dart` and dedicated test suite `test/core/services/pdf_validation_service_test.dart` (6 tests).
   - Consolidated password/corrupted PDF validation across 8 PDF tool controllers.
@@ -176,9 +186,18 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | PDF Insert Image as Page | `docs/PHASE 3/FEATURE_pdf_insert_image_as_page_v2.md` | Done | Upgraded to v2 (N images batch insertion at shared point, reordering, test suite passing) |
 | Tool Search | `docs/PHASE 3/FEATURE_tool_search.md` | Done | Tool search controller, home screen filtering, and unit test suite passing |
 | Images to PDF | `docs/PHASE 3/FEATURE_images_to_pdf.md` | Done | Controller, UI, shared image service extraction, background isolate, and test suite passing |
-| Image tools (v2) | *(spec pending)* | Not started | |
+| Image Format Convert | `FEATURE_image_convert.md` | Done | Controller, UI, isolate worker, transparency flattening, unit tests passing |
+| Image Resize | *(spec pending)* | Not started | Sprint 2 |
+| Image Compress | *(spec pending)* | Not started | Sprint 3 |
 
 ## 5. Decisions log
+
+## 2026-07-31
+- Decision: WebP input images are decoded successfully, but WebP is excluded as a target output format due to `package:image` 4.x asymmetric support (read-only WebP decoding, no WebP encoder).
+- Decision: Transparent areas in PNG, GIF, BMP, or TIFF source images are automatically flattened onto a solid white background when converting to JPEG, displaying an inline notification to the user pre-conversion.
+- Decision: Animated GIF and WebP source files extract and convert only the first frame, displaying an inline notification to the user pre-conversion.
+- Decision: Format detection uses magic-byte header inspection first (`0x89 PNG`, `0xFFD8 JPEG`, `0x474946 GIF`, `0x424D BMP`, `0x4949`/`0x4D4D TIFF`, `RIFF...WEBP`), with file extension as fallback.
+- Decision: Image encoding and file I/O operations are offloaded to background isolates via Flutter `compute()` (`isolateImageConvertWorker`) to keep UI main thread 100% smooth.
 
 ## 2026-07-30
 - Decision: Centralized password-protected and corrupted PDF validation into a static utility class `PdfValidationService` (`lib/core/services/pdf_validation_service.dart`) with dedicated unit test coverage (`test/core/services/pdf_validation_service_test.dart`), eliminating 8 duplicate implementations across PDF controllers.

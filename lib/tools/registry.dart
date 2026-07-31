@@ -129,6 +129,23 @@ class ToolRegistry {
         'combine photos',
       ],
     ),
+    ToolMetadata(
+      id: 'image_convert',
+      title: 'Image Format Convert',
+      description: 'Convert an image between PNG, JPEG, BMP, GIF, and TIFF formats.',
+      icon: Icons.transform_rounded,
+      route: '/image-convert',
+      isAvailable: true,
+      keywords: [
+        'convert image',
+        'png to jpg',
+        'jpg to png',
+        'webp to png',
+        'format converter',
+        'change file type',
+        'picture converter',
+      ],
+    ),
   ];
 }
 
