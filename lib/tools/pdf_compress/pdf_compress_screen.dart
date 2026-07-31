@@ -9,6 +9,8 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_dialog.dart';
+import '../../core/widgets/theme_toggle_button.dart';
+import '../registry.dart';
 import 'pdf_compress_controller.dart';
 import 'pdf_compress_state.dart';
 
@@ -22,12 +24,13 @@ class PdfCompressScreen extends ConsumerStatefulWidget {
 class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
   final FileService _fileService = FileService();
 
-  Future<void> _handleCompress() async {
+  Future<void> _handleCompress(Color familyAccent) async {
     final controller = ref.read(pdfCompressControllerProvider.notifier);
     await showTaskProgressDialog<String>(
       context: context,
       title: 'Compressing PDF',
       defaultMessage: 'Reducing file size…',
+      color: familyAccent,
       getMessage: () => ref.read(pdfCompressControllerProvider).progressMessage ?? 'Reducing file size…',
       task: () => controller.compress(),
     );
@@ -40,7 +43,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
     }
   }
 
-  Future<void> _handleSaveAs(String currentOutputPath) async {
+  Future<void> _handleSaveAs(String currentOutputPath, Color familyAccent) async {
     final savedPath = await _fileService.saveFile(
       defaultFileName: p.basename(currentOutputPath),
       bytes: [],
@@ -55,7 +58,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Saved to $savedPath'),
-                backgroundColor: AppColors.anvilTeal,
+                backgroundColor: familyAccent,
               ),
             );
           }
@@ -76,6 +79,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final familyAccent = AppColors.familyAccent(ToolCategory.pdf, brightness);
     final state = ref.watch(pdfCompressControllerProvider);
     final controller = ref.read(pdfCompressControllerProvider.notifier);
 
@@ -95,6 +99,8 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
               icon: const Icon(Icons.refresh),
               onPressed: controller.reset,
             ),
+          const ThemeToggleButton(),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -107,10 +113,10 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(
                 child: !state.isLoaded
-                    ? _buildEmptyDropZone(brightness)
+                    ? _buildEmptyDropZone(brightness, familyAccent)
                     : state.outputPath != null
-                        ? _buildSuccessView(context, state, brightness, controller)
-                        : _buildCompressForm(context, state, brightness, controller),
+                        ? _buildSuccessView(context, state, brightness, controller, familyAccent)
+                        : _buildCompressForm(context, state, brightness, controller, familyAccent),
               ),
             ],
           ),
@@ -153,7 +159,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
     );
   }
 
-  Widget _buildEmptyDropZone(Brightness brightness) {
+  Widget _buildEmptyDropZone(Brightness brightness, Color familyAccent) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
@@ -162,13 +168,14 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
           label: 'Drop PDF file here or click to browse',
           sublabel: 'Select a PDF document to shrink file size',
           icon: Icons.compress_rounded,
+          color: familyAccent,
         ),
       ),
     );
   }
 
   Widget _buildCompressForm(BuildContext context, PdfCompressState state,
-      Brightness brightness, PdfCompressController controller) {
+      Brightness brightness, PdfCompressController controller, Color familyAccent) {
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Center(
@@ -191,13 +198,13 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.primary(brightness).withValues(alpha: 0.1),
+                        color: familyAccent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Icon(
                         Icons.picture_as_pdf,
                         size: 32,
-                        color: AppColors.primary(brightness),
+                        color: familyAccent,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -281,8 +288,9 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                 label: 'Compress PDF',
                 icon: Icons.compress_rounded,
                 variant: AppButtonVariant.primary,
+                color: familyAccent,
                 isLoading: state.isProcessing,
-                onPressed: state.isProcessing ? null : _handleCompress,
+                onPressed: state.isProcessing ? null : () => _handleCompress(familyAccent),
               ),
             ],
           ),
@@ -292,7 +300,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
   }
 
   Widget _buildSuccessView(BuildContext context, PdfCompressState state,
-      Brightness brightness, PdfCompressController controller) {
+      Brightness brightness, PdfCompressController controller, Color familyAccent) {
     final isMinimal = state.resultType == CompressionResultType.minimalReduction;
 
     return Center(
@@ -301,7 +309,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const StampAnimation(label: 'COMPRESSED'),
+            StampAnimation(label: 'COMPRESSED', color: familyAccent),
             const SizedBox(height: 24),
             Text(
               'PDF Compression Complete!',
@@ -316,7 +324,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
               decoration: BoxDecoration(
                 color: AppColors.cardBackground(brightness),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.pegGrey),
+                border: Border.all(color: familyAccent.withValues(alpha: 0.35)),
               ),
               child: Column(
                 children: [
@@ -334,7 +342,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                       const SizedBox(width: 12),
                       Icon(
                         Icons.arrow_forward_rounded,
-                        color: AppColors.primary(brightness),
+                        color: familyAccent,
                       ),
                       const SizedBox(width: 12),
                       Text(
@@ -342,7 +350,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                         style: AppTypography.mono(brightness).copyWith(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.primary(brightness),
+                          color: familyAccent,
                         ),
                       ),
                     ],
@@ -352,14 +360,14 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.anvilTeal.withValues(alpha: 0.15),
+                      color: familyAccent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       '${state.reductionPercentage.toStringAsFixed(0)}% smaller',
                       style: AppTypography.mono(brightness).copyWith(
                         fontWeight: FontWeight.bold,
-                        color: AppColors.anvilTeal,
+                        color: familyAccent,
                       ),
                     ),
                   ),
@@ -433,6 +441,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                   label: 'Open Folder',
                   icon: Icons.folder_open_rounded,
                   variant: AppButtonVariant.primary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _fileService.openFolder(p.dirname(state.outputPath!));
@@ -443,9 +452,10 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                   label: 'Save As…',
                   icon: Icons.save_alt_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
-                      _handleSaveAs(state.outputPath!);
+                      _handleSaveAs(state.outputPath!, familyAccent);
                     }
                   },
                 ),
@@ -453,6 +463,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                   label: 'Share',
                   icon: Icons.share_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _fileService.shareFile(state.outputPath!);
@@ -463,6 +474,7 @@ class _PdfCompressScreenState extends ConsumerState<PdfCompressScreen> {
                   label: 'Compress Another PDF',
                   icon: Icons.refresh,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: controller.reset,
                 ),
               ],

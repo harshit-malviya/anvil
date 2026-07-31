@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/widgets/theme_toggle_button.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_typography.dart';
 import '../core/widgets/tool_card.dart';
@@ -84,26 +85,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.secondary(brightness).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6.0),
-                      border: Border.all(
-                        color: AppColors.secondary(brightness).withValues(alpha: 0.3),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary(brightness).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6.0),
+                          border: Border.all(
+                            color: AppColors.secondary(brightness).withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Text(
+                          'OFFLINE WORKSHOP',
+                          style: AppTypography.labelSmall(brightness).copyWith(
+                            color: AppColors.secondary(brightness),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      'OFFLINE WORKSHOP',
-                      style: AppTypography.labelSmall(brightness).copyWith(
-                        color: AppColors.secondary(brightness),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10,
-                      ),
-                    ),
+                      const SizedBox(width: 8),
+                      const ThemeToggleButton(),
+                    ],
                   ),
                 ],
               ),

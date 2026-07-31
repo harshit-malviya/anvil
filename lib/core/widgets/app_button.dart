@@ -31,7 +31,7 @@ class AppButton extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final isDisabled = onPressed == null && !isLoading;
     final primaryColor = color ?? AppColors.primary(brightness);
-    final secondaryColor = color ?? AppColors.secondary(brightness);
+    final secondaryColor = color ?? primaryColor;
     final textAndIconColor = _getTextAndIconColor(brightness, isDisabled, primaryColor, secondaryColor);
 
     Widget buttonChild = Row(

@@ -16,7 +16,6 @@ abstract class AppColors {
   // Brand & Accent Tokens (Light)
   static const Color emberCopper = Color(0xFFB5502D);
   static const Color anvilBlue = Color(0xFF357ABD);
-  static const Color anvilTeal = anvilBlue;
   static const Color sparkYellow = Color(0xFFE8B33D);
   static const Color rustRed = Color(0xFFA63A2E);
   static const Color pegGrey = Color(0xFFC7C4BC);
@@ -24,7 +23,6 @@ abstract class AppColors {
   // Brand & Accent Tokens (+8% luminance for Dark Mode)
   static const Color emberCopperDark = Color(0xFFC75D37);
   static const Color anvilBlueDark = Color(0xFF498ED1);
-  static const Color anvilTealDark = anvilBlueDark;
 
   // Convenient Theme Getters
   static Color background(Brightness brightness) =>
@@ -63,3 +61,4 @@ abstract class AppColors {
           ? const Color(0xFF32363C)
           : const Color(0xFFD0CDC5);
 }
+

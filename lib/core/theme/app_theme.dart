@@ -13,7 +13,7 @@ abstract class AppTheme {
       scaffoldBackgroundColor: AppColors.workshopGrey,
       colorScheme: const ColorScheme.light(
         primary: AppColors.emberCopper,
-        secondary: AppColors.anvilTeal,
+        secondary: AppColors.anvilBlue,
         surface: AppColors.paperCard,
         error: AppColors.rustRed,
         onPrimary: Colors.white,
@@ -50,9 +50,9 @@ abstract class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.anvilTeal,
+          foregroundColor: AppColors.emberCopper,
           disabledForegroundColor: AppColors.disabledText(Brightness.light),
-          side: const BorderSide(color: AppColors.anvilTeal, width: 1.5),
+          side: const BorderSide(color: AppColors.emberCopper, width: 1.5),
           minimumSize: const Size(88, 44),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(borderRadius),
@@ -130,7 +130,7 @@ abstract class AppTheme {
       scaffoldBackgroundColor: AppColors.forgeBlack,
       colorScheme: const ColorScheme.dark(
         primary: AppColors.emberCopperDark,
-        secondary: AppColors.anvilTealDark,
+        secondary: AppColors.anvilBlueDark,
         surface: AppColors.steelCard,
         error: AppColors.rustRed,
         onPrimary: Colors.white,
@@ -170,9 +170,9 @@ abstract class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.anvilTealDark,
+          foregroundColor: AppColors.emberCopperDark,
           disabledForegroundColor: AppColors.disabledText(Brightness.dark),
-          side: const BorderSide(color: AppColors.anvilTealDark, width: 1.5),
+          side: const BorderSide(color: AppColors.emberCopperDark, width: 1.5),
           minimumSize: const Size(88, 44),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(borderRadius),

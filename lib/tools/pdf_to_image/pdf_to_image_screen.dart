@@ -10,6 +10,8 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_dialog.dart';
+import '../../core/widgets/theme_toggle_button.dart';
+import '../registry.dart';
 import 'pdf_to_image_controller.dart';
 import 'pdf_to_image_state.dart';
 
@@ -23,14 +25,14 @@ class PdfToImageScreen extends ConsumerStatefulWidget {
 class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
   final FileService _fileService = FileService();
 
-  Future<void> _handleExport() async {
+  Future<void> _handleConvert(Color familyAccent) async {
     final controller = ref.read(pdfToImageControllerProvider.notifier);
     await showTaskProgressDialog<String>(
       context: context,
-      title: 'Exporting Images',
-      defaultMessage: 'Rendering PDF pages…',
-      getMessage: () => ref.read(pdfToImageControllerProvider).progressMessage ?? 'Rendering PDF pages…',
-      getProgressPercent: () => ref.read(pdfToImageControllerProvider).progressPercent,
+      title: 'Converting PDF to Images',
+      defaultMessage: 'Rendering PDF pages as image files…',
+      color: familyAccent,
+      getMessage: () => ref.read(pdfToImageControllerProvider).progressMessage ?? 'Rendering pages…',
       task: () => controller.export(),
     );
   }
@@ -42,10 +44,8 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
     }
   }
 
-  Future<void> _handleSaveAs(PdfToImageState state) async {
-    if (state.outputPath == null) return;
-    final sourcePath = state.outputPath!;
-
+  Future<void> _handleSaveAs(String sourcePath, Color familyAccent) async {
+    final state = ref.read(pdfToImageControllerProvider);
     if (state.isSingleFileExport) {
       final sourceFile = File(sourcePath);
       if (sourceFile.existsSync()) {
@@ -59,7 +59,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Saved to $savedPath'),
-              backgroundColor: AppColors.anvilTeal,
+              backgroundColor: familyAccent,
             ),
           );
         }
@@ -87,7 +87,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Saved $copiedCount image files to $targetDir'),
-                  backgroundColor: AppColors.anvilTeal,
+                  backgroundColor: familyAccent,
                 ),
               );
             }
@@ -106,10 +106,8 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
     }
   }
 
-  Future<void> _handleShare(PdfToImageState state) async {
-    if (state.outputPath == null) return;
-    final outputPath = state.outputPath!;
-
+  Future<void> _handleShare(String outputPath) async {
+    final state = ref.read(pdfToImageControllerProvider);
     if (state.isSingleFileExport) {
       if (File(outputPath).existsSync()) {
         await _fileService.shareFile(outputPath);
@@ -120,13 +118,8 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
         final imgPaths = dir
             .listSync()
             .whereType<File>()
-            .where((f) {
-              final ext = p.extension(f.path).toLowerCase();
-              return ext == '.png' || ext == '.jpeg' || ext == '.jpg';
-            })
             .map((f) => f.path)
             .toList();
-
         if (imgPaths.isNotEmpty) {
           await _fileService.shareMultipleFiles(imgPaths);
         }
@@ -137,6 +130,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final familyAccent = AppColors.familyAccent(ToolCategory.pdf, brightness);
     final state = ref.watch(pdfToImageControllerProvider);
     final controller = ref.read(pdfToImageControllerProvider.notifier);
 
@@ -160,6 +154,8 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
               icon: const Icon(Icons.refresh),
               onPressed: controller.reset,
             ),
+          const ThemeToggleButton(),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -172,13 +168,13 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(
                 child: !state.isLoaded
-                    ? _buildEmptyDropZone(brightness)
+                    ? _buildEmptyDropZone(brightness, familyAccent)
                     : state.outputPath != null
-                        ? _buildSuccessView(context, state, brightness, controller)
-                        : _buildMainContent(context, state, brightness, controller),
+                        ? _buildSuccessState(context, state, brightness, controller, familyAccent)
+                        : _buildMainContent(context, state, brightness, controller, familyAccent),
               ),
               if (state.isLoaded && state.outputPath == null)
-                _buildBottomSummaryBar(context, state, brightness, controller),
+                _buildBottomSummaryBar(context, state, brightness, controller, familyAccent),
             ],
           ),
         ),
@@ -224,7 +220,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
     );
   }
 
-  Widget _buildEmptyDropZone(Brightness brightness) {
+  Widget _buildEmptyDropZone(Brightness brightness, Color familyAccent) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
@@ -233,6 +229,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
           label: 'Drop PDF file here or click to browse',
           sublabel: 'Select a PDF document to convert to images',
           icon: Icons.image_outlined,
+          color: familyAccent,
         ),
       ),
     );
@@ -243,6 +240,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
     PdfToImageState state,
     Brightness brightness,
     PdfToImageController controller,
+    Color familyAccent,
   ) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -265,10 +263,10 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: AppColors.primary(brightness).withValues(alpha: 0.1),
+                        color: familyAccent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Icon(Icons.picture_as_pdf, color: AppColors.primary(brightness), size: 24),
+                      child: Icon(Icons.picture_as_pdf, color: familyAccent, size: 24),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -291,10 +289,10 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                     ),
                     TextButton.icon(
                       onPressed: state.isProcessing ? null : _pickFile,
-                      icon: Icon(Icons.swap_horiz, size: 18, color: AppColors.primary(brightness)),
+                      icon: Icon(Icons.swap_horiz, size: 18, color: familyAccent),
                       label: Text(
                         'Change file',
-                        style: AppTypography.labelSmall(brightness).copyWith(color: AppColors.primary(brightness)),
+                        style: AppTypography.labelSmall(brightness).copyWith(color: familyAccent),
                       ),
                     ),
                   ],
@@ -303,7 +301,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
               const SizedBox(height: 20),
 
               // Controls Panel (Format & Resolution options)
-              _buildControlsPanel(context, state, controller),
+              _buildControlsPanel(context, state, controller, familyAccent),
               const SizedBox(height: 24),
 
               // Page Selection Header & Actions
@@ -324,13 +322,13 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.primary(brightness).withValues(alpha: 0.15),
+                          color: familyAccent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           '${state.selectedCount} / ${state.totalPageCount} selected',
                           style: AppTypography.labelSmall(brightness).copyWith(
-                            color: AppColors.primary(brightness),
+                            color: familyAccent,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -347,7 +345,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                           style: AppTypography.labelSmall(brightness).copyWith(
                             color: state.isProcessing
                                 ? AppColors.disabledText(brightness)
-                                : AppColors.primary(brightness),
+                                : familyAccent,
                           ),
                         ),
                       ),
@@ -374,7 +372,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 40),
                   child: Center(
-                    child: CircularProgressIndicator(color: AppColors.primary(brightness)),
+                    child: CircularProgressIndicator(color: familyAccent),
                   ),
                 ),
               ] else ...[
@@ -400,13 +398,13 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                           color: AppColors.cardBackground(brightness),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: isSelected ? AppColors.primary(brightness) : AppColors.pegGrey.withValues(alpha: 0.5),
+                            color: isSelected ? familyAccent : AppColors.pegGrey.withValues(alpha: 0.5),
                             width: isSelected ? 2.5 : 1,
                           ),
                           boxShadow: isSelected
                               ? [
                                   BoxShadow(
-                                    color: AppColors.primary(brightness).withValues(alpha: 0.2),
+                                    color: familyAccent.withValues(alpha: 0.2),
                                     blurRadius: 8,
                                     offset: const Offset(0, 4),
                                   ),
@@ -452,11 +450,11 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                                 height: 26,
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? AppColors.primary(brightness)
+                                      ? familyAccent
                                       : AppColors.cardBackground(brightness).withValues(alpha: 0.9),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: isSelected ? AppColors.primary(brightness) : AppColors.pegGrey,
+                                    color: isSelected ? familyAccent : AppColors.pegGrey,
                                     width: 2,
                                   ),
                                 ),
@@ -503,6 +501,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
     BuildContext context,
     PdfToImageState state,
     PdfToImageController controller,
+    Color familyAccent,
   ) {
     final brightness = Theme.of(context).brightness;
 
@@ -530,10 +529,10 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary(brightness) : AppColors.background(brightness),
+                    color: isSelected ? familyAccent : AppColors.background(brightness),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isSelected ? AppColors.primary(brightness) : AppColors.pegGrey.withValues(alpha: 0.5),
+                      color: isSelected ? familyAccent : AppColors.pegGrey.withValues(alpha: 0.5),
                     ),
                   ),
                   child: Text(
@@ -584,7 +583,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                       children: ExportResolution.values
                           .map((res) => Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
-                                child: _buildResolutionCard(context, res, state, controller),
+                                child: _buildResolutionCard(context, res, state, controller, familyAccent),
                               ))
                           .toList(),
                     )
@@ -593,7 +592,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                           .map((res) => Expanded(
                                 child: Padding(
                                   padding: const EdgeInsets.only(right: 12),
-                                  child: _buildResolutionCard(context, res, state, controller),
+                                  child: _buildResolutionCard(context, res, state, controller, familyAccent),
                                 ),
                               ))
                           .toList(),
@@ -610,6 +609,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
     ExportResolution res,
     PdfToImageState state,
     PdfToImageController controller,
+    Color familyAccent,
   ) {
     final brightness = Theme.of(context).brightness;
     final isSelected = state.resolution == res;
@@ -621,10 +621,10 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary(brightness).withValues(alpha: 0.1) : AppColors.background(brightness),
+          color: isSelected ? familyAccent.withValues(alpha: 0.1) : AppColors.background(brightness),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? AppColors.primary(brightness) : AppColors.pegGrey.withValues(alpha: 0.5),
+            color: isSelected ? familyAccent : AppColors.pegGrey.withValues(alpha: 0.5),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -637,12 +637,12 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                 Text(
                   res.label,
                   style: AppTypography.titleMedium(brightness).copyWith(
-                    color: isSelected ? AppColors.primary(brightness) : AppColors.text(brightness),
+                    color: isSelected ? familyAccent : AppColors.text(brightness),
                     fontSize: 15,
                   ),
                 ),
                 if (isSelected)
-                  Icon(Icons.check_circle, color: AppColors.primary(brightness), size: 18),
+                  Icon(Icons.check_circle, color: familyAccent, size: 18),
               ],
             ),
             const SizedBox(height: 4),
@@ -674,6 +674,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
     PdfToImageState state,
     Brightness brightness,
     PdfToImageController controller,
+    Color familyAccent,
   ) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -715,7 +716,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                         const SizedBox(height: 4),
                         Text(
                           state.progressMessage!,
-                          style: AppTypography.labelSmall(brightness).copyWith(color: AppColors.primary(brightness)),
+                          style: AppTypography.labelSmall(brightness).copyWith(color: familyAccent),
                         ),
                       ],
                     ],
@@ -726,8 +727,9 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                   label: state.isProcessing ? 'Exporting…' : 'Export Images',
                   icon: state.isProcessing ? null : Icons.download_rounded,
                   variant: AppButtonVariant.primary,
+                  color: familyAccent,
                   isLoading: state.isProcessing,
-                  onPressed: state.canExport ? _handleExport : null,
+                  onPressed: state.canExport ? () => _handleConvert(familyAccent) : null,
                 ),
               ],
             ),
@@ -737,11 +739,12 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
     );
   }
 
-  Widget _buildSuccessView(
+  Widget _buildSuccessState(
     BuildContext context,
     PdfToImageState state,
     Brightness brightness,
     PdfToImageController controller,
+    Color familyAccent,
   ) {
     final outputPath = state.outputPath!;
     final dirOrFileName = p.basename(outputPath);
@@ -770,7 +773,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const StampAnimation(label: 'EXPORTED'),
+            StampAnimation(label: 'EXPORTED', color: familyAccent),
             const SizedBox(height: 24),
             Text(
               'PDF Export Completed!',
@@ -784,7 +787,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
               decoration: BoxDecoration(
                 color: AppColors.cardBackground(brightness),
                 borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(color: AppColors.pegGrey),
+                border: Border.all(color: familyAccent.withValues(alpha: 0.35)),
               ),
               child: Column(
                 children: [
@@ -840,7 +843,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
             ],
             const SizedBox(height: 28),
 
-            // Final Action Buttons matching all other tools (Open Folder, Save As..., Share, Convert Another PDF)
+            // Final Action Buttons matching all other tools
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -850,6 +853,7 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                   label: 'Open Folder',
                   icon: Icons.folder_open_rounded,
                   variant: AppButtonVariant.primary,
+                  color: familyAccent,
                   onPressed: () {
                     final folder = state.isSingleFileExport ? p.dirname(outputPath) : outputPath;
                     _fileService.openFolder(folder);
@@ -859,18 +863,21 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
                   label: 'Save As…',
                   icon: Icons.save_alt_rounded,
                   variant: AppButtonVariant.secondary,
-                  onPressed: () => _handleSaveAs(state),
+                  color: familyAccent,
+                  onPressed: () => _handleSaveAs(outputPath, familyAccent),
                 ),
                 AppButton(
                   label: 'Share',
                   icon: Icons.share_rounded,
                   variant: AppButtonVariant.secondary,
-                  onPressed: () => _handleShare(state),
+                  color: familyAccent,
+                  onPressed: () => _handleShare(outputPath),
                 ),
                 AppButton(
                   label: 'Convert Another PDF',
                   icon: Icons.refresh,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: controller.reset,
                 ),
               ],

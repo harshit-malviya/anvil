@@ -9,6 +9,8 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_dialog.dart';
+import '../../core/widgets/theme_toggle_button.dart';
+import '../registry.dart';
 import 'pdf_split_controller.dart';
 import 'pdf_split_state.dart';
 
@@ -42,7 +44,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
     }
   }
 
-  Future<void> _handleSplit(PdfSplitState state) async {
+  Future<void> _handleSplit(PdfSplitState state, Color familyAccent) async {
     final controller = ref.read(pdfSplitControllerProvider.notifier);
     final ranges = state.calculatedRanges;
 
@@ -99,6 +101,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
         context: context,
         title: 'Splitting PDF',
         defaultMessage: 'Creating files…',
+        color: familyAccent,
         getMessage: () => ref.read(pdfSplitControllerProvider).progressMessage ?? 'Creating files…',
         task: () => controller.split(overrideGapCheck: true),
       );
@@ -109,6 +112,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
       context: context,
       title: 'Splitting PDF',
       defaultMessage: 'Creating files…',
+      color: familyAccent,
       getMessage: () => ref.read(pdfSplitControllerProvider).progressMessage ?? 'Creating files…',
       task: () => controller.split(),
     );
@@ -118,7 +122,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
     await _fileService.openFolder(folderPath);
   }
 
-  Future<void> _handleSaveAs(String outputFolderPath) async {
+  Future<void> _handleSaveAs(String outputFolderPath, Color familyAccent) async {
     final targetDir = await _fileService.pickDirectory(
       dialogTitle: 'Select destination folder for split PDFs',
     );
@@ -141,7 +145,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Saved $copiedCount split files to $targetDir'),
-                backgroundColor: AppColors.anvilTeal,
+                backgroundColor: familyAccent,
               ),
             );
           }
@@ -178,6 +182,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final familyAccent = AppColors.familyAccent(ToolCategory.pdf, brightness);
     final state = ref.watch(pdfSplitControllerProvider);
     final controller = ref.read(pdfSplitControllerProvider.notifier);
 
@@ -207,6 +212,8 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
                 controller.reset();
               },
             ),
+          const ThemeToggleButton(),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -219,13 +226,13 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(
                 child: !state.isLoaded
-                    ? _buildEmptyState(brightness)
+                    ? _buildEmptyState(brightness, familyAccent)
                     : state.outputFolderPath != null
-                        ? _buildSuccessState(context, state, brightness, controller)
-                        : _buildMainContent(context, state, brightness, controller),
+                        ? _buildSuccessState(context, state, brightness, controller, familyAccent)
+                        : _buildMainContent(context, state, brightness, controller, familyAccent),
               ),
               if (state.isLoaded && state.outputFolderPath == null)
-                _buildBottomSummaryBar(context, state, brightness),
+                _buildBottomSummaryBar(context, state, brightness, familyAccent),
             ],
           ),
         ),
@@ -267,7 +274,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
     );
   }
 
-  Widget _buildEmptyState(Brightness brightness) {
+  Widget _buildEmptyState(Brightness brightness, Color familyAccent) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
@@ -276,20 +283,21 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
           label: 'Drop PDF file here or click to browse',
           sublabel: 'Select a PDF document to split into smaller files',
           icon: Icons.call_split_rounded,
+          color: familyAccent,
         ),
       ),
     );
   }
 
   Widget _buildSuccessState(BuildContext context, PdfSplitState state,
-      Brightness brightness, PdfSplitController controller) {
+      Brightness brightness, PdfSplitController controller, Color familyAccent) {
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const StampAnimation(label: 'SPLIT'),
+            StampAnimation(label: 'SPLIT', color: familyAccent),
             const SizedBox(height: 24),
             Text(
               'PDF Split Successfully!',
@@ -303,7 +311,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
               decoration: BoxDecoration(
                 color: AppColors.cardBackground(brightness),
                 borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(color: AppColors.pegGrey),
+                border: Border.all(color: familyAccent.withValues(alpha: 0.35)),
               ),
               child: Column(
                 children: [
@@ -359,6 +367,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
                   label: 'Open Folder',
                   icon: Icons.folder_open_rounded,
                   variant: AppButtonVariant.primary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputFolderPath != null) {
                       _openOutputFolder(state.outputFolderPath!);
@@ -369,9 +378,10 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
                   label: 'Save As…',
                   icon: Icons.save_alt_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputFolderPath != null) {
-                      _handleSaveAs(state.outputFolderPath!);
+                      _handleSaveAs(state.outputFolderPath!, familyAccent);
                     }
                   },
                 ),
@@ -379,6 +389,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
                   label: 'Share',
                   icon: Icons.share_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputFolderPath != null) {
                       _handleShare(state.outputFolderPath!);
@@ -389,6 +400,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
                   label: 'Split Another PDF',
                   icon: Icons.refresh,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     _rangeTextController.clear();
                     controller.reset();
@@ -403,7 +415,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
   }
 
   Widget _buildMainContent(BuildContext context, PdfSplitState state,
-      Brightness brightness, PdfSplitController controller) {
+      Brightness brightness, PdfSplitController controller, Color familyAccent) {
     return Column(
       children: [
         // Source File info header
@@ -412,7 +424,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
           color: AppColors.cardBackground(brightness),
           child: Row(
             children: [
-              Icon(Icons.picture_as_pdf, color: AppColors.primary(brightness)),
+              Icon(Icons.picture_as_pdf, color: familyAccent),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -600,14 +612,14 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
         else
           // Page Thumbnail List with Split Markers
           Expanded(
-            child: _buildThumbnailGrid(context, state, brightness, controller),
+            child: _buildThumbnailGrid(context, state, brightness, controller, familyAccent),
           ),
       ],
     );
   }
 
   Widget _buildThumbnailGrid(BuildContext context, PdfSplitState state,
-      Brightness brightness, PdfSplitController controller) {
+      Brightness brightness, PdfSplitController controller, Color familyAccent) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: LayoutBuilder(
@@ -638,6 +650,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
                 state.mode == SplitMode.customRanges,
                 brightness,
                 controller,
+                familyAccent,
               );
             },
           );
@@ -655,6 +668,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
     bool interactiveMarkers,
     Brightness brightness,
     PdfSplitController controller,
+    Color familyAccent,
   ) {
     final pageNumber = index + 1;
 
@@ -663,7 +677,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
         color: AppColors.cardBackground(brightness),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: hasMarkerAfter ? AppColors.primary(brightness) : AppColors.pegGrey,
+          color: hasMarkerAfter ? familyAccent : AppColors.pegGrey,
           width: hasMarkerAfter ? 2.0 : 1.0,
         ),
       ),
@@ -732,14 +746,14 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
                 behavior: HitTestBehavior.opaque,
                 child: Container(
                   color: hasMarkerAfter
-                      ? AppColors.primary(brightness).withValues(alpha: 0.2)
+                      ? familyAccent.withValues(alpha: 0.2)
                       : Colors.transparent,
                   alignment: Alignment.center,
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: hasMarkerAfter
-                          ? AppColors.primary(brightness)
+                          ? familyAccent
                           : AppColors.pegGrey.withValues(alpha: 0.8),
                       shape: BoxShape.circle,
                     ),
@@ -758,7 +772,7 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
   }
 
   Widget _buildBottomSummaryBar(
-      BuildContext context, PdfSplitState state, Brightness brightness) {
+      BuildContext context, PdfSplitState state, Brightness brightness, Color familyAccent) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -801,12 +815,13 @@ class _PdfSplitScreenState extends ConsumerState<PdfSplitScreen> {
                 label: 'Split PDF',
                 icon: Icons.call_split,
                 variant: AppButtonVariant.primary,
+                color: familyAccent,
                 isLoading: state.isProcessing,
                 onPressed: state.isSinglePage ||
                         state.rangeValidationError != null ||
                         state.calculatedRanges.isEmpty
                     ? null
-                    : () => _handleSplit(state),
+                    : () => _handleSplit(state, familyAccent),
               ),
             ],
           ),

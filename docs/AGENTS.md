@@ -52,6 +52,13 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-07-31 — Session 19
+- Unified Tool Family Colors & Global Dark/Light Theme Mode:
+  - Added global `themeModeProvider` (`System`, `Light`, `Dark`) and `ThemeToggleButton` widget integrated across `HomeScreen` and all 10 tool AppBars.
+  - Standardized tool family accent colors across all screens (`ToolCategory.pdf` -> Copper `#FFB5502D` / `#FFC75D37`, `ToolCategory.image` -> Blue `#FF357ABD` / `#FF498ED1`).
+  - Purged legacy `anvilTeal` and `anvilTealDark` colors and all cross-contaminated UI element colors.
+  - Verified static analysis (`0 errors`) and test suite (`126/126` unit & widget tests passing).
+
 ## 2026-07-31 — Session 18
 - Implemented Visual Differentiation (`TASK_visual_differentiation.md`):
   - Added `ToolCategory` enum (`pdf` vs `image`) and `category` field to `ToolMetadata` in `lib/tools/registry.dart`.

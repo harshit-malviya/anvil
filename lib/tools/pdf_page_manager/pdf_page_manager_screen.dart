@@ -14,6 +14,8 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_dialog.dart';
+import '../../core/widgets/theme_toggle_button.dart';
+import '../registry.dart';
 import 'pdf_page_manager_controller.dart';
 import 'pdf_page_manager_state.dart';
 
@@ -27,12 +29,13 @@ class PdfPageManagerScreen extends ConsumerStatefulWidget {
 class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
   final FileService _fileService = FileService();
 
-  Future<void> _handleApplyChanges() async {
+  Future<void> _handleApplyChanges(Color familyAccent) async {
     final controller = ref.read(pdfPageManagerControllerProvider.notifier);
     await showTaskProgressDialog<String>(
       context: context,
       title: 'Applying Page Changes',
       defaultMessage: 'Saving changes…',
+      color: familyAccent,
       getMessage: () => ref.read(pdfPageManagerControllerProvider).progressMessage ?? 'Saving changes…',
       task: () => controller.applyChanges(),
     );
@@ -47,7 +50,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
     }
   }
 
-  Future<void> _handleSaveAs(String currentOutputPath) async {
+  Future<void> _handleSaveAs(String currentOutputPath, Color familyAccent) async {
     final savedPath = await _fileService.saveFile(
       defaultFileName: p.basename(currentOutputPath),
       bytes: [],
@@ -62,7 +65,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Saved to $savedPath'),
-                backgroundColor: AppColors.anvilTeal,
+                backgroundColor: familyAccent,
               ),
             );
           }
@@ -97,15 +100,11 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(false),
-                child: Text(
-                  'Keep Editing',
-                  style: AppTypography.bodyMedium(brightness).copyWith(fontWeight: FontWeight.w600),
-                ),
+                child: const Text('Cancel'),
               ),
-              AppButton(
-                label: 'Discard',
-                variant: AppButtonVariant.destructive,
+              ElevatedButton(
                 onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Discard'),
               ),
             ],
           );
@@ -116,10 +115,10 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
     return true;
   }
 
-  void _showPagePreview(BuildContext context, int initialIndex) {
+  void _showPagePreview(BuildContext context, int initialIndex, Color familyAccent) {
     showDialog(
       context: context,
-      builder: (context) => _PdfPagePreviewDialog(initialIndex: initialIndex),
+      builder: (context) => _PdfPagePreviewDialog(initialIndex: initialIndex, familyAccent: familyAccent),
     );
   }
 
@@ -128,6 +127,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
     final state = ref.watch(pdfPageManagerControllerProvider);
     final controller = ref.read(pdfPageManagerControllerProvider.notifier);
     final brightness = Theme.of(context).brightness;
+    final familyAccent = AppColors.familyAccent(ToolCategory.pdf, brightness);
 
     return PopScope(
       canPop: false,
@@ -156,6 +156,10 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
             'Page Manager',
             style: AppTypography.displayMedium(brightness),
           ),
+          actions: const [
+            ThemeToggleButton(),
+            SizedBox(width: 8),
+          ],
         ),
         body: SafeArea(
           child: Padding(
@@ -167,10 +171,10 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                   _buildErrorBanner(context, state.errorMessage!, controller),
                 Expanded(
                   child: state.outputPath != null
-                      ? _buildSuccessView(context, state, controller)
+                      ? _buildSuccessView(context, state, controller, familyAccent)
                       : state.file == null
-                          ? _buildDropZoneView(context)
-                          : _buildPageGridView(context, state, controller),
+                          ? _buildDropZoneView(context, familyAccent)
+                          : _buildPageGridView(context, state, controller, familyAccent),
                 ),
               ],
             ),
@@ -216,7 +220,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
     );
   }
 
-  Widget _buildDropZoneView(BuildContext context) {
+  Widget _buildDropZoneView(BuildContext context, Color familyAccent) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
@@ -224,13 +228,14 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
           onTap: _pickAndLoadFile,
           label: 'Drop PDF file here or click to browse',
           sublabel: 'Select a PDF to delete, reorder, or rotate pages',
+          color: familyAccent,
         ),
       ),
     );
   }
 
   Widget _buildPageGridView(
-      BuildContext context, PdfPageManagerState state, PdfPageManagerController controller) {
+      BuildContext context, PdfPageManagerState state, PdfPageManagerController controller, Color familyAccent) {
     final brightness = Theme.of(context).brightness;
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -256,7 +261,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.picture_as_pdf_rounded, color: AppColors.anvilTeal),
+              Icon(Icons.picture_as_pdf_rounded, color: familyAccent),
               const SizedBox(width: 12.0),
               Expanded(
                 child: Column(
@@ -279,6 +284,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
               AppButton(
                 label: 'Change File',
                 variant: AppButtonVariant.secondary,
+                color: familyAccent,
                 onPressed: controller.reset,
               ),
             ],
@@ -298,7 +304,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
             itemCount: state.pages.length,
             itemBuilder: (context, index) {
               final page = state.pages[index];
-              return _buildPageCard(context, index, page, state, controller);
+              return _buildPageCard(context, index, page, state, controller, familyAccent);
             },
           ),
         ),
@@ -313,24 +319,60 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
             borderRadius: BorderRadius.circular(8.0),
             border: Border.all(color: AppColors.pegGrey),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  state.summaryText,
-                  style: AppTypography.titleMedium(brightness).copyWith(
-                    color: AppColors.secondary(brightness),
+          child: Builder(
+            builder: (context) {
+              final hasUnsavedChanges = state.pages.any((p) => p.isDeleted || p.rotation != 0) || state.pages.length != state.originalPageCount;
+              final deletedPageCount = state.pages.where((p) => p.isDeleted).length;
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${state.activePageCount} of ${state.originalPageCount} pages active',
+                        style: AppTypography.titleMedium(brightness).copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2.0),
+                      Text(
+                        hasUnsavedChanges
+                            ? '$deletedPageCount deleted • ${state.rotatedPageCount} rotated'
+                            : 'No changes made yet',
+                        style: AppTypography.labelSmall(brightness).copyWith(
+                          color: AppColors.text(brightness).withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              AppButton(
-                label: 'Apply Changes',
-                variant: AppButtonVariant.primary,
-                icon: Icons.check_circle_outline_rounded,
-                isLoading: state.isProcessing,
-                onPressed: state.canApply ? _handleApplyChanges : null,
-              ),
-            ],
+                  Row(
+                    children: [
+                      if (hasUnsavedChanges && state.file != null)
+                        TextButton(
+                          onPressed: state.isProcessing ? null : () => controller.loadDocument(state.file!),
+                          child: Text(
+                            'Reset Arrangement',
+                            style: AppTypography.bodyMedium(brightness).copyWith(
+                              color: AppColors.rustRed,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(width: 12.0),
+                      AppButton(
+                        label: 'Apply Changes',
+                        icon: Icons.save_rounded,
+                        color: familyAccent,
+                        isLoading: state.isProcessing,
+                        onPressed: state.canApply ? () => _handleApplyChanges(familyAccent) : null,
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ],
@@ -343,107 +385,99 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
     PageItem page,
     PdfPageManagerState state,
     PdfPageManagerController controller,
+    Color familyAccent,
   ) {
     final brightness = Theme.of(context).brightness;
 
-    final cardContent = Card(
-      elevation: page.isDeleted ? 0 : 2,
-      shape: RoundedRectangleBorder(
+    Widget cardContent = Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground(brightness),
         borderRadius: BorderRadius.circular(8.0),
-        side: BorderSide(
+        border: Border.all(
           color: page.isDeleted
-              ? AppColors.rustRed.withValues(alpha: 0.4)
+              ? AppColors.rustRed.withValues(alpha: 0.5)
               : AppColors.pegGrey,
           width: page.isDeleted ? 1.5 : 1.0,
         ),
       ),
-      color: page.isDeleted
-          ? AppColors.rustRed.withValues(alpha: 0.05)
-          : AppColors.cardBackground(brightness),
       child: Stack(
         children: [
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Top Page Badge & Reorder hints
+                // Top Badge: Page Number & Drag indicator
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
                       decoration: BoxDecoration(
-                        color: AppColors.background(brightness),
+                        color: AppColors.pegGrey.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(4.0),
                       ),
                       child: Text(
-                        'PAGE ${page.originalIndex + 1}',
+                        'PAGE ${index + 1}',
                         style: AppTypography.mono(brightness).copyWith(
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                    Row(
-                      children: [
-                        if (index > 0)
-                          InkWell(
-                            onTap: () => controller.reorderPage(index, index - 1),
-                            child: Icon(Icons.arrow_left_rounded,
-                                size: 20, color: AppColors.text(brightness).withValues(alpha: 0.6)),
-                          ),
-                        if (index < state.pages.length - 1)
-                          InkWell(
-                            onTap: () => controller.reorderPage(index, index + 2),
-                            child: Icon(Icons.arrow_right_rounded,
-                                size: 20, color: AppColors.text(brightness).withValues(alpha: 0.6)),
-                          ),
-                      ],
+                    Icon(
+                      Icons.drag_indicator_rounded,
+                      size: 18,
+                      color: AppColors.text(brightness).withValues(alpha: 0.4),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8.0),
+                const SizedBox(height: 6.0),
 
-                // Page Thumbnail Preview (Clickable to open high-res preview)
+                // Page Thumbnail Image Container
                 Expanded(
-                  child: Tooltip(
-                    message: 'Click to preview page content',
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                        onTap: () => _showPagePreview(context, index),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4.0),
-                          child: Transform.rotate(
-                            angle: page.rotation * (math.pi / 180),
-                            child: Container(
-                              width: double.infinity,
-                              color: Colors.white,
-                              child: page.thumbnailBytes != null
-                                  ? Image.memory(
-                                      page.thumbnailBytes!,
-                                      fit: BoxFit.contain,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4.0),
+                    child: InkWell(
+                      onTap: () => _showPagePreview(context, index, familyAccent),
+                      child: AnimatedRotation(
+                        turns: page.rotation / 360,
+                        duration: const Duration(milliseconds: 200),
+                        child: Container(
+                          color: Colors.white,
+                          alignment: Alignment.center,
+                          child: Builder(
+                            builder: (context) {
+                              final thumbBytes = page.thumbnailBytes;
+                              if (thumbBytes != null) {
+                                return Image.memory(
+                                  thumbBytes,
+                                  fit: BoxFit.contain,
+                                );
+                              }
+                              return state.isLoadingThumbnails
+                                  ? const Center(
+                                      child: CircularProgressIndicator(strokeWidth: 2.0),
                                     )
-                                  : page.hasThumbnailError
-                                      ? Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(Icons.insert_drive_file_outlined,
-                                                size: 36, color: AppColors.pegGrey),
-                                            const SizedBox(height: 4.0),
-                                            Text(
-                                              'Preview unavailable',
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                color: Colors.grey.shade600,
-                                              ),
+                                  : Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                          Icon(
+                                            Icons.description_outlined,
+                                            size: 36,
+                                            color: Colors.grey.shade400,
+                                          ),
+                                          const SizedBox(height: 4.0),
+                                          Text(
+                                            'Page ${page.originalIndex + 1}',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey.shade600,
                                             ),
-                                          ],
-                                        )
-                                      : const Center(
-                                          child: CircularProgressIndicator(strokeWidth: 2.0),
-                                        ),
-                            ),
+                                          ),
+                                        ],
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -463,15 +497,15 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                       visualDensity: VisualDensity.compact,
                       color: page.isDeleted
                           ? AppColors.disabledText(brightness)
-                          : AppColors.anvilTeal,
-                      onPressed: () => _showPagePreview(context, index),
+                          : familyAccent,
+                      onPressed: () => _showPagePreview(context, index, familyAccent),
                     ),
                     IconButton(
                       icon: const Icon(Icons.rotate_right_rounded),
                       tooltip: 'Rotate 90° (${page.rotation}°)',
                       padding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
-                      color: page.isDeleted ? AppColors.disabledText(brightness) : AppColors.anvilTeal,
+                      color: page.isDeleted ? AppColors.disabledText(brightness) : familyAccent,
                       onPressed: page.isDeleted ? null : () => controller.rotatePage(index),
                     ),
                     IconButton(
@@ -481,7 +515,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                       tooltip: page.isDeleted ? 'Undo deletion' : 'Delete page',
                       padding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
-                      color: page.isDeleted ? AppColors.anvilTeal : AppColors.rustRed,
+                      color: page.isDeleted ? familyAccent : AppColors.rustRed,
                       onPressed: () => controller.togglePageDeleted(index),
                     ),
                   ],
@@ -514,6 +548,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                     AppButton(
                       label: 'Undo',
                       variant: AppButtonVariant.secondary,
+                      color: familyAccent,
                       icon: Icons.undo_rounded,
                       onPressed: () => controller.togglePageDeleted(index),
                     ),
@@ -551,7 +586,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
             duration: const Duration(milliseconds: 150),
             decoration: BoxDecoration(
               border: isTargeting
-                  ? Border.all(color: AppColors.anvilTeal, width: 2.5)
+                  ? Border.all(color: familyAccent, width: 2.5)
                   : null,
               borderRadius: BorderRadius.circular(8.0),
             ),
@@ -563,7 +598,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
   }
 
   Widget _buildSuccessView(
-      BuildContext context, PdfPageManagerState state, PdfPageManagerController controller) {
+      BuildContext context, PdfPageManagerState state, PdfPageManagerController controller, Color familyAccent) {
     final brightness = Theme.of(context).brightness;
 
     return Center(
@@ -649,6 +684,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                     label: 'Open Folder',
                     variant: AppButtonVariant.primary,
                     icon: Icons.folder_open_rounded,
+                    color: familyAccent,
                     onPressed: () {
                       if (state.outputPath != null) {
                         _fileService.openFolder(p.dirname(state.outputPath!));
@@ -659,12 +695,14 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                     label: 'Save As…',
                     variant: AppButtonVariant.secondary,
                     icon: Icons.save_alt_rounded,
-                    onPressed: () => _handleSaveAs(state.outputPath!),
+                    color: familyAccent,
+                    onPressed: () => _handleSaveAs(state.outputPath!, familyAccent),
                   ),
                   AppButton(
                     label: 'Share',
                     variant: AppButtonVariant.secondary,
                     icon: Icons.share_rounded,
+                    color: familyAccent,
                     onPressed: () {
                       if (state.outputPath != null) {
                         _fileService.shareFile(state.outputPath!);
@@ -675,6 +713,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                     label: 'Arrange Another PDF',
                     variant: AppButtonVariant.secondary,
                     icon: Icons.refresh,
+                    color: familyAccent,
                     onPressed: controller.reset,
                   ),
                 ],
@@ -689,8 +728,9 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
 
 class _PdfPagePreviewDialog extends ConsumerStatefulWidget {
   final int initialIndex;
+  final Color familyAccent;
 
-  const _PdfPagePreviewDialog({required this.initialIndex});
+  const _PdfPagePreviewDialog({required this.initialIndex, required this.familyAccent});
 
   @override
   ConsumerState<_PdfPagePreviewDialog> createState() => _PdfPagePreviewDialogState();
@@ -820,7 +860,7 @@ class _PdfPagePreviewDialogState extends ConsumerState<_PdfPagePreviewDialog> {
                         spacing: 10.0,
                         runSpacing: 6.0,
                         children: [
-                          const Icon(Icons.preview_rounded, color: AppColors.anvilTeal),
+                          Icon(Icons.preview_rounded, color: widget.familyAccent),
                           Text(
                             'Page ${_currentIndex + 1} of ${state.pages.length}',
                             style: AppTypography.titleMedium(brightness).copyWith(

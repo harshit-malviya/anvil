@@ -9,6 +9,8 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_dialog.dart';
+import '../../core/widgets/theme_toggle_button.dart';
+import '../registry.dart';
 import 'pdf_merge_controller.dart';
 import 'pdf_merge_state.dart';
 
@@ -22,12 +24,13 @@ class PdfMergeScreen extends ConsumerStatefulWidget {
 class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
   final FileService _fileService = FileService();
 
-  Future<void> _handleMerge() async {
+  Future<void> _handleMerge(Color familyAccent) async {
     final controller = ref.read(pdfMergeControllerProvider.notifier);
     await showTaskProgressDialog<String>(
       context: context,
       title: 'Merging PDFs',
       defaultMessage: 'Combining documents…',
+      color: familyAccent,
       getMessage: () => ref.read(pdfMergeControllerProvider).progressMessage ?? 'Combining documents…',
       task: () => controller.merge(),
     );
@@ -40,7 +43,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
     }
   }
 
-  Future<void> _handleSaveAs(String currentOutputPath) async {
+  Future<void> _handleSaveAs(String currentOutputPath, Color familyAccent) async {
     final state = ref.read(pdfMergeControllerProvider);
 
     // Save as dialog
@@ -53,7 +56,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('File saved to $savedPath'),
-          backgroundColor: AppColors.anvilTeal,
+          backgroundColor: familyAccent,
         ),
       );
     }
@@ -64,8 +67,10 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
     final state = ref.watch(pdfMergeControllerProvider);
     final controller = ref.read(pdfMergeControllerProvider.notifier);
     final brightness = Theme.of(context).brightness;
+    final familyAccent = AppColors.familyAccent(ToolCategory.pdf, brightness);
 
     return Scaffold(
+      backgroundColor: AppColors.background(brightness),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -77,6 +82,10 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
           'Merge PDFs',
           style: AppTypography.displayMedium(brightness),
         ),
+        actions: const [
+          ThemeToggleButton(),
+          SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -87,10 +96,10 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
               if (state.errorMessage != null) _buildErrorBanner(context, state.errorMessage!, controller),
               Expanded(
                 child: state.outputPath != null
-                    ? _buildSuccessView(context, state, controller)
+                    ? _buildSuccessView(context, state, controller, familyAccent)
                     : state.files.isEmpty
-                        ? _buildEmptyDropZone(context)
-                        : _buildFileList(context, state, controller),
+                        ? _buildEmptyDropZone(context, familyAccent)
+                        : _buildFileList(context, state, controller, familyAccent),
               ),
             ],
           ),
@@ -146,7 +155,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
     );
   }
 
-  Widget _buildEmptyDropZone(BuildContext context) {
+  Widget _buildEmptyDropZone(BuildContext context, Color familyAccent) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
@@ -155,12 +164,14 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
           label: 'Drop PDF files here or click to browse',
           sublabel: 'Select 2 or more PDF documents to merge into a single file',
           icon: Icons.picture_as_pdf_outlined,
+          color: familyAccent,
         ),
       ),
     );
   }
 
-  Widget _buildFileList(BuildContext context, PdfMergeState state, PdfMergeController controller) {
+  Widget _buildFileList(
+      BuildContext context, PdfMergeState state, PdfMergeController controller, Color familyAccent) {
     final brightness = Theme.of(context).brightness;
 
     return Column(
@@ -180,12 +191,12 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                   icon: const Icon(Icons.add_rounded, size: 18),
                   label: const Text('Add More'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primary(brightness),
+                    foregroundColor: familyAccent,
                     disabledForegroundColor: AppColors.disabledText(brightness),
                     side: BorderSide(
                       color: state.isProcessing
                           ? AppColors.disabledBorder(brightness)
-                          : AppColors.primary(brightness),
+                          : familyAccent,
                     ),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6.0)),
                   ),
@@ -216,7 +227,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
             itemCount: state.files.length,
             itemBuilder: (context, index) {
               final item = state.files[index];
-              return _buildFileRow(context, item, index, controller, brightness, key: ValueKey(item.id));
+              return _buildFileRow(context, item, index, controller, brightness, familyAccent, key: ValueKey(item.id));
             },
           ),
         ),
@@ -227,7 +238,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
             borderRadius: BorderRadius.circular(8.0),
             border: Border.all(
               color: state.insertDividers
-                  ? AppColors.primary(brightness).withValues(alpha: 0.5)
+                  ? familyAccent.withValues(alpha: 0.5)
                   : AppColors.pegGrey.withValues(alpha: 0.3),
             ),
           ),
@@ -251,7 +262,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                           onChanged: state.isProcessing
                               ? null
                               : (val) => controller.setInsertDividers(val ?? false),
-                          activeColor: AppColors.primary(brightness),
+                          activeColor: familyAccent,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
                         ),
                       ),
@@ -288,7 +299,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                             '${state.dividerFontSize.round()} pt',
                             style: AppTypography.mono(brightness).copyWith(
                               fontWeight: FontWeight.bold,
-                              color: AppColors.primary(brightness),
+                              color: familyAccent,
                             ),
                           ),
                           Expanded(
@@ -303,7 +314,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                                 max: 24.0,
                                 divisions: 14,
                                 label: '${state.dividerFontSize.round()} pt',
-                                activeColor: AppColors.primary(brightness),
+                                activeColor: familyAccent,
                                 onChanged: state.isProcessing
                                     ? null
                                     : (val) => controller.setDividerFontSize(val),
@@ -321,7 +332,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                                   style: AppTypography.bodyMedium(brightness).copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: state.dividerIsBold
-                                        ? AppColors.primary(brightness)
+                                        ? familyAccent
                                         : AppColors.text(brightness),
                                   ),
                                 ),
@@ -333,13 +344,13 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                             onSelected: state.isProcessing
                                 ? null
                                 : (val) => controller.setDividerIsBold(val),
-                            selectedColor: AppColors.primary(brightness).withValues(alpha: 0.15),
-                            checkmarkColor: AppColors.primary(brightness),
+                            selectedColor: familyAccent.withValues(alpha: 0.15),
+                            checkmarkColor: familyAccent,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(6.0),
                               side: BorderSide(
                                 color: state.dividerIsBold
-                                    ? AppColors.primary(brightness)
+                                    ? familyAccent
                                     : AppColors.pegGrey.withValues(alpha: 0.4),
                               ),
                             ),
@@ -368,7 +379,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? AppColors.primary(brightness)
+                                        ? familyAccent
                                         : AppColors.pegGrey.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(4.0),
                                   ),
@@ -439,7 +450,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
         const SizedBox(height: 12),
         if (state.isProcessing) ...[
           LinearProgressIndicator(
-            color: AppColors.primary(brightness),
+            color: familyAccent,
             backgroundColor: AppColors.pegGrey.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 8),
@@ -449,7 +460,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
           ),
           const SizedBox(height: 16),
         ],
-        _buildBottomActionBar(context, state, controller, brightness),
+        _buildBottomActionBar(context, state, controller, brightness, familyAccent),
       ],
     );
   }
@@ -459,7 +470,8 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
     PdfMergeItem item,
     int index,
     PdfMergeController controller,
-    Brightness brightness, {
+    Brightness brightness,
+    Color familyAccent, {
     required Key key,
   }) {
     return Container(
@@ -492,12 +504,12 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.primary(brightness).withValues(alpha: 0.1),
+              color: familyAccent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4.0),
             ),
             child: Icon(
               Icons.picture_as_pdf_rounded,
-              color: AppColors.primary(brightness),
+              color: familyAccent,
               size: 20,
             ),
           ),
@@ -558,6 +570,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
     PdfMergeState state,
     PdfMergeController controller,
     Brightness brightness,
+    Color familyAccent,
   ) {
     return Column(
       children: [
@@ -589,8 +602,9 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
           height: 48,
           child: AppButton(
             label: 'Merge ${state.files.length} PDFs',
+            color: familyAccent,
             isLoading: state.isProcessing,
-            onPressed: state.canMerge ? _handleMerge : null,
+            onPressed: state.canMerge ? () => _handleMerge(familyAccent) : null,
           ),
         ),
       ],
@@ -601,6 +615,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
     BuildContext context,
     PdfMergeState state,
     PdfMergeController controller,
+    Color familyAccent,
   ) {
     final brightness = Theme.of(context).brightness;
     final outputPath = state.outputPath!;
@@ -614,13 +629,13 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
             color: AppColors.cardBackground(brightness),
             borderRadius: BorderRadius.circular(6.0),
             border: Border.all(
-              color: AppColors.primary(brightness).withValues(alpha: 0.3),
+              color: familyAccent.withValues(alpha: 0.3),
             ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const StampAnimation(label: 'MERGED'),
+              StampAnimation(label: 'MERGED', color: familyAccent),
               const SizedBox(height: 24),
               Text(
                 'PDFs Merged Successfully!',
@@ -689,24 +704,28 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                   AppButton(
                     label: 'Open Folder',
                     variant: AppButtonVariant.primary,
+                    color: familyAccent,
                     icon: Icons.folder_open_rounded,
                     onPressed: () => _fileService.openFolder(p.dirname(outputPath)),
                   ),
                   AppButton(
                     label: 'Save As…',
                     variant: AppButtonVariant.secondary,
+                    color: familyAccent,
                     icon: Icons.save_alt_rounded,
-                    onPressed: () => _handleSaveAs(outputPath),
+                    onPressed: () => _handleSaveAs(outputPath, familyAccent),
                   ),
                   AppButton(
                     label: 'Share',
                     variant: AppButtonVariant.secondary,
+                    color: familyAccent,
                     icon: Icons.share_rounded,
                     onPressed: () => _fileService.shareFile(outputPath),
                   ),
                   AppButton(
                     label: 'Merge Another Batch',
                     variant: AppButtonVariant.secondary,
+                    color: familyAccent,
                     icon: Icons.refresh,
                     onPressed: () => controller.removeAll(),
                   ),

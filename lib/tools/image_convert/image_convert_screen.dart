@@ -10,6 +10,7 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_dialog.dart';
+import '../../core/widgets/theme_toggle_button.dart';
 import '../../tools/registry.dart';
 import 'image_convert_controller.dart';
 import 'image_convert_state.dart';
@@ -115,6 +116,8 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
               icon: const Icon(Icons.refresh),
               onPressed: controller.reset,
             ),
+          const ThemeToggleButton(),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -549,7 +552,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: (isSmaller ? familyAccent : AppColors.emberCopper)
+                        color: (isSmaller ? familyAccent : AppColors.sparkYellow)
                             .withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -557,7 +560,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                         '${percentChange.abs().toStringAsFixed(0)}% ${isSmaller ? "smaller" : "larger"}',
                         style: AppTypography.mono(brightness).copyWith(
                           fontWeight: FontWeight.bold,
-                          color: isSmaller ? familyAccent : AppColors.emberCopper,
+                          color: isSmaller ? familyAccent : AppColors.sparkYellow,
                         ),
                       ),
                     ),

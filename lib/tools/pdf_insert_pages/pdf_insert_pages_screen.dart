@@ -11,6 +11,8 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_bar.dart';
+import '../../core/widgets/theme_toggle_button.dart';
+import '../registry.dart';
 import 'pdf_insert_pages_controller.dart';
 import 'pdf_insert_pages_state.dart';
 
@@ -80,7 +82,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     await _fileService.openFolder(dir);
   }
 
-  Future<void> _handleSaveAs(String currentFilePath) async {
+  Future<void> _handleSaveAs(String currentFilePath, Color familyAccent) async {
     final fileName = p.basename(currentFilePath);
     final targetPath = await FilePicker.platform.saveFile(
       dialogTitle: 'Save inserted PDF as',
@@ -96,7 +98,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Saved file to $targetPath'),
-              backgroundColor: AppColors.anvilTeal,
+              backgroundColor: familyAccent,
             ),
           );
         }
@@ -116,6 +118,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final familyAccent = AppColors.familyAccent(ToolCategory.pdf, brightness);
     final state = ref.watch(pdfInsertPagesControllerProvider);
     final controller = ref.read(pdfInsertPagesControllerProvider.notifier);
 
@@ -138,6 +141,8 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                 controller.clearTarget();
               },
             ),
+          const ThemeToggleButton(),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -149,16 +154,17 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
               TaskProgressBar(
                 isVisible: state.isProcessing,
                 message: state.progressMessage ?? 'Inserting pages…',
+                color: familyAccent,
               ),
               if (state.errorMessage != null)
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(
                 child: state.outputPath != null
-                    ? _buildSuccessState(context, state, brightness, controller)
-                    : _buildMainContent(context, state, brightness, controller),
+                    ? _buildSuccessState(context, state, brightness, controller, familyAccent)
+                    : _buildMainContent(context, state, brightness, controller, familyAccent),
               ),
               if (state.hasTarget && state.outputPath == null)
-                _buildBottomSummaryBar(context, state, brightness),
+                _buildBottomSummaryBar(context, state, brightness, familyAccent),
             ],
           ),
         ),
@@ -209,6 +215,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     PdfInsertPagesState state,
     Brightness brightness,
     PdfInsertPagesController controller,
+    Color familyAccent,
   ) {
     return Center(
       child: SingleChildScrollView(
@@ -216,7 +223,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const StampAnimation(label: 'PAGES INSERTED'),
+            StampAnimation(label: 'PAGES INSERTED', color: familyAccent),
             const SizedBox(height: 24),
             Text(
               'Pages Inserted Successfully!',
@@ -230,7 +237,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
               decoration: BoxDecoration(
                 color: AppColors.cardBackground(brightness),
                 borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(color: AppColors.pegGrey),
+                border: Border.all(color: familyAccent.withValues(alpha: 0.35)),
               ),
               child: Column(
                 children: [
@@ -286,6 +293,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   label: 'Open Folder',
                   icon: Icons.folder_open_rounded,
                   variant: AppButtonVariant.primary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _openOutputFolder(state.outputPath!);
@@ -296,9 +304,10 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   label: 'Save As…',
                   icon: Icons.save_alt_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
-                      _handleSaveAs(state.outputPath!);
+                      _handleSaveAs(state.outputPath!, familyAccent);
                     }
                   },
                 ),
@@ -306,6 +315,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   label: 'Share',
                   icon: Icons.share_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _fileService.shareFile(state.outputPath!);
@@ -316,6 +326,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   label: 'Insert Into Another PDF',
                   icon: Icons.refresh,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     _pageInputController.clear();
                     controller.clearTarget();
@@ -334,6 +345,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     PdfInsertPagesState state,
     Brightness brightness,
     PdfInsertPagesController controller,
+    Color familyAccent,
   ) {
     if (!state.hasTarget) {
       return Center(
@@ -344,6 +356,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
             label: 'Drop PDF to insert into',
             sublabel: 'Step 1 — Pick target PDF document',
             icon: Icons.post_add_rounded,
+            color: familyAccent,
           ),
         ),
       );
@@ -355,13 +368,13 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // STEP 1: Target Document Header & Grid
-          _buildTargetHeader(context, state, brightness, controller),
+          _buildTargetHeader(context, state, brightness, controller, familyAccent),
           const SizedBox(height: 12),
-          _buildTargetInsertionBar(context, state, brightness, controller),
+          _buildTargetInsertionBar(context, state, brightness, controller, familyAccent),
           const SizedBox(height: 12),
           SizedBox(
             height: _isTargetGridExpanded ? 380 : 230,
-            child: _buildTargetThumbnailGrid(context, state, brightness, controller),
+            child: _buildTargetThumbnailGrid(context, state, brightness, controller, familyAccent),
           ),
 
           const SizedBox(height: 24),
@@ -378,17 +391,18 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   label: 'Drop PDF to insert pages from',
                   sublabel: 'Step 2 — Pick source PDF containing pages to insert',
                   icon: Icons.library_add_rounded,
+                  color: familyAccent,
                 ),
               ),
             )
           else ...[
-            _buildSourceHeader(context, state, brightness, controller),
+            _buildSourceHeader(context, state, brightness, controller, familyAccent),
             const SizedBox(height: 12),
-            _buildSourceSelectionBar(context, state, brightness, controller),
+            _buildSourceSelectionBar(context, state, brightness, controller, familyAccent),
             const SizedBox(height: 12),
             SizedBox(
               height: _isSourceGridExpanded ? 380 : 230,
-              child: _buildSourceThumbnailGrid(context, state, brightness, controller),
+              child: _buildSourceThumbnailGrid(context, state, brightness, controller, familyAccent),
             ),
           ],
         ],
@@ -401,6 +415,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     PdfInsertPagesState state,
     Brightness brightness,
     PdfInsertPagesController controller,
+    Color familyAccent,
   ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -411,7 +426,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.picture_as_pdf, color: AppColors.primary(brightness)),
+          Icon(Icons.picture_as_pdf, color: familyAccent),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -422,14 +437,14 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.primary(brightness).withValues(alpha: 0.2),
+                        color: familyAccent.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         'TARGET PDF',
                         style: AppTypography.labelSmall(brightness).copyWith(
                           fontSize: 10,
-                          color: AppColors.primary(brightness),
+                          color: familyAccent,
                         ),
                       ),
                     ),
@@ -456,8 +471,8 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
           ),
           TextButton.icon(
             onPressed: _pickTargetFile,
-            icon: const Icon(Icons.swap_horiz, size: 18),
-            label: const Text('Change Target'),
+            icon: Icon(Icons.swap_horiz, size: 18, color: familyAccent),
+            label: Text('Change Target', style: TextStyle(color: familyAccent)),
           ),
         ],
       ),
@@ -469,6 +484,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     PdfInsertPagesState state,
     Brightness brightness,
     PdfInsertPagesController controller,
+    Color familyAccent,
   ) {
     final currentVal = state.insertionPoint == -1 ? 0 : state.insertionPoint + 1;
     if (_pageInputController.text != currentVal.toString() && !_pageInputController.selection.isValid) {
@@ -500,16 +516,16 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.anvilTeal.withValues(alpha: 0.15),
+                color: familyAccent.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: AppColors.anvilTeal),
+                border: Border.all(color: familyAccent),
               ),
               child: Text(
                 positionLabel,
                 style: AppTypography.mono(brightness).copyWith(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.anvilTeal,
+                  color: familyAccent,
                 ),
               ),
             ),
@@ -519,8 +535,8 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'After Page:',
-              style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 13),
+              'Insert after page:',
+              style: AppTypography.bodyMedium(brightness),
             ),
             const SizedBox(width: 6),
             SizedBox(
@@ -604,6 +620,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     PdfInsertPagesState state,
     Brightness brightness,
     PdfInsertPagesController controller,
+    Color familyAccent,
   ) {
     final hasInsertedBlock = state.hasSource && state.selectedSourceCount > 0;
     final totalGridItems = state.targetPageCount + (hasInsertedBlock ? 1 : 0);
@@ -628,10 +645,10 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
         int targetIdx;
         bool isPreviewBlock = false;
 
-        final insertionIdx = state.insertionPoint; // -1 to targetPageCount - 1
+        final insertionIdx = state.insertionPoint;
 
         if (hasInsertedBlock) {
-          final blockPositionInGrid = insertionIdx + 1; // 0 for start (-1 + 1)
+          final blockPositionInGrid = insertionIdx + 1;
           if (index == blockPositionInGrid) {
             isPreviewBlock = true;
             targetIdx = -1;
@@ -647,16 +664,16 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
         if (isPreviewBlock) {
           return Container(
             decoration: BoxDecoration(
-              color: AppColors.anvilTeal.withValues(alpha: 0.15),
+              color: familyAccent.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.anvilTeal, width: 2),
+              border: Border.all(color: familyAccent, width: 2),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
+                Icon(
                   Icons.post_add_rounded,
-                  color: AppColors.anvilTeal,
+                  color: familyAccent,
                   size: 32,
                 ),
                 const SizedBox(height: 8),
@@ -664,7 +681,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   '+${state.selectedSourceCount} Pages',
                   style: AppTypography.mono(brightness).copyWith(
                     fontWeight: FontWeight.bold,
-                    color: AppColors.anvilTeal,
+                    color: familyAccent,
                     fontSize: 13,
                   ),
                 ),
@@ -703,7 +720,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
               color: AppColors.cardBackground(brightness),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: isInsertionAnchor ? AppColors.primary(brightness) : AppColors.pegGrey,
+                color: isInsertionAnchor ? familyAccent : AppColors.pegGrey,
                 width: isInsertionAnchor ? 2.5 : 1.0,
               ),
             ),
@@ -758,7 +775,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.primary(brightness),
+                        color: familyAccent,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
@@ -812,17 +829,18 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     PdfInsertPagesState state,
     Brightness brightness,
     PdfInsertPagesController controller,
+    Color familyAccent,
   ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.anvilTeal.withValues(alpha: 0.08),
+        color: familyAccent.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.anvilTeal.withValues(alpha: 0.4)),
+        border: Border.all(color: familyAccent.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.library_add_rounded, color: AppColors.anvilTeal),
+          Icon(Icons.library_add_rounded, color: familyAccent),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -833,14 +851,14 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.anvilTeal.withValues(alpha: 0.2),
+                        color: familyAccent.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         'SOURCE PDF',
                         style: AppTypography.labelSmall(brightness).copyWith(
                           fontSize: 10,
-                          color: AppColors.anvilTeal,
+                          color: familyAccent,
                         ),
                       ),
                     ),
@@ -859,15 +877,20 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${state.sourcePageCount} total pages',
+                  '${state.sourcePageCount} pages total',
                   style: AppTypography.mono(brightness).copyWith(fontSize: 12),
                 ),
               ],
             ),
           ),
+          TextButton.icon(
+            onPressed: _pickSourceFile,
+            icon: const Icon(Icons.swap_horiz, size: 18),
+            label: const Text('Change Source'),
+          ),
           IconButton(
-            tooltip: 'Remove Source File',
-            icon: const Icon(Icons.close_rounded, color: AppColors.rustRed),
+            tooltip: 'Remove Source Document',
+            icon: const Icon(Icons.close, size: 18),
             onPressed: controller.clearSource,
           ),
         ],
@@ -880,6 +903,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     PdfInsertPagesState state,
     Brightness brightness,
     PdfInsertPagesController controller,
+    Color familyAccent,
   ) {
     return Row(
       children: [
@@ -892,7 +916,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             color: state.selectedSourceCount > 0
-                ? AppColors.anvilTeal.withValues(alpha: 0.15)
+                ? familyAccent.withValues(alpha: 0.15)
                 : AppColors.rustRed.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(4),
           ),
@@ -901,7 +925,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
             style: AppTypography.mono(brightness).copyWith(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: state.selectedSourceCount > 0 ? AppColors.anvilTeal : AppColors.rustRed,
+              color: state.selectedSourceCount > 0 ? familyAccent : AppColors.rustRed,
             ),
           ),
         ),
@@ -932,6 +956,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     PdfInsertPagesState state,
     Brightness brightness,
     PdfInsertPagesController controller,
+    Color familyAccent,
   ) {
     final gridWidget = GridView.builder(
       controller: _sourceScrollController,
@@ -963,7 +988,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
               color: AppColors.cardBackground(brightness),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: isSelected ? AppColors.anvilTeal : AppColors.pegGrey,
+                color: isSelected ? familyAccent : AppColors.pegGrey,
                 width: isSelected ? 2.5 : 1.0,
               ),
             ),
@@ -997,7 +1022,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: AppColors.anvilTeal.withValues(alpha: 0.12),
+                        color: familyAccent.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(5),
                       ),
                     ),
@@ -1028,7 +1053,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   right: 6,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.anvilTeal : Colors.black.withValues(alpha: 0.46),
+                      color: isSelected ? familyAccent : Colors.black.withValues(alpha: 0.46),
                       shape: BoxShape.circle,
                     ),
                     padding: const EdgeInsets.all(4),
@@ -1079,6 +1104,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
     BuildContext context,
     PdfInsertPagesState state,
     Brightness brightness,
+    Color familyAccent,
   ) {
     String summaryText;
     if (!state.hasSource) {
@@ -1134,6 +1160,7 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
             label: 'Insert Pages',
             icon: Icons.post_add_rounded,
             variant: AppButtonVariant.primary,
+            color: familyAccent,
             isLoading: state.isProcessing,
             onPressed: state.canSubmit ? _handleInsert : null,
           ),

@@ -11,6 +11,8 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_dialog.dart';
+import '../../core/widgets/theme_toggle_button.dart';
+import '../registry.dart';
 import 'pdf_insert_image_as_page_controller.dart';
 import 'pdf_insert_image_as_page_state.dart';
 
@@ -24,20 +26,20 @@ class PdfInsertImageAsPageScreen extends ConsumerStatefulWidget {
 class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPageScreen> {
   final FileService _fileService = FileService();
   late final ScrollController _targetScrollController;
-  late final TextEditingController _pageInputController;
+  late final ScrollController _imageScrollController;
   bool _isTargetGridExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _targetScrollController = ScrollController();
-    _pageInputController = TextEditingController();
+    _imageScrollController = ScrollController();
   }
 
   @override
   void dispose() {
     _targetScrollController.dispose();
-    _pageInputController.dispose();
+    _imageScrollController.dispose();
     super.dispose();
   }
 
@@ -66,7 +68,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     }
   }
 
-  Future<void> _handleInsert() async {
+  Future<void> _handleInsert(Color familyAccent) async {
     final state = ref.read(pdfInsertImageAsPageControllerProvider);
     final count = state.imageCount;
     final defaultMsg = count <= 1
@@ -77,6 +79,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
       context: context,
       title: 'Inserting Images',
       defaultMessage: defaultMsg,
+      color: familyAccent,
       task: () => ref.read(pdfInsertImageAsPageControllerProvider.notifier).insertImagePages(),
       getMessage: () => ref.read(pdfInsertImageAsPageControllerProvider).progressMessage ?? defaultMsg,
     );
@@ -87,7 +90,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     await _fileService.openFolder(dir);
   }
 
-  Future<void> _handleSaveAs(String currentFilePath) async {
+  Future<void> _handleSaveAs(String currentFilePath, Color familyAccent) async {
     final fileName = p.basename(currentFilePath);
     final targetPath = await FilePicker.platform.saveFile(
       dialogTitle: 'Save inserted PDF as',
@@ -103,7 +106,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Saved file to $targetPath'),
-              backgroundColor: AppColors.anvilTeal,
+              backgroundColor: familyAccent,
             ),
           );
         }
@@ -123,6 +126,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final familyAccent = AppColors.familyAccent(ToolCategory.pdf, brightness);
     final state = ref.watch(pdfInsertImageAsPageControllerProvider);
     final controller = ref.read(pdfInsertImageAsPageControllerProvider.notifier);
 
@@ -141,10 +145,11 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
               tooltip: 'Reset All',
               icon: const Icon(Icons.refresh),
               onPressed: () {
-                _pageInputController.clear();
                 controller.clearTarget();
               },
             ),
+          const ThemeToggleButton(),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -157,11 +162,11 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(
                 child: state.outputPath != null
-                    ? _buildSuccessState(context, state, brightness, controller)
-                    : _buildMainContent(context, state, brightness, controller),
+                    ? _buildSuccessState(context, state, brightness, controller, familyAccent)
+                    : _buildMainContent(context, state, brightness, controller, familyAccent),
               ),
               if (state.hasTarget && state.outputPath == null)
-                _buildBottomSummaryBar(context, state, brightness),
+                _buildBottomSummaryBar(context, state, brightness, familyAccent),
             ],
           ),
         ),
@@ -212,6 +217,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
+    Color familyAccent,
   ) {
     final stampLabel = state.imageCount <= 1 ? 'PAGE INSERTED' : 'PAGES INSERTED';
     final successTitle = state.imageCount <= 1
@@ -224,7 +230,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            StampAnimation(label: stampLabel),
+            StampAnimation(label: stampLabel, color: familyAccent),
             const SizedBox(height: 24),
             Text(
               successTitle,
@@ -238,7 +244,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
               decoration: BoxDecoration(
                 color: AppColors.cardBackground(brightness),
                 borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(color: AppColors.pegGrey),
+                border: Border.all(color: familyAccent.withValues(alpha: 0.35)),
               ),
               child: Column(
                 children: [
@@ -294,6 +300,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                   label: 'Open Folder',
                   icon: Icons.folder_open_rounded,
                   variant: AppButtonVariant.primary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _openOutputFolder(state.outputPath!);
@@ -304,9 +311,10 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                   label: 'Save As…',
                   icon: Icons.save_alt_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
-                      _handleSaveAs(state.outputPath!);
+                      _handleSaveAs(state.outputPath!, familyAccent);
                     }
                   },
                 ),
@@ -314,6 +322,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                   label: 'Share',
                   icon: Icons.share_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _fileService.shareFile(state.outputPath!);
@@ -324,8 +333,8 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                   label: 'Insert More Images',
                   icon: Icons.refresh,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
-                    _pageInputController.clear();
                     controller.clearTarget();
                   },
                 ),
@@ -342,6 +351,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
+    Color familyAccent,
   ) {
     if (!state.hasTarget) {
       return Center(
@@ -352,6 +362,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
             label: 'Drop PDF to insert into',
             sublabel: 'Step 1 — Pick target PDF document',
             icon: Icons.post_add_rounded,
+            color: familyAccent,
           ),
         ),
       );
@@ -363,13 +374,13 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // STEP 1: Target Document Header & Grid
-          _buildTargetHeader(context, state, brightness, controller),
+          _buildTargetHeader(context, state, brightness, controller, familyAccent),
           const SizedBox(height: 12),
-          _buildTargetInsertionBar(context, state, brightness, controller),
+          _buildTargetInsertionBar(context, state, brightness, controller, familyAccent),
           const SizedBox(height: 12),
           SizedBox(
             height: _isTargetGridExpanded ? 380 : 230,
-            child: _buildTargetThumbnailGrid(context, state, brightness, controller),
+            child: _buildTargetThumbnailGrid(context, state, brightness, controller, familyAccent),
           ),
 
           const SizedBox(height: 24),
@@ -386,15 +397,16 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                   label: 'Drop image(s) to insert (JPEG or PNG)',
                   sublabel: 'Step 2 — Pick image file(s) to add as page(s)',
                   icon: Icons.add_photo_alternate_rounded,
+                  color: familyAccent,
                 ),
               ),
             )
           else ...[
-            _buildImageSectionHeader(context, state, brightness, controller),
+            _buildImageSectionHeader(context, state, brightness, controller, familyAccent),
             const SizedBox(height: 12),
-            _buildImageCardGrid(context, state, brightness, controller),
+            _buildImageCardGrid(context, state, brightness, controller, familyAccent),
             const SizedBox(height: 20),
-            _buildPageFitControls(context, state, brightness, controller),
+            _buildPageFitControls(context, state, brightness, controller, familyAccent),
           ],
         ],
       ),
@@ -406,6 +418,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
+    Color familyAccent,
   ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -416,7 +429,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
       ),
       child: Row(
         children: [
-          Icon(Icons.picture_as_pdf, color: AppColors.primary(brightness)),
+          Icon(Icons.picture_as_pdf, color: familyAccent),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -427,14 +440,14 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.primary(brightness).withValues(alpha: 0.2),
+                        color: familyAccent.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         'TARGET PDF',
                         style: AppTypography.labelSmall(brightness).copyWith(
                           fontSize: 10,
-                          color: AppColors.primary(brightness),
+                          color: familyAccent,
                         ),
                       ),
                     ),
@@ -461,8 +474,8 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
           ),
           TextButton.icon(
             onPressed: _pickTargetFile,
-            icon: const Icon(Icons.swap_horiz, size: 18),
-            label: const Text('Change Target'),
+            icon: Icon(Icons.swap_horiz, size: 18, color: familyAccent),
+            label: Text('Change Target', style: TextStyle(color: familyAccent)),
           ),
         ],
       ),
@@ -474,12 +487,8 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
+    Color familyAccent,
   ) {
-    final currentVal = state.insertionPoint == -1 ? 0 : state.insertionPoint + 1;
-    if (_pageInputController.text != currentVal.toString() && !_pageInputController.selection.isValid) {
-      _pageInputController.text = currentVal.toString();
-    }
-
     String positionLabel;
     if (state.insertionPoint == -1) {
       positionLabel = 'At start (before Page 1)';
@@ -505,63 +514,18 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.anvilTeal.withValues(alpha: 0.15),
+                color: familyAccent.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: AppColors.anvilTeal),
+                border: Border.all(color: familyAccent),
               ),
               child: Text(
                 positionLabel,
                 style: AppTypography.mono(brightness).copyWith(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.anvilTeal,
+                  color: familyAccent,
                 ),
               ),
-            ),
-          ],
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'After Page:',
-              style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 13),
-            ),
-            const SizedBox(width: 6),
-            SizedBox(
-              width: 76,
-              height: 36,
-              child: TextField(
-                controller: _pageInputController,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: AppTypography.mono(brightness).copyWith(fontWeight: FontWeight.bold),
-                decoration: const InputDecoration(
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                  border: OutlineInputBorder(),
-                ),
-                onSubmitted: (val) {
-                  final pageNum = int.tryParse(val.trim());
-                  if (pageNum != null) {
-                    int targetIdx;
-                    if (pageNum <= 0) {
-                      targetIdx = -1;
-                    } else if (pageNum >= state.targetPageCount) {
-                      targetIdx = state.targetPageCount - 1;
-                    } else {
-                      targetIdx = pageNum - 1;
-                    }
-                    controller.setInsertionPoint(targetIdx);
-                    _scrollToTargetIndex(targetIdx, state.targetPageCount);
-                  }
-                },
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '(0=Start, ${state.targetPageCount}=End)',
-              style: AppTypography.mono(brightness).copyWith(fontSize: 11, color: AppColors.text(brightness).withValues(alpha: 0.6)),
             ),
           ],
         ),
@@ -609,6 +573,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
+    Color familyAccent,
   ) {
     final hasInsertedBlock = state.hasImages;
     final totalGridItems = state.targetPageCount + (hasInsertedBlock ? 1 : 0);
@@ -655,9 +620,9 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
 
           return Container(
             decoration: BoxDecoration(
-              color: AppColors.anvilTeal.withValues(alpha: 0.15),
+              color: familyAccent.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.anvilTeal, width: 2),
+              border: Border.all(color: familyAccent, width: 2),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -679,7 +644,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     margin: const EdgeInsets.only(bottom: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.anvilTeal,
+                      color: familyAccent,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -692,9 +657,9 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                     ),
                   ),
                 ] else ...[
-                  const Icon(
+                  Icon(
                     Icons.add_photo_alternate_rounded,
-                    color: AppColors.anvilTeal,
+                    color: familyAccent,
                     size: 32,
                   ),
                   const SizedBox(height: 8),
@@ -702,7 +667,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                     countLabel,
                     style: AppTypography.mono(brightness).copyWith(
                       fontWeight: FontWeight.bold,
-                      color: AppColors.anvilTeal,
+                      color: familyAccent,
                       fontSize: 12,
                     ),
                   ),
@@ -728,7 +693,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
               color: AppColors.cardBackground(brightness),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                color: isInsertionAnchor ? AppColors.primary(brightness) : AppColors.pegGrey,
+                color: isInsertionAnchor ? familyAccent : AppColors.pegGrey,
                 width: isInsertionAnchor ? 2.5 : 1.0,
               ),
             ),
@@ -783,7 +748,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppColors.primary(brightness),
+                        color: familyAccent,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
@@ -837,27 +802,28 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
+    Color familyAccent,
   ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.anvilTeal.withValues(alpha: 0.08),
+        color: familyAccent.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.anvilTeal.withValues(alpha: 0.3)),
+        border: Border.all(color: familyAccent.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: AppColors.anvilTeal.withValues(alpha: 0.2),
+              color: familyAccent.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
               'IMAGES TO INSERT',
               style: AppTypography.labelSmall(brightness).copyWith(
                 fontSize: 10,
-                color: AppColors.anvilTeal,
+                color: familyAccent,
               ),
             ),
           ),
@@ -867,7 +833,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
             style: AppTypography.mono(brightness).copyWith(
               fontSize: 13,
               fontWeight: FontWeight.bold,
-              color: AppColors.anvilTeal,
+              color: familyAccent,
             ),
           ),
           const Spacer(),
@@ -892,6 +858,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
+    Color familyAccent,
   ) {
     return GridView.builder(
       shrinkWrap: true,
@@ -905,7 +872,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
       itemCount: state.images.length,
       itemBuilder: (context, index) {
         final item = state.images[index];
-        return _buildImageCard(context, index, item, state, brightness, controller);
+        return _buildImageCard(context, index, item, state, brightness, controller, familyAccent);
       },
     );
   }
@@ -917,6 +884,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
+    Color familyAccent,
   ) {
     final fileSizeKb = (item.file.size / 1024).toStringAsFixed(1);
 
@@ -938,7 +906,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
                   decoration: BoxDecoration(
-                    color: AppColors.anvilTeal.withValues(alpha: 0.15),
+                    color: familyAccent.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(4.0),
                   ),
                   child: Text(
@@ -946,7 +914,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                     style: AppTypography.mono(brightness).copyWith(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.anvilTeal,
+                      color: familyAccent,
                     ),
                   ),
                 ),
@@ -1046,6 +1014,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     PdfInsertImageAsPageState state,
     Brightness brightness,
     PdfInsertImageAsPageController controller,
+    Color familyAccent,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1065,6 +1034,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                 isSelected: state.fitMode == PageFitMode.matchNeighboringPage,
                 icon: Icons.aspect_ratio_rounded,
                 brightness: brightness,
+                familyAccent: familyAccent,
                 onTap: () => controller.setPageFitMode(PageFitMode.matchNeighboringPage),
               ),
             ),
@@ -1077,6 +1047,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                 isSelected: state.fitMode == PageFitMode.fitToImage,
                 icon: Icons.crop_original_rounded,
                 brightness: brightness,
+                familyAccent: familyAccent,
                 onTap: () => controller.setPageFitMode(PageFitMode.fitToImage),
               ),
             ),
@@ -1094,6 +1065,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     required IconData icon,
     required Brightness brightness,
     required VoidCallback onTap,
+    required Color familyAccent,
   }) {
     return InkWell(
       onTap: onTap,
@@ -1102,11 +1074,11 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.anvilTeal.withValues(alpha: 0.1)
+              ? familyAccent.withValues(alpha: 0.1)
               : AppColors.cardBackground(brightness),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isSelected ? AppColors.anvilTeal : AppColors.pegGrey,
+            color: isSelected ? familyAccent : AppColors.pegGrey,
             width: isSelected ? 2.0 : 1.0,
           ),
         ),
@@ -1115,7 +1087,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
           children: [
             Icon(
               icon,
-              color: isSelected ? AppColors.anvilTeal : AppColors.text(brightness).withValues(alpha: 0.6),
+              color: isSelected ? familyAccent : AppColors.text(brightness).withValues(alpha: 0.6),
               size: 24,
             ),
             const SizedBox(width: 10),
@@ -1127,7 +1099,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
                     title,
                     style: AppTypography.bodyMedium(brightness).copyWith(
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? AppColors.anvilTeal : AppColors.text(brightness),
+                      color: isSelected ? familyAccent : AppColors.text(brightness),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1151,6 +1123,7 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
     BuildContext context,
     PdfInsertImageAsPageState state,
     Brightness brightness,
+    Color familyAccent,
   ) {
     String summaryText;
     if (state.insertionPoint == -1) {
@@ -1194,7 +1167,8 @@ class _PdfInsertImageAsPageScreenState extends ConsumerState<PdfInsertImageAsPag
             label: buttonLabel,
             icon: Icons.add_photo_alternate_rounded,
             variant: AppButtonVariant.primary,
-            onPressed: state.canSubmit ? _handleInsert : null,
+            color: familyAccent,
+            onPressed: state.canSubmit ? () => _handleInsert(familyAccent) : null,
           ),
         ],
       ),

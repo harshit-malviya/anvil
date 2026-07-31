@@ -10,6 +10,8 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_dialog.dart';
+import '../../core/widgets/theme_toggle_button.dart';
+import '../registry.dart';
 import 'images_to_pdf_controller.dart';
 import 'images_to_pdf_state.dart';
 
@@ -23,13 +25,14 @@ class ImagesToPdfScreen extends ConsumerStatefulWidget {
 class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
   final FileService _fileService = FileService();
 
-  Future<void> _handleCreatePdf() async {
+  Future<void> _handleConvert(Color familyAccent) async {
     final controller = ref.read(imagesToPdfControllerProvider.notifier);
     await showTaskProgressDialog<String>(
       context: context,
       title: 'Creating PDF',
-      defaultMessage: 'Creating PDF from images…',
-      getMessage: () => ref.read(imagesToPdfControllerProvider).progressMessage ?? 'Creating PDF from images…',
+      defaultMessage: 'Combining images into a single PDF document…',
+      color: familyAccent,
+      getMessage: () => ref.read(imagesToPdfControllerProvider).progressMessage ?? 'Combining images…',
       task: () => controller.createPdf(),
     );
   }
@@ -37,16 +40,16 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
   Future<void> _pickAndAddImages() async {
     final pickedFiles = await _fileService.pickImageFiles(allowMultiple: true);
     if (pickedFiles.isNotEmpty && mounted) {
-      await ref.read(imagesToPdfControllerProvider.notifier).addImages(pickedFiles);
+      ref.read(imagesToPdfControllerProvider.notifier).addImages(pickedFiles);
     }
   }
 
-  Future<void> _handleSaveAs(String currentOutputPath) async {
-    List<int> bytes = [];
+  Future<void> _handleSaveAs(String currentOutputPath, Color familyAccent) async {
+    final bytes = <int>[];
     try {
-      final file = File(currentOutputPath);
-      if (file.existsSync()) {
-        bytes = await file.readAsBytes();
+      final f = File(currentOutputPath);
+      if (f.existsSync()) {
+        bytes.addAll(await f.readAsBytes());
       }
     } catch (_) {}
 
@@ -59,7 +62,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('File saved to $savedPath'),
-          backgroundColor: AppColors.anvilTeal,
+          backgroundColor: familyAccent,
         ),
       );
     }
@@ -145,7 +148,6 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
   }
 
   String _formatBytes(int bytes) {
-    if (bytes <= 0) return '0 B';
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
@@ -156,8 +158,10 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
     final state = ref.watch(imagesToPdfControllerProvider);
     final controller = ref.read(imagesToPdfControllerProvider.notifier);
     final brightness = Theme.of(context).brightness;
+    final familyAccent = AppColors.familyAccent(ToolCategory.pdf, brightness);
 
     return Scaffold(
+      backgroundColor: AppColors.background(brightness),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -169,6 +173,10 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
           'Images to PDF',
           style: AppTypography.displayMedium(brightness),
         ),
+        actions: const [
+          ThemeToggleButton(),
+          SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -180,10 +188,10 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                 _buildErrorBanner(context, state.errorMessage!, controller),
               Expanded(
                 child: state.outputPath != null
-                    ? _buildSuccessView(context, state, controller)
+                    ? _buildSuccessView(context, state, controller, familyAccent)
                     : state.images.isEmpty
-                        ? _buildEmptyDropZone(context)
-                        : _buildImageGridView(context, state, controller),
+                        ? _buildEmptyDropZone(context, familyAccent)
+                        : _buildImageGridView(context, state, controller, familyAccent),
               ),
             ],
           ),
@@ -223,7 +231,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
     );
   }
 
-  Widget _buildEmptyDropZone(BuildContext context) {
+  Widget _buildEmptyDropZone(BuildContext context, Color familyAccent) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
@@ -232,12 +240,13 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
           label: 'Drop image files here or click to browse',
           sublabel: 'Select one or more image files to combine into a single PDF',
           icon: Icons.add_photo_alternate_outlined,
+          color: familyAccent,
         ),
       ),
     );
   }
 
-  Widget _buildImageGridView(BuildContext context, ImagesToPdfState state, ImagesToPdfController controller) {
+  Widget _buildImageGridView(BuildContext context, ImagesToPdfState state, ImagesToPdfController controller, Color familyAccent) {
     final brightness = Theme.of(context).brightness;
 
     return Column(
@@ -259,7 +268,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                     icon: const Icon(Icons.add_photo_alternate_rounded, size: 18.0),
                     label: const Text('Add Images'),
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.secondary(brightness),
+                      foregroundColor: familyAccent,
                     ),
                   ),
                   const SizedBox(width: 8.0),
@@ -289,7 +298,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
             itemCount: state.images.length,
             itemBuilder: (context, index) {
               final item = state.images[index];
-              return _buildImageCard(context, index, item, state, brightness, controller);
+              return _buildImageCard(context, index, item, state, brightness, controller, familyAccent);
             },
           ),
         ),
@@ -304,7 +313,8 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
             label: state.images.length == 1
                 ? 'Create PDF'
                 : 'Create PDF from ${state.images.length} Images',
-            onPressed: state.canSubmit ? _handleCreatePdf : null,
+            color: familyAccent,
+            onPressed: state.canSubmit ? () => _handleConvert(familyAccent) : null,
           ),
         ),
       ],
@@ -318,6 +328,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
     ImagesToPdfState state,
     Brightness brightness,
     ImagesToPdfController controller,
+    Color familyAccent,
   ) {
     return Card(
       elevation: 2,
@@ -337,7 +348,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
                   decoration: BoxDecoration(
-                    color: AppColors.secondary(brightness).withValues(alpha: 0.15),
+                    color: familyAccent.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(4.0),
                   ),
                   child: Text(
@@ -345,7 +356,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                     style: AppTypography.mono(brightness).copyWith(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.secondary(brightness),
+                      color: familyAccent,
                     ),
                   ),
                 ),
@@ -451,19 +462,19 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 4.0),
                 decoration: BoxDecoration(
-                  color: AppColors.primary(brightness).withValues(alpha: 0.1),
+                  color: AppColors.rustRed.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4.0),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.close_rounded, size: 14, color: AppColors.primary(brightness)),
+                    const Icon(Icons.close_rounded, size: 14, color: AppColors.rustRed),
                     const SizedBox(width: 4),
                     Text(
                       'Remove',
                       style: AppTypography.bodySmall(brightness).copyWith(
                         fontSize: 11,
-                        color: AppColors.primary(brightness),
+                        color: AppColors.rustRed,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -477,7 +488,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
     );
   }
 
-  Widget _buildSuccessView(BuildContext context, ImagesToPdfState state, ImagesToPdfController controller) {
+  Widget _buildSuccessView(BuildContext context, ImagesToPdfState state, ImagesToPdfController controller, Color familyAccent) {
     final brightness = Theme.of(context).brightness;
     final outputPath = state.outputPath!;
     final fileName = p.basename(outputPath);
@@ -491,8 +502,9 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 32.0),
-              const StampAnimation(
+              StampAnimation(
                 label: 'CREATED',
+                color: familyAccent,
               ),
               const SizedBox(height: 24.0),
               Text(
@@ -507,7 +519,7 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.cardBackground(brightness),
                   borderRadius: BorderRadius.circular(8.0),
-                  border: Border.all(color: AppColors.pegGrey),
+                  border: Border.all(color: familyAccent.withValues(alpha: 0.35)),
                 ),
                 child: Column(
                   children: [
@@ -563,24 +575,28 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                     label: 'Open Folder',
                     icon: Icons.folder_open_rounded,
                     variant: AppButtonVariant.primary,
+                    color: familyAccent,
                     onPressed: () => _fileService.openFolder(p.dirname(outputPath)),
                   ),
                   AppButton(
                     label: 'Save As…',
                     icon: Icons.save_alt_rounded,
                     variant: AppButtonVariant.secondary,
-                    onPressed: () => _handleSaveAs(outputPath),
+                    color: familyAccent,
+                    onPressed: () => _handleSaveAs(outputPath, familyAccent),
                   ),
                   AppButton(
                     label: 'Share',
                     icon: Icons.share_rounded,
                     variant: AppButtonVariant.secondary,
+                    color: familyAccent,
                     onPressed: () => _fileService.shareFile(outputPath),
                   ),
                   AppButton(
                     label: 'Create Another PDF',
                     icon: Icons.refresh_rounded,
                     variant: AppButtonVariant.secondary,
+                    color: familyAccent,
                     onPressed: () => controller.clearImages(),
                   ),
                 ],

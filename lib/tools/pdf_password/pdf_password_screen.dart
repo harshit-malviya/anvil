@@ -9,6 +9,8 @@ import '../../core/widgets/app_button.dart';
 import '../../core/widgets/file_drop_zone.dart';
 import '../../core/widgets/stamp_animation.dart';
 import '../../core/widgets/task_progress_dialog.dart';
+import '../../core/widgets/theme_toggle_button.dart';
+import '../registry.dart';
 import 'pdf_password_controller.dart';
 import 'pdf_password_state.dart';
 
@@ -25,7 +27,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
   bool _obscureConfirmPassword = true;
   bool _obscureRemovalPassword = true;
 
-  Future<void> _handleSubmit() async {
+  Future<void> _handleSubmit(Color familyAccent) async {
     final controller = ref.read(pdfPasswordControllerProvider.notifier);
     final state = ref.read(pdfPasswordControllerProvider);
     final isAdd = state.mode == PdfPasswordMode.add;
@@ -33,6 +35,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
       context: context,
       title: isAdd ? 'Protecting PDF' : 'Removing Protection',
       defaultMessage: isAdd ? 'Encrypting file…' : 'Decrypting file…',
+      color: familyAccent,
       getMessage: () => ref.read(pdfPasswordControllerProvider).progressMessage ?? (isAdd ? 'Encrypting file…' : 'Decrypting file…'),
       task: () => controller.submit(),
     );
@@ -45,7 +48,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
     }
   }
 
-  Future<void> _handleSaveAs(String currentOutputPath) async {
+  Future<void> _handleSaveAs(String currentOutputPath, Color familyAccent) async {
     final savedPath = await _fileService.saveFile(
       defaultFileName: p.basename(currentOutputPath),
       bytes: [],
@@ -60,7 +63,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Saved to $savedPath'),
-                backgroundColor: AppColors.anvilTeal,
+                backgroundColor: familyAccent,
               ),
             );
           }
@@ -81,6 +84,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final familyAccent = AppColors.familyAccent(ToolCategory.pdf, brightness);
     final state = ref.watch(pdfPasswordControllerProvider);
     final controller = ref.read(pdfPasswordControllerProvider.notifier);
 
@@ -100,6 +104,8 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
               icon: const Icon(Icons.refresh),
               onPressed: controller.reset,
             ),
+          const ThemeToggleButton(),
+          const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -112,10 +118,10 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                 _buildErrorBanner(context, state.errorMessage!, brightness, controller),
               Expanded(
                 child: !state.isLoaded
-                    ? _buildEmptyDropZone(brightness)
+                    ? _buildEmptyDropZone(brightness, familyAccent)
                     : state.outputPath != null
-                        ? _buildSuccessView(context, state, brightness, controller)
-                        : _buildPasswordForm(context, state, brightness, controller),
+                        ? _buildSuccessView(context, state, brightness, controller, familyAccent)
+                        : _buildPasswordForm(context, state, brightness, controller, familyAccent),
               ),
             ],
           ),
@@ -162,7 +168,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
     );
   }
 
-  Widget _buildEmptyDropZone(Brightness brightness) {
+  Widget _buildEmptyDropZone(Brightness brightness, Color familyAccent) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
@@ -171,6 +177,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
           label: 'Drop PDF file here or click to browse',
           sublabel: 'Select a PDF document to add or remove password protection',
           icon: Icons.lock_outline_rounded,
+          color: familyAccent,
         ),
       ),
     );
@@ -181,6 +188,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
     PdfPasswordState state,
     Brightness brightness,
     PdfPasswordController controller,
+    Color familyAccent,
   ) {
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -207,13 +215,13 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                         decoration: BoxDecoration(
                           color: state.isProtected
                               ? AppColors.sparkYellow.withValues(alpha: 0.15)
-                              : AppColors.anvilTeal.withValues(alpha: 0.15),
+                              : familyAccent.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Icon(
                           state.isProtected ? Icons.lock_rounded : Icons.lock_open_rounded,
                           size: 28,
-                          color: state.isProtected ? AppColors.sparkYellow : AppColors.anvilTeal,
+                          color: state.isProtected ? AppColors.sparkYellow : familyAccent,
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -245,7 +253,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                                   decoration: BoxDecoration(
                                     color: state.isProtected
                                         ? AppColors.sparkYellow.withValues(alpha: 0.15)
-                                        : AppColors.anvilTeal.withValues(alpha: 0.15),
+                                        : familyAccent.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
@@ -255,7 +263,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                                       fontWeight: FontWeight.bold,
                                       color: state.isProtected
                                           ? AppColors.sparkYellow
-                                          : AppColors.anvilTeal,
+                                          : familyAccent,
                                     ),
                                   ),
                                 ),
@@ -359,8 +367,9 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                     label: 'Protect PDF',
                     icon: Icons.lock_rounded,
                     variant: AppButtonVariant.primary,
+                    color: familyAccent,
                     isLoading: state.isProcessing,
-                    onPressed: state.canSubmitAdd ? _handleSubmit : null,
+                    onPressed: state.canSubmitAdd ? () => _handleSubmit(familyAccent) : null,
                   ),
                 ] else ...[
                   Text(
@@ -405,8 +414,9 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                     label: 'Remove Protection',
                     icon: Icons.lock_open_rounded,
                     variant: AppButtonVariant.primary,
+                    color: familyAccent,
                     isLoading: state.isProcessing,
-                    onPressed: state.canSubmitRemove ? _handleSubmit : null,
+                    onPressed: state.canSubmitRemove ? () => _handleSubmit(familyAccent) : null,
                   ),
                 ],
               ],
@@ -422,6 +432,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
     PdfPasswordState state,
     Brightness brightness,
     PdfPasswordController controller,
+    Color familyAccent,
   ) {
     final isAddedMode = state.mode == PdfPasswordMode.add;
     final stampLabel = isAddedMode ? 'PROTECTED' : 'UNPROTECTED';
@@ -432,7 +443,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            StampAnimation(label: stampLabel),
+            StampAnimation(label: stampLabel, color: familyAccent),
             const SizedBox(height: 24),
             Text(
               isAddedMode ? 'Password Protection Added!' : 'Password Protection Removed!',
@@ -446,7 +457,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
               decoration: BoxDecoration(
                 color: AppColors.cardBackground(brightness),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.pegGrey),
+                border: Border.all(color: familyAccent.withValues(alpha: 0.35)),
               ),
               child: Row(
                 children: [
@@ -518,6 +529,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                   label: 'Open Folder',
                   icon: Icons.folder_open_rounded,
                   variant: AppButtonVariant.primary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _fileService.openFolder(p.dirname(state.outputPath!));
@@ -528,9 +540,10 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                   label: 'Save As…',
                   icon: Icons.save_alt_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
-                      _handleSaveAs(state.outputPath!);
+                      _handleSaveAs(state.outputPath!, familyAccent);
                     }
                   },
                 ),
@@ -538,6 +551,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                   label: 'Share',
                   icon: Icons.share_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _fileService.shareFile(state.outputPath!);
@@ -548,6 +562,7 @@ class _PdfPasswordScreenState extends ConsumerState<PdfPasswordScreen> {
                   label: 'Process Another PDF',
                   icon: Icons.refresh,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: controller.reset,
                 ),
               ],
