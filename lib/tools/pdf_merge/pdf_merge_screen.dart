@@ -620,13 +620,44 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const StampAnimation(label: 'DONE'),
+              const StampAnimation(label: 'MERGED'),
               const SizedBox(height: 24),
               Text(
                 'PDFs Merged Successfully!',
                 style: AppTypography.displayMedium(brightness),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 16),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBackground(brightness),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.pegGrey),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      p.basename(outputPath),
+                      style: AppTypography.bodyLarge(brightness).copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${state.files.length} PDF files merged into single document',
+                      style: AppTypography.mono(brightness).copyWith(
+                        fontSize: 12,
+                        color: AppColors.text(brightness).withValues(alpha: 0.7),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               Text(
                 'Saved to:',
                 style: AppTypography.labelSmall(brightness),
@@ -662,7 +693,7 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                     onPressed: () => _fileService.openFolder(p.dirname(outputPath)),
                   ),
                   AppButton(
-                    label: 'Save As',
+                    label: 'Save As…',
                     variant: AppButtonVariant.secondary,
                     icon: Icons.save_alt_rounded,
                     onPressed: () => _handleSaveAs(outputPath),
@@ -673,18 +704,13 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
                     icon: Icons.share_rounded,
                     onPressed: () => _fileService.shareFile(outputPath),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => controller.removeAll(),
-                child: Text(
-                  'Merge Another Batch',
-                  style: AppTypography.bodyMedium(brightness).copyWith(
-                    color: AppColors.primary(brightness),
-                    fontWeight: FontWeight.w600,
+                  AppButton(
+                    label: 'Merge Another Batch',
+                    variant: AppButtonVariant.secondary,
+                    icon: Icons.refresh,
+                    onPressed: () => controller.removeAll(),
                   ),
-                ),
+                ],
               ),
             ],
           ),

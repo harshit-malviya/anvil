@@ -223,9 +223,37 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
               style: AppTypography.displayMedium(brightness),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+            Container(
+              constraints: const BoxConstraints(maxWidth: 520),
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: AppColors.cardBackground(brightness),
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: AppColors.pegGrey),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    state.targetFile?.name ?? 'Updated PDF Document',
+                    style: AppTypography.bodyLarge(brightness).copyWith(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4.0),
+                  Text(
+                    'Inserted ${state.selectedSourceCount} ${state.selectedSourceCount == 1 ? "page" : "pages"} → ${state.totalResultPageCount} pages total',
+                    style: AppTypography.mono(brightness).copyWith(
+                      fontSize: 12.0,
+                      color: AppColors.text(brightness).withValues(alpha: 0.7),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             Text(
-              'Resulting document contains ${state.totalResultPageCount} pages. Saved to:',
+              'Saved to:',
               style: AppTypography.labelSmall(brightness),
               textAlign: TextAlign.center,
             ),
@@ -271,6 +299,16 @@ class _PdfInsertPagesScreenState extends ConsumerState<PdfInsertPagesScreen> {
                   onPressed: () {
                     if (state.outputPath != null) {
                       _handleSaveAs(state.outputPath!);
+                    }
+                  },
+                ),
+                AppButton(
+                  label: 'Share',
+                  icon: Icons.share_rounded,
+                  variant: AppButtonVariant.secondary,
+                  onPressed: () {
+                    if (state.outputPath != null) {
+                      _fileService.shareFile(state.outputPath!);
                     }
                   },
                 ),

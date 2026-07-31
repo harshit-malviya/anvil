@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -490,14 +489,14 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
               ),
               const SizedBox(height: 24.0),
               Text(
-                'PDF Document Created Successfully',
+                'PDF Created Successfully!',
                 style: AppTypography.displayMedium(brightness),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12.0),
+              const SizedBox(height: 16.0),
               Container(
-                constraints: const BoxConstraints(maxWidth: 550),
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                constraints: const BoxConstraints(maxWidth: 520),
+                padding: const EdgeInsets.all(16.0),
                 decoration: BoxDecoration(
                   color: AppColors.cardBackground(brightness),
                   borderRadius: BorderRadius.circular(8.0),
@@ -512,44 +511,67 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
                     ),
                     const SizedBox(height: 4.0),
                     Text(
-                      outputPath,
+                      'Created from ${state.images.length} ${state.images.length == 1 ? "image" : "images"}',
                       style: AppTypography.mono(brightness).copyWith(
                         fontSize: 12.0,
-                        color: AppColors.text(brightness).withValues(alpha: 0.6),
+                        color: AppColors.text(brightness).withValues(alpha: 0.7),
                       ),
                       textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 32.0),
+              const SizedBox(height: 16.0),
+              Text(
+                'Saved to:',
+                style: AppTypography.labelSmall(brightness),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6.0),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.pegGrey.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6.0),
+                  border: Border.all(color: AppColors.pegGrey.withValues(alpha: 0.3)),
+                ),
+                child: SelectableText(
+                  outputPath,
+                  style: AppTypography.mono(brightness).copyWith(
+                    fontSize: 12.0,
+                    color: AppColors.text(brightness),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 28.0),
               Wrap(
                 spacing: 12.0,
                 runSpacing: 12.0,
                 alignment: WrapAlignment.center,
                 children: [
                   AppButton(
-                    label: 'Save As...',
+                    label: 'Open Folder',
+                    icon: Icons.folder_open_rounded,
+                    variant: AppButtonVariant.primary,
+                    onPressed: () => _fileService.openFolder(p.dirname(outputPath)),
+                  ),
+                  AppButton(
+                    label: 'Save As…',
                     icon: Icons.save_alt_rounded,
+                    variant: AppButtonVariant.secondary,
                     onPressed: () => _handleSaveAs(outputPath),
                   ),
                   AppButton(
-                    label: 'Open Folder',
-                    icon: Icons.folder_open_rounded,
+                    label: 'Share',
+                    icon: Icons.share_rounded,
                     variant: AppButtonVariant.secondary,
-                    onPressed: () => _fileService.openFolder(p.dirname(outputPath)),
+                    onPressed: () => _fileService.shareFile(outputPath),
                   ),
-                  if (Platform.isAndroid || Platform.isIOS)
-                    AppButton(
-                      label: 'Share',
-                      icon: Icons.share_rounded,
-                      variant: AppButtonVariant.secondary,
-                      onPressed: () => _fileService.shareFile(outputPath),
-                    ),
                   AppButton(
-                    label: 'Convert More Images',
+                    label: 'Create Another PDF',
                     icon: Icons.refresh_rounded,
                     variant: AppButtonVariant.secondary,
                     onPressed: () => controller.clearImages(),

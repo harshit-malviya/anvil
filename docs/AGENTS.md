@@ -35,6 +35,17 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
    - Use an **indeterminate progress bar** with a static message (compute() can't send
      incremental updates back)
    - Never use `Future.delayed()` as a workaround for UI jank — it doesn't work; use isolates
+8. **Standardized File Picker and Completion View Pattern.** All tool screens MUST use `FileService` (`lib/core/services/file_service.dart`) for picking and saving files, and MUST implement the standardized completion view layout (`_buildSuccessView` / completion state):
+   - `StampAnimation(label: '<STAMP_TEXT>')` with a descriptive uppercase stamp (e.g. `MERGED`, `ARRANGED`, `SPLIT`, `COMPRESSED`, `EXPORTED`, `PROTECTED`, `UNPROTECTED`, `PAGE INSERTED`, `PAGES INSERTED`, `CREATED`, `CONVERTED`).
+   - Standardized completion title in `AppTypography.displayMedium(brightness)`.
+   - File details / size / page comparison card styled with `AppColors.cardBackground(brightness)` and `AppColors.pegGrey` border.
+   - `'Saved to:'` header in `AppTypography.labelSmall(brightness)` followed by a full-width `SelectableText` containing the output file or directory path in a rounded `AppColors.pegGrey.withValues(alpha: 0.15)` container.
+   - Standardized action buttons wrapped in `Wrap(spacing: 12, runSpacing: 12, alignment: WrapAlignment.center)`:
+     1. `AppButton(label: 'Open Folder', icon: Icons.folder_open_rounded, variant: AppButtonVariant.primary)`
+     2. `AppButton(label: 'Save As…', icon: Icons.save_alt_rounded, variant: AppButtonVariant.secondary)`
+     3. `AppButton(label: 'Share', icon: Icons.share_rounded, variant: AppButtonVariant.secondary)`
+     4. `AppButton(label: '<Tool Reset Label>', icon: Icons.refresh, variant: AppButtonVariant.secondary)`
+   - SnackBar feedback on `Save As…` completion (`File saved to $savedPath` using `AppColors.anvilTeal` or `AppColors.rustRed` on error).
 
 ## 3. Progress log
 

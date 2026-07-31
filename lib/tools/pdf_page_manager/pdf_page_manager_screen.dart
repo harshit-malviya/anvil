@@ -584,11 +584,39 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
               ),
               const SizedBox(height: 24.0),
               Text(
-                'Page changes applied successfully!',
+                'Page Changes Applied Successfully!',
                 style: AppTypography.displayMedium(brightness),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12.0),
+              const SizedBox(height: 16.0),
+              Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                padding: const EdgeInsets.all(16.0),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBackground(brightness),
+                  borderRadius: BorderRadius.circular(8.0),
+                  border: Border.all(color: AppColors.pegGrey),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      state.outputPath != null ? p.basename(state.outputPath!) : 'document.pdf',
+                      style: AppTypography.bodyLarge(brightness).copyWith(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4.0),
+                    Text(
+                      '${state.activePageCount} ${state.activePageCount == 1 ? "page" : "pages"} remaining in final document',
+                      style: AppTypography.mono(brightness).copyWith(
+                        fontSize: 12.0,
+                        color: AppColors.text(brightness).withValues(alpha: 0.7),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16.0),
               Text(
                 'Saved to:',
                 style: AppTypography.labelSmall(brightness),
@@ -611,7 +639,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                   textAlign: TextAlign.center,
                 ),
               ),
-              const SizedBox(height: 32.0),
+              const SizedBox(height: 28.0),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
@@ -643,18 +671,13 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                       }
                     },
                   ),
-                ],
-              ),
-              const SizedBox(height: 16.0),
-              TextButton(
-                onPressed: controller.reset,
-                child: Text(
-                  'Arrange Another PDF',
-                  style: AppTypography.bodyMedium(brightness).copyWith(
-                    color: AppColors.secondary(brightness),
-                    fontWeight: FontWeight.w600,
+                  AppButton(
+                    label: 'Arrange Another PDF',
+                    variant: AppButtonVariant.secondary,
+                    icon: Icons.refresh,
+                    onPressed: controller.reset,
                   ),
-                ),
+                ],
               ),
             ],
           ),

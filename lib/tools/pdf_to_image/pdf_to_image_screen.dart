@@ -773,17 +773,39 @@ class _PdfToImageScreenState extends ConsumerState<PdfToImageScreen> {
             const StampAnimation(label: 'EXPORTED'),
             const SizedBox(height: 24),
             Text(
-              'Export Complete',
+              'PDF Export Completed!',
               style: AppTypography.displayMedium(brightness),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
-            Text(
-              successMessage,
-              style: AppTypography.bodyMedium(brightness),
-              textAlign: TextAlign.center,
+            const SizedBox(height: 16),
+            Container(
+              constraints: const BoxConstraints(maxWidth: 520),
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: AppColors.cardBackground(brightness),
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: AppColors.pegGrey),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    state.file?.name ?? 'PDF Document',
+                    style: AppTypography.bodyLarge(brightness).copyWith(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4.0),
+                  Text(
+                    successMessage,
+                    style: AppTypography.mono(brightness).copyWith(
+                      fontSize: 12.0,
+                      color: AppColors.text(brightness).withValues(alpha: 0.7),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text(
               'Saved to:',
               style: AppTypography.labelSmall(brightness),
