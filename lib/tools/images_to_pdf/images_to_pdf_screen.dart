@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,8 +42,13 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
   }
 
   Future<void> _handleSaveAs(String currentOutputPath) async {
-    final state = ref.read(imagesToPdfControllerProvider);
-    final bytes = state.images.isNotEmpty ? state.images.first.bytes : <int>[];
+    List<int> bytes = [];
+    try {
+      final file = File(currentOutputPath);
+      if (file.existsSync()) {
+        bytes = await file.readAsBytes();
+      }
+    } catch (_) {}
 
     final savedPath = await _fileService.saveFile(
       defaultFileName: p.basename(currentOutputPath),
@@ -219,11 +225,11 @@ class _ImagesToPdfScreenState extends ConsumerState<ImagesToPdfScreen> {
   Widget _buildEmptyDropZone(BuildContext context) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 400),
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 280),
         child: FileDropZone(
           onTap: _pickAndAddImages,
-          label: 'Drop images here or click to browse',
-          sublabel: 'Supports JPG, JPEG, and PNG images',
+          label: 'Drop image files here or click to browse',
+          sublabel: 'Select one or more image files to combine into a single PDF',
           icon: Icons.add_photo_alternate_outlined,
         ),
       ),
