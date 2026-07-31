@@ -10,6 +10,7 @@ import '../tools/pdf_insert_pages/pdf_insert_pages_screen.dart';
 import '../tools/pdf_insert_image_as_page/pdf_insert_image_as_page_screen.dart';
 import '../tools/images_to_pdf/images_to_pdf_screen.dart';
 import '../tools/image_convert/image_convert_screen.dart';
+import '../tools/image_resize/image_resize_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -57,6 +58,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/image-convert',
       builder: (context, state) => const ImageConvertScreen(),
+    ),
+    GoRoute(
+      path: '/image-resize',
+      builder: (context, state) => const ImageResizeScreen(),
     ),
   ],
 );

@@ -161,6 +161,26 @@ class ToolRegistry {
       ],
       category: ToolCategory.image,
     ),
+    ToolMetadata(
+      id: 'image_resize',
+      title: 'Resize Image',
+      description: "Change an image's pixel dimensions by exact size, percentage, or preset.",
+      icon: Icons.aspect_ratio_rounded,
+      route: '/image-resize',
+      isAvailable: true,
+      keywords: [
+        'resize',
+        'scale',
+        'dimensions',
+        'resolution',
+        'shrink photo',
+        'upscale',
+        'aspect ratio',
+        'width',
+        'height',
+      ],
+      category: ToolCategory.image,
+    ),
   ];
 }
 

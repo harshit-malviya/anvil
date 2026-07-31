@@ -52,6 +52,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-07-31 — Session 20
+- Implemented Sprint 2 Image Resize (`FEATURE_image_resize.md`, `PRD_image_tools_v2.md`):
+  - Created `ResizeMode` (`exactDimensions`, `percentage`, `preset`), `ImagePreset` (HD, Full HD, 4K, Square, Story, Web banner), and immutable `ImageResizeState` in `lib/tools/image_resize/image_resize_state.dart`.
+  - Created `ImageResizeController` in `lib/tools/image_resize/image_resize_controller.dart` featuring background isolate worker (`isolateImageResizeWorker`), EXIF orientation baking (`img.bakeOrientation`), mode switching intent preservation, aspect-ratio locking calculations, preset selection, percentage scaling, floor validation (< 10px), upscaling detection getter, and error handling.
+  - Created `ImageResizeScreen` in `lib/tools/image_resize/image_resize_screen.dart` with single image drop zone, thumbnail preview card with mono specs, mode selector, exact dimensions inputs with lock toggle, percentage slider and chips, preset chips, inline stretch/squash warning when unlocked, upscaling warning, live numeric preview line (`New size: W × H px`), stamp animation (`RESIZED`), and completion save/folder actions.
+  - Registered route `/image-resize` in `lib/core/router.dart` and tool metadata in `lib/tools/registry.dart`.
+  - Created comprehensive unit test suite `test/tools/image_resize/image_resize_controller_test.dart` (14 unit tests passing cleanly). All 140 workspace tests passing with 0 lint errors.
+
 ## 2026-07-31 — Session 19
 - Unified Tool Family Colors & Global Dark/Light Theme Mode:
   - Added global `themeModeProvider` (`System`, `Light`, `Dark`) and `ThemeToggleButton` widget integrated across `HomeScreen` and all 10 tool AppBars.
@@ -212,12 +220,15 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | Tool Search | `docs/PHASE 3/FEATURE_tool_search.md` | Done | Tool search controller, home screen filtering, and unit test suite passing |
 | Images to PDF | `docs/PHASE 3/FEATURE_images_to_pdf.md` | Done | Controller, UI, shared image service extraction, background isolate, and test suite passing |
 | Image Format Convert | `FEATURE_image_convert.md` | Done | Controller, UI, isolate worker, transparency flattening, unit tests passing |
-| Image Resize | *(spec pending)* | Not started | Sprint 2 |
+| Image Resize | `docs/V2/02_Image_Resizer/FEATURE_image_resize.md` | Done | Controller, UI, background isolate worker, ratio lock, presets, unit tests passing |
 | Image Compress | *(spec pending)* | Not started | Sprint 3 |
 
 ## 5. Decisions log
 
 ## 2026-07-31
+- Decision: Resizing interpolation uses high-quality `img.Interpolation.cubic` in the background isolate worker.
+- Decision: EXIF orientation is automatically baked into the image (`img.bakeOrientation`) before resizing so mobile photo orientation is preserved right-side up.
+- Decision: Presets apply preset width as starting width when aspect ratio lock is ON, recalculating target height from source aspect ratio. When aspect ratio lock is OFF, preset exact width & height both apply.
 - Decision: Tool families are visually differentiated by family accent colors resolved via `AppColors.familyAccent(category, brightness)` (`emberCopper` for PDF tools, `anvilBlue` light blue `#357ABD` / `#498ED1` for Image tools).
 - Decision: Tool card icons follow their tool family accent color, housed inside a neutral icon container background (`pegGrey` tint / `steelCard`). Card hover/focus borders use family accent color.
 - Decision: Home screen tool grid groups tools by category into ordered sections ("PDF TOOLS" followed by "IMAGE TOOLS") with fixed spacing (24px top, 12px bottom).
