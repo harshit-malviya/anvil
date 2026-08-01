@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/file_service.dart';
@@ -272,17 +273,77 @@ class _ImageCropRotateScreenState
                     icon: const Icon(Icons.center_focus_weak_rounded),
                     tooltip: 'Reset Selection',
                     onPressed: () {
-                      notifier.setCropRect(
-                        Rect.fromLTWH(
-                          0,
-                          0,
-                          state.currentWidth.toDouble(),
-                          state.currentHeight.toDouble(),
-                        ),
-                      );
+                      notifier.setCropRect(state.inscribedCropBounds);
                     },
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 8),
+
+              // Straighten Slider Row
+              Row(
+                children: [
+                  Text(
+                    'Straighten:',
+                    style: AppTypography.labelSmall(brightness),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 52,
+                    child: Text(
+                      '${state.fineRotationAngle >= 0 ? "+" : ""}${state.fineRotationAngle.toStringAsFixed(1)}°',
+                      style: AppTypography.bodySmall(brightness).copyWith(
+                        color: accentColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 3,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                      ),
+                      child: Slider(
+                        value: state.fineRotationAngle,
+                        min: -45.0,
+                        max: 45.0,
+                        divisions: 900,
+                        activeColor: accentColor,
+                        onChanged: (val) {
+                          notifier.setFineRotationAngle(val);
+                        },
+                      ),
+                    ),
+                  ),
+                  if (state.fineRotationAngle != 0.0)
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: notifier.resetFineRotation,
+                      child: Text(
+                        'Reset',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: accentColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+
+              Text(
+                'Rotate turns the photo a quarter turn. Straighten levels a tilted photo.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.text(brightness).withValues(alpha: 0.55),
+                ),
               ),
 
               if (state.rotationResetNoticeVisible) ...[
@@ -625,13 +686,16 @@ class _CropCanvasOverlayState extends State<_CropCanvasOverlay> {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // 1. Display image (rotated visually per state.rotation)
+              // 1. Display image (rotated visually per state.rotation & state.fineRotationAngle)
               Positioned.fill(
-                child: RotatedBox(
-                  quarterTurns: state.rotation ~/ 90,
-                  child: Image.memory(
-                    state.thumbnailBytes!,
-                    fit: BoxFit.fill,
+                child: Transform.rotate(
+                  angle: state.fineRotationAngle * pi / 180.0,
+                  child: RotatedBox(
+                    quarterTurns: state.rotation ~/ 90,
+                    child: Image.memory(
+                      state.thumbnailBytes!,
+                      fit: BoxFit.fill,
+                    ),
                   ),
                 ),
               ),
@@ -812,9 +876,11 @@ class _CropCanvasOverlayState extends State<_CropCanvasOverlay> {
     final deltaPixel = deltaScreen / scale;
 
     final init = _initialCropRect!;
-    final maxW = widget.state.currentWidth.toDouble();
-    final maxH = widget.state.currentHeight.toDouble();
-    final targetRatio = widget.state.aspectRatioPreset.getRatio(maxW, maxH);
+    final bounds = widget.state.inscribedCropBounds;
+    final targetRatio = widget.state.aspectRatioPreset.getRatio(
+      widget.state.currentWidth.toDouble(),
+      widget.state.currentHeight.toDouble(),
+    );
 
     // Free Mode or Body Move
     if (targetRatio == null || _activeHandle == _DragHandle.body) {
@@ -827,46 +893,46 @@ class _CropCanvasOverlayState extends State<_CropCanvasOverlay> {
         case _DragHandle.body:
           final w = init.width;
           final h = init.height;
-          left = (init.left + deltaPixel.dx).clamp(0.0, maxW - w);
-          top = (init.top + deltaPixel.dy).clamp(0.0, maxH - h);
+          left = (init.left + deltaPixel.dx).clamp(bounds.left, bounds.right - w);
+          top = (init.top + deltaPixel.dy).clamp(bounds.top, bounds.bottom - h);
           right = left + w;
           bottom = top + h;
           break;
 
         case _DragHandle.topLeft:
-          left = (init.left + deltaPixel.dx).clamp(0.0, init.right - 10);
-          top = (init.top + deltaPixel.dy).clamp(0.0, init.bottom - 10);
+          left = (init.left + deltaPixel.dx).clamp(bounds.left, init.right - 10);
+          top = (init.top + deltaPixel.dy).clamp(bounds.top, init.bottom - 10);
           break;
 
         case _DragHandle.topRight:
-          right = (init.right + deltaPixel.dx).clamp(init.left + 10, maxW);
-          top = (init.top + deltaPixel.dy).clamp(0.0, init.bottom - 10);
+          right = (init.right + deltaPixel.dx).clamp(init.left + 10, bounds.right);
+          top = (init.top + deltaPixel.dy).clamp(bounds.top, init.bottom - 10);
           break;
 
         case _DragHandle.bottomLeft:
-          left = (init.left + deltaPixel.dx).clamp(0.0, init.right - 10);
-          bottom = (init.bottom + deltaPixel.dy).clamp(init.top + 10, maxH);
+          left = (init.left + deltaPixel.dx).clamp(bounds.left, init.right - 10);
+          bottom = (init.bottom + deltaPixel.dy).clamp(init.top + 10, bounds.bottom);
           break;
 
         case _DragHandle.bottomRight:
-          right = (init.right + deltaPixel.dx).clamp(init.left + 10, maxW);
-          bottom = (init.bottom + deltaPixel.dy).clamp(init.top + 10, maxH);
+          right = (init.right + deltaPixel.dx).clamp(init.left + 10, bounds.right);
+          bottom = (init.bottom + deltaPixel.dy).clamp(init.top + 10, bounds.bottom);
           break;
 
         case _DragHandle.top:
-          top = (init.top + deltaPixel.dy).clamp(0.0, init.bottom - 10);
+          top = (init.top + deltaPixel.dy).clamp(bounds.top, init.bottom - 10);
           break;
 
         case _DragHandle.bottom:
-          bottom = (init.bottom + deltaPixel.dy).clamp(init.top + 10, maxH);
+          bottom = (init.bottom + deltaPixel.dy).clamp(init.top + 10, bounds.bottom);
           break;
 
         case _DragHandle.left:
-          left = (init.left + deltaPixel.dx).clamp(0.0, init.right - 10);
+          left = (init.left + deltaPixel.dx).clamp(bounds.left, init.right - 10);
           break;
 
         case _DragHandle.right:
-          right = (init.right + deltaPixel.dx).clamp(init.left + 10, maxW);
+          right = (init.right + deltaPixel.dx).clamp(init.left + 10, bounds.right);
           break;
 
         case _DragHandle.none:
@@ -883,53 +949,53 @@ class _CropCanvasOverlayState extends State<_CropCanvasOverlay> {
 
     switch (_activeHandle) {
       case _DragHandle.top:
-        double newH = (init.height - deltaPixel.dy).clamp(10.0, init.bottom);
+        double newH = (init.height - deltaPixel.dy).clamp(10.0, init.bottom - bounds.top);
         double newW = newH * R;
-        if (newW > maxW) {
-          newW = maxW;
+        if (newW > bounds.width) {
+          newW = bounds.width;
           newH = newW / R;
         }
         final newTop = init.bottom - newH;
-        final newLeft = (init.center.dx - newW / 2).clamp(0.0, maxW - newW);
+        final newLeft = (init.center.dx - newW / 2).clamp(bounds.left, bounds.right - newW);
         newRect = Rect.fromLTWH(newLeft, newTop, newW, newH);
         break;
 
       case _DragHandle.bottom:
-        double newH = (init.height + deltaPixel.dy).clamp(10.0, maxH - init.top);
+        double newH = (init.height + deltaPixel.dy).clamp(10.0, bounds.bottom - init.top);
         double newW = newH * R;
-        if (newW > maxW) {
-          newW = maxW;
+        if (newW > bounds.width) {
+          newW = bounds.width;
           newH = newW / R;
         }
-        final newLeft = (init.center.dx - newW / 2).clamp(0.0, maxW - newW);
+        final newLeft = (init.center.dx - newW / 2).clamp(bounds.left, bounds.right - newW);
         newRect = Rect.fromLTWH(newLeft, init.top, newW, newH);
         break;
 
       case _DragHandle.left:
-        double newW = (init.width - deltaPixel.dx).clamp(10.0, init.right);
+        double newW = (init.width - deltaPixel.dx).clamp(10.0, init.right - bounds.left);
         double newH = newW / R;
-        if (newH > maxH) {
-          newH = maxH;
+        if (newH > bounds.height) {
+          newH = bounds.height;
           newW = newH * R;
         }
-        final newTop = (init.center.dy - newH / 2).clamp(0.0, maxH - newH);
+        final newTop = (init.center.dy - newH / 2).clamp(bounds.top, bounds.bottom - newH);
         newRect = Rect.fromLTWH(init.right - newW, newTop, newW, newH);
         break;
 
       case _DragHandle.right:
-        double newW = (init.width + deltaPixel.dx).clamp(10.0, maxW - init.left);
+        double newW = (init.width + deltaPixel.dx).clamp(10.0, bounds.right - init.left);
         double newH = newW / R;
-        if (newH > maxH) {
-          newH = maxH;
+        if (newH > bounds.height) {
+          newH = bounds.height;
           newW = newH * R;
         }
-        final newTop = (init.center.dy - newH / 2).clamp(0.0, maxH - newH);
+        final newTop = (init.center.dy - newH / 2).clamp(bounds.top, bounds.bottom - newH);
         newRect = Rect.fromLTWH(init.left, newTop, newW, newH);
         break;
 
       case _DragHandle.bottomRight:
-        double candW = (init.width + deltaPixel.dx).clamp(10.0, maxW - init.left);
-        double candH = (init.height + deltaPixel.dy).clamp(10.0, maxH - init.top);
+        double candW = (init.width + deltaPixel.dx).clamp(10.0, bounds.right - init.left);
+        double candH = (init.height + deltaPixel.dy).clamp(10.0, bounds.bottom - init.top);
         double w = candW;
         double h = w / R;
         if (h > candH) {
@@ -940,8 +1006,8 @@ class _CropCanvasOverlayState extends State<_CropCanvasOverlay> {
         break;
 
       case _DragHandle.bottomLeft:
-        double candW = (init.width - deltaPixel.dx).clamp(10.0, init.right);
-        double candH = (init.height + deltaPixel.dy).clamp(10.0, maxH - init.top);
+        double candW = (init.width - deltaPixel.dx).clamp(10.0, init.right - bounds.left);
+        double candH = (init.height + deltaPixel.dy).clamp(10.0, bounds.bottom - init.top);
         double w = candW;
         double h = w / R;
         if (h > candH) {
@@ -952,8 +1018,8 @@ class _CropCanvasOverlayState extends State<_CropCanvasOverlay> {
         break;
 
       case _DragHandle.topLeft:
-        double candW = (init.width - deltaPixel.dx).clamp(10.0, init.right);
-        double candH = (init.height - deltaPixel.dy).clamp(10.0, init.bottom);
+        double candW = (init.width - deltaPixel.dx).clamp(10.0, init.right - bounds.left);
+        double candH = (init.height - deltaPixel.dy).clamp(10.0, init.bottom - bounds.top);
         double w = candW;
         double h = w / R;
         if (h > candH) {
@@ -964,8 +1030,8 @@ class _CropCanvasOverlayState extends State<_CropCanvasOverlay> {
         break;
 
       case _DragHandle.topRight:
-        double candW = (init.width + deltaPixel.dx).clamp(10.0, maxW - init.left);
-        double candH = (init.height - deltaPixel.dy).clamp(10.0, init.bottom);
+        double candW = (init.width + deltaPixel.dx).clamp(10.0, bounds.right - init.left);
+        double candH = (init.height - deltaPixel.dy).clamp(10.0, init.bottom - bounds.top);
         double w = candW;
         double h = w / R;
         if (h > candH) {
@@ -1035,3 +1101,4 @@ class _GridLinesPainter extends CustomPainter {
     return oldDelegate.accentColor != accentColor;
   }
 }
+

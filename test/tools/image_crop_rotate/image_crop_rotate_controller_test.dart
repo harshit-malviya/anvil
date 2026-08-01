@@ -216,8 +216,100 @@ void main() {
     });
   });
 
+  group('ImageCropRotateController - Fine-angle Straighten Rotation', () {
+    test('setFineRotationAngle clamps degrees to [-45, 45]', () async {
+      final file = PlatformFile(name: 'sample.png', size: testPngBytes.length, bytes: testPngBytes);
+      await controller.loadImage(file);
+
+      controller.setFineRotationAngle(15.5);
+      expect(controller.state.fineRotationAngle, 15.5);
+      expect(controller.state.hasUnsavedChanges, true);
+
+      // Clamp upper bound
+      controller.setFineRotationAngle(60.0);
+      expect(controller.state.fineRotationAngle, 45.0);
+
+      // Clamp lower bound
+      controller.setFineRotationAngle(-50.0);
+      expect(controller.state.fineRotationAngle, -45.0);
+    });
+
+    test('crop rectangle auto-shrinks/recenters to fit inscribed bounds when angle increases', () async {
+      final file = PlatformFile(name: 'sample.png', size: testPngBytes.length, bytes: testPngBytes);
+      await controller.loadImage(file);
+
+      final initialCrop = controller.state.cropRect;
+      expect(initialCrop, const Rect.fromLTWH(0, 0, 200, 150));
+
+      // Set Straighten angle to 10°
+      controller.setFineRotationAngle(10.0);
+      final bounds10 = controller.state.inscribedCropBounds;
+      final crop10 = controller.state.cropRect;
+
+      // Crop rectangle should be constrained within inscribed bounds (smaller than 200x150)
+      expect(crop10.width, lessThan(200.0));
+      expect(crop10.height, lessThan(150.0));
+      expect(crop10.left, greaterThan(0.0));
+      expect(crop10.top, greaterThan(0.0));
+      expect(crop10.right <= bounds10.right + 0.01, true);
+      expect(crop10.bottom <= bounds10.bottom + 0.01, true);
+      expect(crop10.left >= bounds10.left - 0.01, true);
+      expect(crop10.top >= bounds10.top - 0.01, true);
+    });
+
+    test('Straighten preserves user crop selection (only shrinks/recenters if needed), unlike 90° rotate', () async {
+      final file = PlatformFile(name: 'sample.png', size: testPngBytes.length, bytes: testPngBytes);
+      await controller.loadImage(file);
+
+      // User sets custom crop box 80x60 centered at (100, 75)
+      const customCrop = Rect.fromLTWH(60, 45, 80, 60);
+      controller.setCropRect(customCrop);
+      expect(controller.state.cropRect, customCrop);
+
+      // Small Straighten angle drag (5°) -> crop box should NOT reset to full bounds, but remain 80x60
+      controller.setFineRotationAngle(5.0);
+      expect(controller.state.cropRect.width, closeTo(80.0, 1.0));
+      expect(controller.state.cropRect.height, closeTo(60.0, 1.0));
+
+      // 90° step rotation -> DOES reset crop box to new full orientation bounds
+      controller.rotate();
+      expect(controller.state.cropRect.width, controller.state.inscribedCropBounds.width);
+      expect(controller.state.cropRect.height, controller.state.inscribedCropBounds.height);
+    });
+
+    test('aspect ratio lock produces valid bounds-respecting rectangle at non-zero angle', () async {
+      final file = PlatformFile(name: 'sample.png', size: testPngBytes.length, bytes: testPngBytes);
+      await controller.loadImage(file);
+
+      controller.setAspectRatioPreset(AspectRatioPreset.square);
+      controller.setFineRotationAngle(10.0);
+
+      final bounds = controller.state.inscribedCropBounds;
+      final crop = controller.state.cropRect;
+
+      // Crop ratio should remain 1.0 (Square) and lie inside inscribed bounds
+      expect(crop.width / crop.height, closeTo(1.0, 0.01));
+      expect(bounds.left <= crop.left, true);
+      expect(bounds.top <= crop.top, true);
+      expect(crop.right <= bounds.right + 0.01, true);
+      expect(crop.bottom <= bounds.bottom + 0.01, true);
+    });
+
+    test('resetFineRotation restores 0° angle and full orientation bounds', () async {
+      final file = PlatformFile(name: 'sample.png', size: testPngBytes.length, bytes: testPngBytes);
+      await controller.loadImage(file);
+
+      controller.setFineRotationAngle(25.0);
+      expect(controller.state.fineRotationAngle, 25.0);
+
+      controller.resetFineRotation();
+      expect(controller.state.fineRotationAngle, 0.0);
+      expect(controller.state.inscribedCropBounds, const Rect.fromLTWH(0, 0, 200, 150));
+    });
+  });
+
   group('ImageCropRotateController - Apply & Isolate Execution', () {
-    test('apply combined rotate + crop produces correct output dimensions and file', () async {
+    test('apply combined rotate + fine rotation + crop produces correct output file', () async {
       final file = PlatformFile(
         name: 'sample.png',
         size: testPngBytes.length,
@@ -226,9 +318,18 @@ void main() {
       );
       await controller.loadImage(file);
 
-      // Rotate 90° (image becomes 150x200) then set crop to 100x120
+      // Rotate 90°, set fine rotation 5°, set crop 80x60
       controller.rotate();
-      controller.setCropRect(const Rect.fromLTWH(10, 20, 100, 120));
+      controller.setFineRotationAngle(5.0);
+
+      final bounds = controller.state.inscribedCropBounds;
+      final targetCrop = Rect.fromLTWH(
+        bounds.left + 5,
+        bounds.top + 5,
+        80,
+        60,
+      );
+      controller.setCropRect(targetCrop);
 
       await controller.apply();
 
@@ -239,17 +340,17 @@ void main() {
       final outputFile = File(state.outputPath!);
       expect(outputFile.existsSync(), true);
 
-      // Decode generated output file and verify pixel dimensions match crop 100x120
       final decodedOut = img.decodeImage(outputFile.readAsBytesSync());
       expect(decodedOut, isNotNull);
-      expect(decodedOut!.width, 100);
-      expect(decodedOut.height, 120);
+      expect(decodedOut!.width, 80);
+      expect(decodedOut.height, 60);
     });
 
     test('reset clears state back to initial values', () async {
       final file = PlatformFile(name: 'sample.png', size: testPngBytes.length, bytes: testPngBytes);
       await controller.loadImage(file);
       controller.rotate();
+      controller.setFineRotationAngle(10.0);
 
       controller.reset();
 
@@ -257,7 +358,9 @@ void main() {
       expect(state.isLoaded, false);
       expect(state.file, isNull);
       expect(state.rotation, 0);
+      expect(state.fineRotationAngle, 0.0);
       expect(state.cropRect, Rect.zero);
     });
   });
 }
+

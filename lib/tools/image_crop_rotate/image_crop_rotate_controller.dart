@@ -20,6 +20,7 @@ class ImageCropRotateParams {
   final Uint8List inputBytes;
   final String sourceFileName;
   final int rotation;
+  final double fineRotationAngle;
   final Rect cropRect;
   final String outputPath;
 
@@ -27,6 +28,7 @@ class ImageCropRotateParams {
     required this.inputBytes,
     required this.sourceFileName,
     required this.rotation,
+    required this.fineRotationAngle,
     required this.cropRect,
     required this.outputPath,
   });
@@ -64,14 +66,30 @@ Future<ImageCropRotateResult> isolateImageCropRotateWorker(
     decoded = img.copyRotate(decoded, angle: params.rotation);
   }
 
-  // Step 2: Crop selection in rotated image coordinate space
-  final imgW = decoded.width;
-  final imgH = decoded.height;
+  final origW = decoded.width;
+  final origH = decoded.height;
 
-  final clampX = params.cropRect.left.round().clamp(0, imgW - 1);
-  final clampY = params.cropRect.top.round().clamp(0, imgH - 1);
-  final clampW = params.cropRect.width.round().clamp(1, imgW - clampX);
-  final clampH = params.cropRect.height.round().clamp(1, imgH - clampY);
+  // Step 2: Fine-angle rotation (Straighten) with cubic interpolation
+  if (params.fineRotationAngle != 0.0) {
+    decoded = img.copyRotate(
+      decoded,
+      angle: params.fineRotationAngle,
+      interpolation: img.Interpolation.cubic,
+    );
+  }
+
+  final bboxW = decoded.width;
+  final bboxH = decoded.height;
+
+  // Coordinate shift between original 90°-rotated space and fine-rotated bounding box
+  final shiftX = (bboxW - origW) / 2.0;
+  final shiftY = (bboxH - origH) / 2.0;
+
+  // Step 3: Crop selection in fine-rotated coordinate space
+  final clampX = (params.cropRect.left + shiftX).round().clamp(0, bboxW - 1);
+  final clampY = (params.cropRect.top + shiftY).round().clamp(0, bboxH - 1);
+  final clampW = params.cropRect.width.round().clamp(1, bboxW - clampX);
+  final clampH = params.cropRect.height.round().clamp(1, bboxH - clampY);
 
   decoded = img.copyCrop(
     decoded,
@@ -219,6 +237,7 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
       originalSizeBytes: bytes.length,
       thumbnailBytes: thumbBytes,
       rotation: 0,
+      fineRotationAngle: 0.0,
       cropRect: defaultCrop,
       aspectRatioPreset: AspectRatioPreset.free,
       rotationResetNoticeVisible: false,
@@ -226,8 +245,41 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     );
   }
 
+  /// Set fine-angle Straighten rotation (−45° to +45°).
+  /// Automatically shrinks/recenters crop selection to fit inside new inscribed bounds.
+  void setFineRotationAngle(double degrees) {
+    if (!state.isLoaded) return;
+
+    final clampedAngle = degrees.clamp(-45.0, 45.0);
+    final newState = state.copyWith(fineRotationAngle: clampedAngle);
+
+    // Straighten is typically many small incremental slider drags, not one discrete action;
+    // resetting the crop on every tick would make fine adjustment unusable.
+    // This is why Straighten shrinks/recenters the crop rect to stay within inscribed bounds
+    // rather than resetting it like 90° rotation does.
+    final bounds = newState.inscribedCropBounds;
+    final adjustedCrop = _adjustCropRectForInscribedBounds(
+      state.cropRect,
+      state.aspectRatioPreset,
+      bounds,
+      newState.currentWidth.toDouble(),
+      newState.currentHeight.toDouble(),
+    );
+
+    state = newState.copyWith(
+      cropRect: adjustedCrop,
+      clearError: true,
+    );
+  }
+
+  /// Reset fine-angle Straighten rotation back to 0°.
+  void resetFineRotation() {
+    if (!state.isLoaded) return;
+    setFineRotationAngle(0.0);
+  }
+
   /// Advance rotation 90° clockwise (0° → 90° → 180° → 270° → 0°).
-  /// Resets crop selection to full bounds of the new orientation.
+  /// Resets crop selection to full inscribed bounds of the new orientation.
   void rotate() {
     if (!state.isLoaded) return;
 
@@ -239,8 +291,14 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
         ? state.originalWidth
         : state.originalHeight;
 
-    var newCrop = Rect.fromLTWH(
-        0, 0, newCurrentW.toDouble(), newCurrentH.toDouble());
+    final tempState = state.copyWith(
+      rotation: newRotation,
+      originalWidth: state.originalWidth,
+      originalHeight: state.originalHeight,
+    );
+    final bounds = tempState.inscribedCropBounds;
+
+    var newCrop = bounds;
 
     // If an aspect ratio lock is active, recalculate full-fit crop for new orientation
     final targetRatio = state.aspectRatioPreset.getRatio(
@@ -250,9 +308,8 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     if (targetRatio != null) {
       newCrop = _recalculateCropForRatio(
         targetRatio,
-        newCrop.center,
-        newCurrentW.toDouble(),
-        newCurrentH.toDouble(),
+        bounds.center,
+        bounds,
       );
     }
 
@@ -265,7 +322,7 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
   }
 
   /// Update crop selection rect in current rotated image pixel space.
-  /// Validates minimum size (10×10px floor) and clamps to current orientation bounds.
+  /// Validates minimum size (10×10px floor) and clamps to current inscribed bounds.
   bool setCropRect(Rect rectInPixelSpace) {
     if (!state.isLoaded) return false;
 
@@ -293,14 +350,14 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     final currentW = state.currentWidth.toDouble();
     final currentH = state.currentHeight.toDouble();
     final targetRatio = preset.getRatio(currentW, currentH);
+    final bounds = state.inscribedCropBounds;
 
     Rect updatedRect = state.cropRect;
     if (targetRatio != null) {
       updatedRect = _recalculateCropForRatio(
         targetRatio,
         state.cropRect.center,
-        currentW,
-        currentH,
+        bounds,
       );
     }
 
@@ -317,45 +374,92 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     state = state.copyWith(rotationResetNoticeVisible: false);
   }
 
-  /// Recalculate crop rect of `targetRatio` centered at `center` inside bounds `(maxW, maxH)`.
+  /// Recalculate crop rect of `targetRatio` centered at `center` inside `bounds`.
   Rect _recalculateCropForRatio(
     double targetRatio,
     Offset center,
-    double maxW,
-    double maxH,
+    Rect bounds,
   ) {
     double rectW;
     double rectH;
 
-    if (maxW / maxH > targetRatio) {
-      rectH = maxH;
+    if (bounds.width / bounds.height > targetRatio) {
+      rectH = bounds.height;
       rectW = rectH * targetRatio;
     } else {
-      rectW = maxW;
+      rectW = bounds.width;
       rectH = rectW / targetRatio;
     }
 
     double left = center.dx - rectW / 2;
     double top = center.dy - rectH / 2;
 
-    // Clamp to canvas bounds
-    if (left < 0) left = 0;
-    if (top < 0) top = 0;
-    if (left + rectW > maxW) left = maxW - rectW;
-    if (top + rectH > maxH) top = maxH - rectH;
+    // Clamp to bounds
+    if (left < bounds.left) left = bounds.left;
+    if (top < bounds.top) top = bounds.top;
+    if (left + rectW > bounds.right) left = bounds.right - rectW;
+    if (top + rectH > bounds.bottom) top = bounds.bottom - rectH;
 
     return Rect.fromLTWH(left, top, rectW, rectH);
   }
 
-  /// Helper to clamp rect within current orientation image bounds and enforce 10×10px floor.
-  Rect? _clampAndValidateRect(Rect rect) {
-    final maxW = state.currentWidth.toDouble();
-    final maxH = state.currentHeight.toDouble();
+  /// Helper to shrink/recenter crop rect to fit inside new inscribed bounds.
+  Rect _adjustCropRectForInscribedBounds(
+    Rect currentRect,
+    AspectRatioPreset preset,
+    Rect bounds,
+    double currentW,
+    double currentH,
+  ) {
+    final targetRatio = preset.getRatio(currentW, currentH);
 
-    final left = rect.left.clamp(0.0, maxW);
-    final top = rect.top.clamp(0.0, maxH);
-    final right = rect.right.clamp(0.0, maxW);
-    final bottom = rect.bottom.clamp(0.0, maxH);
+    double width = currentRect.width;
+    double height = currentRect.height;
+
+    if (targetRatio != null) {
+      if (width / height > targetRatio) {
+        width = height * targetRatio;
+      } else {
+        height = width / targetRatio;
+      }
+    }
+
+    // Clamp size to bounds
+    if (width > bounds.width) {
+      width = bounds.width;
+      if (targetRatio != null) {
+        height = width / targetRatio;
+      }
+    }
+    if (height > bounds.height) {
+      height = bounds.height;
+      if (targetRatio != null) {
+        width = height * targetRatio;
+      }
+    }
+
+    width = max(width, 10.0);
+    height = max(height, 10.0);
+
+    double left = currentRect.center.dx - width / 2.0;
+    double top = currentRect.center.dy - height / 2.0;
+
+    if (left < bounds.left) left = bounds.left;
+    if (top < bounds.top) top = bounds.top;
+    if (left + width > bounds.right) left = bounds.right - width;
+    if (top + height > bounds.bottom) top = bounds.bottom - height;
+
+    return Rect.fromLTWH(left, top, width, height);
+  }
+
+  /// Helper to clamp rect within current inscribed bounds and enforce 10×10px floor.
+  Rect? _clampAndValidateRect(Rect rect) {
+    final bounds = state.inscribedCropBounds;
+
+    final left = rect.left.clamp(bounds.left, bounds.right);
+    final top = rect.top.clamp(bounds.top, bounds.bottom);
+    final right = rect.right.clamp(bounds.left, bounds.right);
+    final bottom = rect.bottom.clamp(bounds.top, bounds.bottom);
 
     final width = (right - left).abs();
     final height = (bottom - top).abs();
@@ -372,7 +476,7 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     );
   }
 
-  /// Execute rotation + crop off the UI thread via background isolate worker.
+  /// Execute rotation + fine rotation + crop off the UI thread via background isolate worker.
   Future<void> apply() async {
     if (state.file == null || !state.isLoaded) return;
 
@@ -409,6 +513,7 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
         inputBytes: inputBytes,
         sourceFileName: state.file!.name,
         rotation: state.rotation,
+        fineRotationAngle: state.fineRotationAngle,
         cropRect: state.cropRect,
         outputPath: defaultOutputPath,
       );
@@ -480,3 +585,4 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     state = const ImageCropRotateState();
   }
 }
+

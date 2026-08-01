@@ -52,6 +52,13 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-08-01 — Session 25
+- Implemented Fine-angle "Straighten" Rotation for Image Crop & Rotate (`TASK_image_crop_rotate_straighten.md`):
+  - Updated `ImageCropRotateState` in `lib/tools/image_crop_rotate/image_crop_rotate_state.dart` with `fineRotationAngle` (−45° to +45°) and derived `inscribedCropBounds` getter using inscribed-rectangle geometry to eliminate empty canvas corners.
+  - Updated `ImageCropRotateController` and `isolateImageCropRotateWorker` in `lib/tools/image_crop_rotate/image_crop_rotate_controller.dart` to support fine angle adjustments, automatic crop box shrink/recenter to fit inscribed bounds, cubic interpolation fine rotation (`img.copyRotate`), coordinate shift mapping, and reset.
+  - Updated `ImageCropRotateScreen` in `lib/tools/image_crop_rotate/image_crop_rotate_screen.dart` with Straighten slider (−45° to +45°), live signed readout (e.g. `+3.5°`), Reset tap target, visual rotation canvas preview (`Transform.rotate`), rule-of-thirds grid, and microcopy helper note.
+  - Expanded unit test suite `test/tools/image_crop_rotate/image_crop_rotate_controller_test.dart` (14 unit tests passing cleanly). All 185 workspace unit and widget tests passing.
+
 ## 2026-08-01 — Session 24
 - Implemented Image Crop & Rotate feature (`FEATURE_image_crop_rotate.md`):
   - Created `AspectRatioPreset` (`free`, `original`, `square`, `fourThree`, `sixteenNine`, `threeTwo`) and immutable `ImageCropRotateState` in `lib/tools/image_crop_rotate/image_crop_rotate_state.dart`.
