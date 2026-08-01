@@ -624,6 +624,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                   label: 'Save As…',
                   icon: Icons.save_alt_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _handleSaveAs(state.outputPath!, familyAccent);
@@ -634,6 +635,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                   label: 'Share',
                   icon: Icons.share_rounded,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: () {
                     if (state.outputPath != null) {
                       _handleShare(state.outputPath!);
@@ -644,6 +646,7 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
                   label: 'Convert Another Image',
                   icon: Icons.refresh,
                   variant: AppButtonVariant.secondary,
+                  color: familyAccent,
                   onPressed: controller.reset,
                 ),
               ],

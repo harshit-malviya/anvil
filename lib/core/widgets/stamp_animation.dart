@@ -127,13 +127,20 @@ class _StampAnimationState extends State<StampAnimation>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.check, size: 28, color: stampColor),
-                      Text(
-                        widget.label,
-                        style: AppTypography.labelSmall(brightness).copyWith(
-                          color: stampColor,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 10,
-                          letterSpacing: 1.2,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            widget.label,
+                            softWrap: false,
+                            style: AppTypography.labelSmall(brightness).copyWith(
+                              color: stampColor,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 10,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
                         ),
                       ),
                     ],
