@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
+import '../../core/services/image_resize_service.dart';
 import 'image_resize_state.dart';
 
 /// Provider for ImageResizeController.
@@ -48,20 +49,13 @@ Future<ImageResizeResult> isolateImageResizeWorker(ImageResizeParams params) asy
     throw const FormatException("This image couldn't be read. File may be corrupt.");
   }
 
-  // Bake EXIF orientation so photos are right-side up before resizing
-  decoded = img.bakeOrientation(decoded);
-
-  // Animated sources: extract and resize first frame
-  if (decoded.numFrames > 1) {
-    decoded = decoded.frames.first;
-  }
-
-  // // ASSUMPTION: img.Interpolation.cubic used for high-quality cubic interpolation resize.
-  final resized = img.copyResize(
+  // // ASSUMPTION: img.Interpolation.cubic used for high-quality cubic interpolation resize via ImageResizeService.
+  final resized = ImageResizeService.resize(
     decoded,
-    width: params.targetWidth,
-    height: params.targetHeight,
+    targetWidth: params.targetWidth,
+    targetHeight: params.targetHeight,
     interpolation: img.Interpolation.cubic,
+    maintainAspect: false,
   );
 
   final ext = p.extension(params.sourceFileName).toLowerCase();

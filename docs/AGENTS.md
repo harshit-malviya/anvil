@@ -52,7 +52,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
-## 2026-07-31 — Session 21
+## 2026-08-01 — Session 22
+- Implemented Reactive Dimension-Reduction Fallback for Image Compress Target Size Range (`TASK_image_compress_dimension_fallback.md`):
+  - Created `ImageResizeService` in `lib/core/services/image_resize_service.dart` for shared proportional image scaling and dimension stepping calculations (90% decrements, 50% min dimension floor). Refactored `ImageResizeController` to use `ImageResizeService`.
+  - Updated `ImageCompressState` with `isDimensionFallbackEnabled`, `compressedWidth`, `compressedHeight`, `bothFloorsHit`, snapshot tracking for pre-resize state reversion, and getters (`isDimensionReduced`, `formattedOriginalDimensions`, `formattedCompressedDimensions`).
+  - Updated `ImageCompressController` and `isolateImageCompressWorker` to perform iterative 90% resolution stepping down to 50% dimension floor when initial quality-only compression fails to land in range and fallback is enabled.
+  - Added `setDimensionFallbackEnabled` toggle and `retryWithDimensionReduction` explicit action. Toggling fallback OFF restores pre-resize closest-effort state.
+  - Updated `ImageCompressScreen` UI with "Also reduce image dimensions to reach your target size" checkbox, helper text showing original vs 50% floor dimensions, "Retry" button, and dual-delta messaging for file size + dimensions.
+  - Created `test/core/services/image_resize_service_test.dart` and expanded `test/tools/image_compress/image_compress_controller_test.dart` with 4 new fallback test cases. All 161 workspace unit/widget tests passing.
 - Implemented Sprint 3 Image Compress (`FEATURE_image_compress.md`, `PRD_image_tools_v2.md`):
   - Created `CompressionMode` (`qualityLevel`, `targetSizeRange`), `CompressionLevel` (`low`, `medium`, `high`), `SizeUnit` (`kb`, `mb`), `CompressionResultType` (`normalSuccess`, `minimalReduction`, `outputLarger`, `inRangeSuccess`, `closestEffort`, `alreadyInRange`, `smallerThanMin`), and `ImageCompressState` in `lib/tools/image_compress/image_compress_state.dart`.
   - Created `ImageCompressController` in `lib/tools/image_compress/image_compress_controller.dart` featuring background isolate worker (`isolateImageCompressWorker`), JPEG quality binary search (1-100 quality, 8 max iterations), PNG palette quantization (`img.quantize` 256..16 colors) + zlib levels, hard floor validation (>= 5 KB), original already in range skip, original smaller than minimum rejection, EXIF orientation baking (`img.bakeOrientation`), and file save/folder actions.

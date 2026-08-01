@@ -664,7 +664,9 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
                       ),
                       child: Text(
                         res == CompressionResultType.inRangeSuccess
-                            ? 'Compressed to ${state.formattedCompressedSize} — within your ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize} target'
+                            ? (state.isDimensionReduced
+                                ? 'Compressed to ${state.formattedCompressedSize} (target ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize}) — dimensions reduced from ${state.formattedOriginalDimensions} to ${state.formattedCompressedDimensions} to reach this.'
+                                : 'Compressed to ${state.formattedCompressedSize} — within your ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize} target')
                             : '${state.reductionPercentage.toStringAsFixed(0)}% smaller',
                         style: AppTypography.mono(brightness).copyWith(
                           fontWeight: FontWeight.bold,
@@ -693,13 +695,69 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          "Couldn't land in your target range without visibly degrading the image — closest safe result is ${state.formattedCompressedSize} (target was ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize}).",
+                          state.bothFloorsHit
+                              ? "Couldn't land in your target range even with reduced dimensions — closest safe result is ${state.formattedCompressedSize} at ${state.formattedCompressedDimensions} (target was ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize})."
+                              : "Couldn't land in your target range without visibly degrading the image — closest safe result is ${state.formattedCompressedSize} (target was ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize}).",
                           style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 13),
                         ),
                       ),
                     ],
                   ),
                 ),
+                if (state.mode == CompressionMode.targetSizeRange) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground(brightness),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.pegGrey),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CheckboxListTile(
+                          value: state.isDimensionFallbackEnabled,
+                          onChanged: (val) {
+                            controller.setDimensionFallbackEnabled(val ?? false);
+                          },
+                          title: Text(
+                            'Also reduce image dimensions to reach your target size',
+                            style: AppTypography.bodyMedium(brightness).copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text(
+                              "This will make the image smaller (e.g. ${state.formattedOriginalDimensions} → ${(state.originalWidth * 0.5).round()}×${(state.originalHeight * 0.5).round()}) to hit your target. You'll see the new size before saving.",
+                              style: AppTypography.bodySmall(brightness).copyWith(
+                                color: AppColors.text(brightness).withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ),
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          activeColor: familyAccent,
+                        ),
+                        if (state.isDimensionFallbackEnabled) ...[
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: AppButton(
+                              label: 'Retry',
+                              icon: Icons.refresh,
+                              variant: AppButtonVariant.primary,
+                              color: familyAccent,
+                              onPressed: () => _handleCompress(familyAccent, state),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ],
 
               if (isMinimal) ...[

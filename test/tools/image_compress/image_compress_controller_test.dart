@@ -349,5 +349,120 @@ void main() {
       expect(controller.state.isLoaded, isFalse);
       expect(controller.state.file, isNull);
     });
+
+    group('Dimension Fallback Unit Tests', () {
+      test('Enabling checkbox without tapping Retry leaves state at quality-only closest effort', () async {
+        final file = PlatformFile(
+          name: 'sample.jpg',
+          size: testJpgBytes.length,
+          bytes: testJpgBytes,
+        );
+
+        await controller.loadImage(file);
+        controller.setMode(CompressionMode.targetSizeRange);
+        controller.setMinSize(5.0, SizeUnit.kb);
+        controller.setMaxSize(5.1, SizeUnit.kb);
+
+        await controller.compress();
+
+        expect(controller.state.resultType, equals(CompressionResultType.closestEffort));
+        expect(controller.state.compressedWidth, equals(400));
+        expect(controller.state.compressedHeight, equals(300));
+        expect(controller.state.isDimensionReduced, isFalse);
+
+        // User checks box but does NOT retry
+        controller.setDimensionFallbackEnabled(true);
+        expect(controller.state.isDimensionFallbackEnabled, isTrue);
+        expect(controller.state.compressedWidth, equals(400));
+        expect(controller.state.compressedHeight, equals(300));
+        expect(controller.state.isDimensionReduced, isFalse);
+      });
+
+      test('retryWithDimensionReduction steps down resolution and lands in range or reaches 50% floor', () async {
+        final file = PlatformFile(
+          name: 'sample.jpg',
+          size: testJpgBytes.length,
+          bytes: testJpgBytes,
+        );
+
+        await controller.loadImage(file);
+        controller.setMode(CompressionMode.targetSizeRange);
+        // Set target range reachable only with resolution reduction
+        controller.setMinSize(5.0, SizeUnit.kb);
+        controller.setMaxSize(6.5, SizeUnit.kb);
+
+        await controller.compress();
+        expect(controller.state.resultType, equals(CompressionResultType.closestEffort));
+
+        controller.setDimensionFallbackEnabled(true);
+        await controller.retryWithDimensionReduction();
+
+        final state = controller.state;
+        expect(state.isDimensionReduced, isTrue);
+        expect(state.compressedWidth, lessThan(400));
+        expect(state.compressedHeight, lessThan(300));
+        // Verify 50% floor bound (>= 200x150)
+        expect(state.compressedWidth, greaterThanOrEqualTo(200));
+        expect(state.compressedHeight, greaterThanOrEqualTo(150));
+      });
+
+      test('Dimension stepping reaches 50% floor without landing in range sets bothFloorsHit', () async {
+        final file = PlatformFile(
+          name: 'sample.jpg',
+          size: testJpgBytes.length,
+          bytes: testJpgBytes,
+        );
+
+        await controller.loadImage(file);
+        controller.setMode(CompressionMode.targetSizeRange);
+        // Extremely low target range unattainable even at 50% floor
+        controller.setMinSize(5.0, SizeUnit.kb);
+        controller.setMaxSize(5.01, SizeUnit.kb);
+
+        controller.setDimensionFallbackEnabled(true);
+        await controller.compress();
+
+        final state = controller.state;
+        expect(state.resultType, equals(CompressionResultType.closestEffort));
+        expect(state.bothFloorsHit, isTrue);
+        // Width/height stopped at 50% floor: 400 * 0.5 = 200, 300 * 0.5 = 150
+        expect(state.compressedWidth, equals(200));
+        expect(state.compressedHeight, equals(150));
+      });
+
+      test('Unchecking dimension fallback after successful resize reverts state to pre-resize quality-only result', () async {
+        final file = PlatformFile(
+          name: 'sample.jpg',
+          size: testJpgBytes.length,
+          bytes: testJpgBytes,
+        );
+
+        await controller.loadImage(file);
+        controller.setMode(CompressionMode.targetSizeRange);
+        controller.setMinSize(5.0, SizeUnit.kb);
+        controller.setMaxSize(6.5, SizeUnit.kb);
+
+        // Quality only search runs first
+        await controller.compress();
+        final qOnlySize = controller.state.compressedSizeBytes;
+        expect(controller.state.isDimensionReduced, isFalse);
+
+        // Retry with dimension reduction succeeds
+        controller.setDimensionFallbackEnabled(true);
+        await controller.retryWithDimensionReduction();
+        expect(controller.state.isDimensionReduced, isTrue);
+
+        // User unchecks the box
+        controller.setDimensionFallbackEnabled(false);
+
+        final state = controller.state;
+        expect(state.isDimensionFallbackEnabled, isFalse);
+        expect(state.isDimensionReduced, isFalse);
+        expect(state.compressedWidth, equals(400));
+        expect(state.compressedHeight, equals(300));
+        expect(state.compressedSizeBytes, equals(qOnlySize));
+        expect(state.resultType, equals(CompressionResultType.closestEffort));
+      });
+    });
   });
 }

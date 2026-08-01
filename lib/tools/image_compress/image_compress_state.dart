@@ -51,6 +51,10 @@ class ImageCompressState {
   final int originalHeight;
   final int originalSizeBytes;
   final int compressedSizeBytes;
+  final int compressedWidth;
+  final int compressedHeight;
+  final bool isDimensionFallbackEnabled;
+  final bool bothFloorsHit;
   final CompressionMode mode;
   final CompressionLevel level;
   final double minSizeValue;
@@ -62,6 +66,13 @@ class ImageCompressState {
   final String? errorMessage;
   final String? outputPath;
 
+  // Snapshot fields for restoring pre-resize quality-only result when dimension fallback is unchecked
+  final int qualityOnlyCompressedSizeBytes;
+  final String? qualityOnlyOutputPath;
+  final CompressionResultType? qualityOnlyResultType;
+  final int qualityOnlyWidth;
+  final int qualityOnlyHeight;
+
   const ImageCompressState({
     this.file,
     this.thumbnailBytes,
@@ -70,6 +81,10 @@ class ImageCompressState {
     this.originalHeight = 0,
     this.originalSizeBytes = 0,
     this.compressedSizeBytes = 0,
+    this.compressedWidth = 0,
+    this.compressedHeight = 0,
+    this.isDimensionFallbackEnabled = false,
+    this.bothFloorsHit = false,
     this.mode = CompressionMode.qualityLevel,
     this.level = CompressionLevel.medium,
     this.minSizeValue = 100.0,
@@ -80,9 +95,23 @@ class ImageCompressState {
     this.isProcessing = false,
     this.errorMessage,
     this.outputPath,
+    this.qualityOnlyCompressedSizeBytes = 0,
+    this.qualityOnlyOutputPath,
+    this.qualityOnlyResultType,
+    this.qualityOnlyWidth = 0,
+    this.qualityOnlyHeight = 0,
   });
 
   bool get isLoaded => file != null && originalSizeBytes > 0 && originalWidth > 0;
+
+  /// Returns true if dimensions were reduced from original
+  bool get isDimensionReduced =>
+      compressedWidth > 0 &&
+      compressedHeight > 0 &&
+      (compressedWidth != originalWidth || compressedHeight != originalHeight);
+
+  String get formattedOriginalDimensions => '$originalWidth × $originalHeight';
+  String get formattedCompressedDimensions => '$compressedWidth × $compressedHeight';
 
   /// Hard floor of 5 KB (5,120 bytes)
   static const int minFloorBytes = 5 * 1024;
@@ -132,6 +161,10 @@ class ImageCompressState {
     int? originalHeight,
     int? originalSizeBytes,
     int? compressedSizeBytes,
+    int? compressedWidth,
+    int? compressedHeight,
+    bool? isDimensionFallbackEnabled,
+    bool? bothFloorsHit,
     CompressionMode? mode,
     CompressionLevel? level,
     double? minSizeValue,
@@ -145,6 +178,11 @@ class ImageCompressState {
     bool clearError = false,
     String? outputPath,
     bool clearOutput = false,
+    int? qualityOnlyCompressedSizeBytes,
+    String? qualityOnlyOutputPath,
+    CompressionResultType? qualityOnlyResultType,
+    int? qualityOnlyWidth,
+    int? qualityOnlyHeight,
   }) {
     return ImageCompressState(
       file: clearFile ? null : (file ?? this.file),
@@ -154,6 +192,10 @@ class ImageCompressState {
       originalHeight: originalHeight ?? this.originalHeight,
       originalSizeBytes: originalSizeBytes ?? this.originalSizeBytes,
       compressedSizeBytes: compressedSizeBytes ?? this.compressedSizeBytes,
+      compressedWidth: compressedWidth ?? this.compressedWidth,
+      compressedHeight: compressedHeight ?? this.compressedHeight,
+      isDimensionFallbackEnabled: isDimensionFallbackEnabled ?? this.isDimensionFallbackEnabled,
+      bothFloorsHit: bothFloorsHit ?? this.bothFloorsHit,
       mode: mode ?? this.mode,
       level: level ?? this.level,
       minSizeValue: minSizeValue ?? this.minSizeValue,
@@ -164,6 +206,12 @@ class ImageCompressState {
       isProcessing: isProcessing ?? this.isProcessing,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       outputPath: clearOutput ? null : (outputPath ?? this.outputPath),
+      qualityOnlyCompressedSizeBytes:
+          qualityOnlyCompressedSizeBytes ?? this.qualityOnlyCompressedSizeBytes,
+      qualityOnlyOutputPath: qualityOnlyOutputPath ?? this.qualityOnlyOutputPath,
+      qualityOnlyResultType: qualityOnlyResultType ?? this.qualityOnlyResultType,
+      qualityOnlyWidth: qualityOnlyWidth ?? this.qualityOnlyWidth,
+      qualityOnlyHeight: qualityOnlyHeight ?? this.qualityOnlyHeight,
     );
   }
 }

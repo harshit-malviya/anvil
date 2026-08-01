@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
+import '../../core/services/image_resize_service.dart';
 import 'image_compress_state.dart';
 
 /// Provider for ImageCompressController.
@@ -22,6 +23,7 @@ class ImageCompressParams {
   final int minSizeBytes;
   final int maxSizeBytes;
   final String outputPath;
+  final bool allowDimensionFallback;
 
   ImageCompressParams({
     required this.inputBytes,
@@ -31,6 +33,7 @@ class ImageCompressParams {
     required this.minSizeBytes,
     required this.maxSizeBytes,
     required this.outputPath,
+    this.allowDimensionFallback = false,
   });
 }
 
@@ -41,6 +44,7 @@ class ImageCompressResult {
   final int outputWidth;
   final int outputHeight;
   final bool landedInRange;
+  final bool bothFloorsHit;
 
   ImageCompressResult({
     required this.outputPath,
@@ -48,6 +52,7 @@ class ImageCompressResult {
     required this.outputWidth,
     required this.outputHeight,
     this.landedInRange = false,
+    this.bothFloorsHit = false,
   });
 }
 
@@ -73,20 +78,90 @@ Future<ImageCompressResult> isolateImageCompressWorker(ImageCompressParams param
 
   Uint8List encodedBytes;
   bool landedInRange = false;
+  bool bothFloorsHit = false;
+  int outputW = origW;
+  int outputH = origH;
 
   if (params.mode == CompressionMode.qualityLevel) {
     // Quality Level Mode
     encodedBytes = _encodeByQualityLevel(decoded, ext, params.level);
   } else {
-    // Target Size Range Mode (Binary search / optimization)
-    final searchResult = _encodeByTargetRange(
-      decoded,
+    // Target Size Range Mode
+    var currentImg = decoded;
+    var searchResult = _encodeByTargetRange(
+      currentImg,
       ext,
       params.minSizeBytes,
       params.maxSizeBytes,
     );
     encodedBytes = searchResult.bytes;
     landedInRange = searchResult.landedInRange;
+    outputW = currentImg.width;
+    outputH = currentImg.height;
+
+    // Dimension Fallback Step-down if initial quality-only pass missed range and fallback is enabled
+    if (!landedInRange && params.allowDimensionFallback) {
+      Uint8List bestBytes = searchResult.bytes;
+      int bestW = currentImg.width;
+      int bestH = currentImg.height;
+      int bestDistance = searchResult.distance;
+
+      while (true) {
+        final nextDim = ImageResizeService.calculateNextStepDimensions(
+          currentWidth: currentImg.width,
+          currentHeight: currentImg.height,
+          originalWidth: origW,
+          originalHeight: origH,
+          stepFactor: 0.9,
+          floorFactor: 0.5,
+        );
+
+        if (nextDim == null) {
+          // Reached 50% dimension floor without landing in range
+          bothFloorsHit = true;
+          break;
+        }
+
+        final stepImg = ImageResizeService.resize(
+          decoded,
+          targetWidth: nextDim.width,
+          targetHeight: nextDim.height,
+          interpolation: img.Interpolation.cubic,
+          maintainAspect: true,
+        );
+
+        final stepResult = _encodeByTargetRange(
+          stepImg,
+          ext,
+          params.minSizeBytes,
+          params.maxSizeBytes,
+        );
+
+        if (stepResult.landedInRange) {
+          encodedBytes = stepResult.bytes;
+          landedInRange = true;
+          outputW = stepImg.width;
+          outputH = stepImg.height;
+          bothFloorsHit = false;
+          break; // Stop immediately upon landing in range
+        }
+
+        if (stepResult.distance < bestDistance) {
+          bestDistance = stepResult.distance;
+          bestBytes = stepResult.bytes;
+          bestW = stepImg.width;
+          bestH = stepImg.height;
+        }
+
+        currentImg = stepImg;
+      }
+
+      if (!landedInRange) {
+        encodedBytes = bestBytes;
+        outputW = bestW;
+        outputH = bestH;
+      }
+    }
   }
 
   final outFile = File(params.outputPath);
@@ -95,9 +170,10 @@ Future<ImageCompressResult> isolateImageCompressWorker(ImageCompressParams param
   return ImageCompressResult(
     outputPath: params.outputPath,
     outputSize: encodedBytes.length,
-    outputWidth: origW,
-    outputHeight: origH,
+    outputWidth: outputW,
+    outputHeight: outputH,
     landedInRange: landedInRange,
+    bothFloorsHit: bothFloorsHit,
   );
 }
 
@@ -147,8 +223,9 @@ Uint8List _encodeByQualityLevel(img.Image decoded, String ext, CompressionLevel 
 class _RangeSearchResult {
   final Uint8List bytes;
   final bool landedInRange;
+  final int distance;
 
-  _RangeSearchResult(this.bytes, this.landedInRange);
+  _RangeSearchResult(this.bytes, this.landedInRange, [this.distance = 0]);
 }
 
 const int jpegQualityFloor = 30;
@@ -177,6 +254,7 @@ _RangeSearchResult _encodeByTargetRange(
       if (size >= minSizeBytes && size <= maxSizeBytes) {
         bestBytes = bytes;
         foundInRange = true;
+        bestDistance = 0;
         break;
       }
 
@@ -197,7 +275,7 @@ _RangeSearchResult _encodeByTargetRange(
     }
 
     bestBytes ??= Uint8List.fromList(img.encodeJpg(decoded, quality: 50));
-    return _RangeSearchResult(bestBytes, foundInRange);
+    return _RangeSearchResult(bestBytes, foundInRange, bestDistance);
   } else if (ext == '.png') {
     // PNG search: palette quantization down to pngPaletteFloor (64) + Floyd-Steinberg dithering
     final colorCounts = [256, 128, 64];
@@ -222,6 +300,7 @@ _RangeSearchResult _encodeByTargetRange(
       if (size >= minSizeBytes && size <= maxSizeBytes) {
         bestBytes = bytes;
         foundInRange = true;
+        bestDistance = 0;
         break;
       }
 
@@ -239,13 +318,17 @@ _RangeSearchResult _encodeByTargetRange(
     }
 
     bestBytes ??= Uint8List.fromList(img.encodePng(decoded, level: 9));
-    return _RangeSearchResult(bestBytes, foundInRange);
+    return _RangeSearchResult(bestBytes, foundInRange, bestDistance);
   } else {
     // Default fallback for BMP/GIF/TIFF
     final bytes = _encodeByQualityLevel(decoded, ext, CompressionLevel.medium);
     final size = bytes.length;
     final inRange = size >= minSizeBytes && size <= maxSizeBytes;
-    return _RangeSearchResult(bytes, inRange);
+    int dist = 0;
+    if (!inRange) {
+      dist = size < minSizeBytes ? minSizeBytes - size : size - maxSizeBytes;
+    }
+    return _RangeSearchResult(bytes, inRange, dist);
   }
 }
 
@@ -338,8 +421,17 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
       originalWidth: decoded.width,
       originalHeight: decoded.height,
       originalSizeBytes: bytes.length,
+      compressedWidth: decoded.width,
+      compressedHeight: decoded.height,
       thumbnailBytes: thumbBytes,
       isProcessing: false,
+      isDimensionFallbackEnabled: false,
+      bothFloorsHit: false,
+      qualityOnlyCompressedSizeBytes: 0,
+      qualityOnlyOutputPath: null,
+      qualityOnlyResultType: null,
+      qualityOnlyWidth: 0,
+      qualityOnlyHeight: 0,
     );
   }
 
@@ -378,6 +470,36 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
       maxSizeUnit: unit,
       clearError: true,
     );
+  }
+
+  /// Toggle dimension fallback checkbox state.
+  void setDimensionFallbackEnabled(bool enabled) {
+    if (state.isDimensionFallbackEnabled == enabled) return;
+
+    if (!enabled && state.qualityOnlyResultType != null && state.isDimensionReduced) {
+      // Revert displayed result back to original (pre-resize) closest-effort state
+      state = state.copyWith(
+        isDimensionFallbackEnabled: false,
+        compressedSizeBytes: state.qualityOnlyCompressedSizeBytes,
+        compressedWidth: state.qualityOnlyWidth,
+        compressedHeight: state.qualityOnlyHeight,
+        outputPath: state.qualityOnlyOutputPath,
+        resultType: state.qualityOnlyResultType,
+        bothFloorsHit: false,
+        clearError: true,
+      );
+    } else {
+      state = state.copyWith(
+        isDimensionFallbackEnabled: enabled,
+        clearError: true,
+      );
+    }
+  }
+
+  /// Explicit user action: Retry search with dimension reduction allowed.
+  Future<void> retryWithDimensionReduction() async {
+    state = state.copyWith(isDimensionFallbackEnabled: true);
+    await compress();
   }
 
   /// Perform image compression via background isolate worker.
@@ -434,6 +556,8 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
           state = state.copyWith(
             isProcessing: false,
             compressedSizeBytes: state.originalSizeBytes,
+            compressedWidth: state.originalWidth,
+            compressedHeight: state.originalHeight,
             resultType: CompressionResultType.alreadyInRange,
           );
           return;
@@ -456,6 +580,7 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         minSizeBytes: state.minSizeBytes,
         maxSizeBytes: state.maxSizeBytes,
         outputPath: defaultOutputPath,
+        allowDimensionFallback: state.isDimensionFallbackEnabled,
       );
 
       final result = await compute(isolateImageCompressWorker, params);
@@ -482,11 +607,33 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         }
       }
 
+      int qOnlySize = state.qualityOnlyCompressedSizeBytes;
+      String? qOnlyPath = state.qualityOnlyOutputPath;
+      CompressionResultType? qOnlyRes = state.qualityOnlyResultType;
+      int qOnlyW = state.qualityOnlyWidth;
+      int qOnlyH = state.qualityOnlyHeight;
+
+      if (!state.isDimensionFallbackEnabled && resultType == CompressionResultType.closestEffort) {
+        qOnlySize = result.outputSize;
+        qOnlyPath = result.outputPath;
+        qOnlyRes = CompressionResultType.closestEffort;
+        qOnlyW = result.outputWidth;
+        qOnlyH = result.outputHeight;
+      }
+
       state = state.copyWith(
         isProcessing: false,
         compressedSizeBytes: result.outputSize,
+        compressedWidth: result.outputWidth,
+        compressedHeight: result.outputHeight,
         resultType: resultType,
+        bothFloorsHit: result.bothFloorsHit,
         outputPath: result.outputPath,
+        qualityOnlyCompressedSizeBytes: qOnlySize,
+        qualityOnlyOutputPath: qOnlyPath,
+        qualityOnlyResultType: qOnlyRes,
+        qualityOnlyWidth: qOnlyW,
+        qualityOnlyHeight: qOnlyH,
       );
     } on OutOfMemoryError {
       state = state.copyWith(
