@@ -151,6 +151,9 @@ class _RangeSearchResult {
   _RangeSearchResult(this.bytes, this.landedInRange);
 }
 
+const int jpegQualityFloor = 30;
+const int pngPaletteFloor = 64;
+
 _RangeSearchResult _encodeByTargetRange(
   img.Image decoded,
   String ext,
@@ -158,8 +161,8 @@ _RangeSearchResult _encodeByTargetRange(
   int maxSizeBytes,
 ) {
   if (ext == '.jpg' || ext == '.jpeg') {
-    // Binary search over JPEG quality [1..100], max 8 iterations
-    int low = 1;
+    // Binary search over JPEG quality [30..100], max 8 iterations
+    int low = jpegQualityFloor;
     int high = 100;
     Uint8List? bestBytes;
     int bestDistance = 999999999;
@@ -196,8 +199,8 @@ _RangeSearchResult _encodeByTargetRange(
     bestBytes ??= Uint8List.fromList(img.encodeJpg(decoded, quality: 50));
     return _RangeSearchResult(bestBytes, foundInRange);
   } else if (ext == '.png') {
-    // PNG search: palette quantization + zlib compression levels
-    final colorCounts = [256, 128, 64, 32, 16];
+    // PNG search: palette quantization down to pngPaletteFloor (64) + Floyd-Steinberg dithering
+    final colorCounts = [256, 128, 64];
     Uint8List? bestBytes;
     int bestDistance = 999999999;
     bool foundInRange = false;
@@ -207,8 +210,12 @@ _RangeSearchResult _encodeByTargetRange(
       if (attempts >= 8) break;
       attempts++;
 
-      // Quantize image to reduced color palette
-      final quantized = img.quantize(decoded, numberOfColors: numColors);
+      // Quantize image to reduced color palette with dithering
+      final quantized = img.quantize(
+        decoded,
+        numberOfColors: numColors,
+        dither: img.DitherKernel.floydSteinberg,
+      );
       final bytes = Uint8List.fromList(img.encodePng(quantized, level: 9));
       final size = bytes.length;
 

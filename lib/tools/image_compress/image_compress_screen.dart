@@ -693,7 +693,7 @@ class _ImageCompressScreenState extends ConsumerState<ImageCompressScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          "Couldn't land exactly in your target range — closest we could get is ${state.formattedCompressedSize} (target was ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize}).",
+                          "Couldn't land in your target range without visibly degrading the image — closest safe result is ${state.formattedCompressedSize} (target was ${state.formattedMinTargetSize}–${state.formattedMaxTargetSize}).",
                           style: AppTypography.bodyMedium(brightness).copyWith(fontSize: 13),
                         ),
                       ),

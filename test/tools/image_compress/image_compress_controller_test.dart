@@ -206,15 +206,15 @@ void main() {
 
       await controller.loadImage(file);
       controller.setMode(CompressionMode.targetSizeRange);
-      controller.setMinSize(5.0, SizeUnit.kb);
-      controller.setMaxSize(20.0, SizeUnit.kb);
+      controller.setMinSize(20.0, SizeUnit.kb);
+      controller.setMaxSize(40.0, SizeUnit.kb);
 
       await controller.compress();
 
       final state = controller.state;
       expect(state.resultType, equals(CompressionResultType.inRangeSuccess));
-      expect(state.compressedSizeBytes, greaterThanOrEqualTo(5 * 1024));
-      expect(state.compressedSizeBytes, lessThanOrEqualTo(20 * 1024));
+      expect(state.compressedSizeBytes, greaterThanOrEqualTo(20 * 1024));
+      expect(state.compressedSizeBytes, lessThanOrEqualTo(40 * 1024));
     });
 
     test('compress in Target Size Range mode detects original already inside target range', () async {
@@ -257,6 +257,73 @@ void main() {
       final state = controller.state;
       expect(state.resultType, equals(CompressionResultType.smallerThanMin));
       expect(state.outputPath, isNull);
+    });
+
+    test('JPEG Target Size Range search stops at quality floor (30) when maximum is unachievable', () async {
+      final file = PlatformFile(
+        name: 'sample.jpg',
+        size: testJpgBytes.length,
+        bytes: testJpgBytes,
+      );
+
+      await controller.loadImage(file);
+      controller.setMode(CompressionMode.targetSizeRange);
+      // Set an unachievably low target max size (e.g. 5.0 KB to 5.1 KB for a complex 400x300 JPG)
+      controller.setMinSize(5.0, SizeUnit.kb);
+      controller.setMaxSize(5.1, SizeUnit.kb);
+
+      await controller.compress();
+
+      final state = controller.state;
+      expect(state.resultType, equals(CompressionResultType.closestEffort));
+      expect(state.outputPath, isNotNull);
+
+      // Verify the compressed JPEG quality wasn't pushed below quality floor (30)
+      final compressedBytes = File(state.outputPath!).readAsBytesSync();
+      // Floor quality output (30) should equal or match the generated compressed size
+      final floorBytes = Uint8List.fromList(img.encodeJpg(img.bakeOrientation(img.decodeImage(testJpgBytes)!), quality: 30));
+      expect(compressedBytes.length, equals(floorBytes.length));
+    });
+
+    test('PNG Target Size Range search stops at palette floor (64) with dithering', () async {
+      // Create a 500x500 test PNG with pseudo-random RGB noise so original size is ~300 KB (> 5 KB floor)
+      final pngImage = img.Image(width: 500, height: 500);
+      var seed = 12345;
+      for (var y = 0; y < 500; y++) {
+        for (var x = 0; x < 500; x++) {
+          seed = (seed * 1664525 + 1013904223) & 0xFFFFFFFF;
+          final r = (seed >> 16) & 0xFF;
+          final g = (seed >> 8) & 0xFF;
+          final b = seed & 0xFF;
+          pngImage.setPixelRgb(x, y, r, g, b);
+        }
+      }
+      final multiColorPngBytes = Uint8List.fromList(img.encodePng(pngImage, level: 6));
+
+      final file = PlatformFile(
+        name: 'multicolor.png',
+        size: multiColorPngBytes.length,
+        bytes: multiColorPngBytes,
+      );
+
+      await controller.loadImage(file);
+      controller.setMode(CompressionMode.targetSizeRange);
+      controller.setMinSize(5.0, SizeUnit.kb);
+      controller.setMaxSize(6.0, SizeUnit.kb);
+
+      await controller.compress();
+
+      final state = controller.state;
+      expect(state.resultType, equals(CompressionResultType.closestEffort));
+      expect(state.outputPath, isNotNull);
+
+      final compressedBytes = File(state.outputPath!).readAsBytesSync();
+      // Quantized at 64 colors with Floyd-Steinberg dither
+      final decodedOrig = img.bakeOrientation(img.decodeImage(multiColorPngBytes)!);
+      final floorQuantized = img.quantize(decodedOrig, numberOfColors: 64, dither: img.DitherKernel.floydSteinberg);
+      final floorPngBytes = Uint8List.fromList(img.encodePng(floorQuantized, level: 9));
+
+      expect(compressedBytes.length, equals(floorPngBytes.length));
     });
 
     test('saveAs, openFolder, and reset work as expected', () async {
