@@ -457,9 +457,13 @@ class _ImageConvertScreenState extends ConsumerState<ImageConvertScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            'Convert ${state.file?.name ?? ""} (${_formatBytes(state.fileSize)})',
-            style: AppTypography.bodyMedium(brightness),
+          Flexible(
+            child: Text(
+              'Convert ${state.file?.name ?? ""} (${_formatBytes(state.fileSize)})',
+              style: AppTypography.bodyMedium(brightness),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
