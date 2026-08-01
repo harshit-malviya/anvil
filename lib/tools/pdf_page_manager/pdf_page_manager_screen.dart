@@ -253,6 +253,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
       children: [
         // File header bar
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
           decoration: BoxDecoration(
             color: AppColors.cardBackground(brightness),
@@ -313,16 +314,74 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
 
         // Bottom Action Bar
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
           decoration: BoxDecoration(
             color: AppColors.cardBackground(brightness),
             borderRadius: BorderRadius.circular(8.0),
             border: Border.all(color: AppColors.pegGrey),
           ),
-          child: Builder(
-            builder: (context) {
+          child: LayoutBuilder(
+            builder: (context, constraints) {
               final hasUnsavedChanges = state.pages.any((p) => p.isDeleted || p.rotation != 0) || state.pages.length != state.originalPageCount;
               final deletedPageCount = state.pages.where((p) => p.isDeleted).length;
+              final isNarrow = constraints.maxWidth < 520;
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${state.activePageCount} of ${state.originalPageCount} pages active',
+                              style: AppTypography.titleMedium(brightness).copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2.0),
+                            Text(
+                              hasUnsavedChanges
+                                  ? '$deletedPageCount deleted • ${state.rotatedPageCount} rotated'
+                                  : 'No changes made yet',
+                              style: AppTypography.labelSmall(brightness).copyWith(
+                                color: AppColors.text(brightness).withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (hasUnsavedChanges && state.file != null)
+                          TextButton(
+                            onPressed: state.isProcessing ? null : () => controller.loadDocument(state.file!),
+                            child: Text(
+                              'Reset',
+                              style: AppTypography.bodyMedium(brightness).copyWith(
+                                color: AppColors.rustRed,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12.0),
+                    SizedBox(
+                      width: double.infinity,
+                      child: AppButton(
+                        label: 'Apply Changes',
+                        icon: Icons.save_rounded,
+                        color: familyAccent,
+                        isLoading: state.isProcessing,
+                        onPressed: state.canApply ? () => _handleApplyChanges(familyAccent) : null,
+                      ),
+                    ),
+                  ],
+                );
+              }
 
               return Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -349,6 +408,7 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                     ],
                   ),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       if (hasUnsavedChanges && state.file != null)
                         TextButton(
