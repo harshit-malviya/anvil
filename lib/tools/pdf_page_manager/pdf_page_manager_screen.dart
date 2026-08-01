@@ -251,62 +251,73 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // File header bar
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          decoration: BoxDecoration(
-            color: AppColors.cardBackground(brightness),
-            borderRadius: BorderRadius.circular(8.0),
-            border: Border.all(color: AppColors.pegGrey),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.picture_as_pdf_rounded, color: familyAccent),
-              const SizedBox(width: 12.0),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      state.file?.name ?? '',
-                      style: AppTypography.titleMedium(brightness),
-                      overflow: TextOverflow.ellipsis,
+        // Scrollable content area: File header bar & Page Grid
+        Expanded(
+          child: CustomScrollView(
+            slivers: [
+              // File header bar (scrolls up with content)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground(brightness),
+                      borderRadius: BorderRadius.circular(8.0),
+                      border: Border.all(color: AppColors.pegGrey),
                     ),
-                    Text(
-                      '${state.originalPageCount} pages loaded • Click page or zoom button to preview',
-                      style: AppTypography.labelSmall(brightness).copyWith(
-                        color: AppColors.text(brightness).withValues(alpha: 0.7),
-                      ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.picture_as_pdf_rounded, color: familyAccent),
+                        const SizedBox(width: 12.0),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                state.file?.name ?? '',
+                                style: AppTypography.titleMedium(brightness),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                '${state.originalPageCount} pages loaded • Click page or zoom button to preview',
+                                style: AppTypography.labelSmall(brightness).copyWith(
+                                  color: AppColors.text(brightness).withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        AppButton(
+                          label: 'Change File',
+                          variant: AppButtonVariant.secondary,
+                          color: familyAccent,
+                          onPressed: controller.reset,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-              AppButton(
-                label: 'Change File',
-                variant: AppButtonVariant.secondary,
-                color: familyAccent,
-                onPressed: controller.reset,
+
+              // Page thumbnail grid
+              SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 16.0,
+                  mainAxisSpacing: 16.0,
+                  childAspectRatio: 0.72,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final page = state.pages[index];
+                    return _buildPageCard(context, index, page, state, controller, familyAccent);
+                  },
+                  childCount: state.pages.length,
+                ),
               ),
             ],
-          ),
-        ),
-        const SizedBox(height: 16.0),
-
-        // Virtualized thumbnail grid
-        Expanded(
-          child: GridView.builder(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount,
-              crossAxisSpacing: 16.0,
-              mainAxisSpacing: 16.0,
-              childAspectRatio: 0.72,
-            ),
-            itemCount: state.pages.length,
-            itemBuilder: (context, index) {
-              final page = state.pages[index];
-              return _buildPageCard(context, index, page, state, controller, familyAccent);
-            },
           ),
         ),
 
