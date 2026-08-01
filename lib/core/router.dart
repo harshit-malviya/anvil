@@ -13,6 +13,7 @@ import '../tools/image_convert/image_convert_screen.dart';
 import '../tools/image_resize/image_resize_screen.dart';
 import '../tools/image_compress/image_compress_screen.dart';
 import '../tools/image_blur/image_blur_screen.dart';
+import '../tools/image_crop_rotate/image_crop_rotate_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -72,6 +73,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/image-blur',
       builder: (context, state) => const ImageBlurScreen(),
+    ),
+    GoRoute(
+      path: '/image-crop-rotate',
+      builder: (context, state) => const ImageCropRotateScreen(),
     ),
   ],
 );

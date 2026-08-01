@@ -219,6 +219,25 @@ class ToolRegistry {
       ],
       category: ToolCategory.image,
     ),
+    ToolMetadata(
+      id: 'image_crop_rotate',
+      title: 'Crop & Rotate Image',
+      description: 'Rotate images in 90° steps and crop rectangular selections in one pass.',
+      icon: Icons.crop_rotate_rounded,
+      route: '/image-crop-rotate',
+      isAvailable: true,
+      keywords: [
+        'crop',
+        'rotate',
+        'straighten',
+        'cut photo',
+        'trim image',
+        'turn photo',
+        'aspect ratio',
+        'square crop',
+      ],
+      category: ToolCategory.image,
+    ),
   ];
 }
 

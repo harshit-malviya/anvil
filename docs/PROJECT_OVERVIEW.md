@@ -99,7 +99,7 @@ spinning up the UI.
 
 ## 7. Explicitly out of scope for v1 (don't build yet)
 
-- Image tools (Format Convert, Resize, Compress, Blur / Redact) — v2, see `PRD_image_tools_v2.md` and per-tool `FEATURE_image_*.md` files
+- Image tools (Format Convert, Resize, Compress, Blur / Redact, Crop & Rotate) — v2, see `PRD_image_tools_v2.md` and per-tool `FEATURE_image_*.md` files
 - PDF split, PDF compress, PDF-to-image, image-to-PDF — fast-follow after v1 ships, not v1
 - Any account system, cloud storage, or sync
 - In-app purchases / licensing tiers

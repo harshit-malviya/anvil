@@ -52,6 +52,15 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-08-01 — Session 24
+- Implemented Image Crop & Rotate feature (`FEATURE_image_crop_rotate.md`):
+  - Created `AspectRatioPreset` (`free`, `original`, `square`, `fourThree`, `sixteenNine`, `threeTwo`) and immutable `ImageCropRotateState` in `lib/tools/image_crop_rotate/image_crop_rotate_state.dart`.
+  - Created `ImageCropRotateController` and `isolateImageCropRotateWorker` in `lib/tools/image_crop_rotate/image_crop_rotate_controller.dart` supporting EXIF orientation baking, 90° clockwise step rotation, crop rectangle selection in rotated pixel space, minimum crop size validation (10x10px floor), aspect ratio locking, and background isolate processing.
+  - Created `ImageCropRotateScreen` in `lib/tools/image_crop_rotate/image_crop_rotate_screen.dart` with single image drop zone, interactive crop overlay canvas with corner and edge handles, rule-of-thirds grid, output size live readout, rotation reset inline notice banner, unsaved changes guard, and completion stamp view (`EXPORTED`).
+  - Registered route `/image-crop-rotate` in `lib/core/router.dart` and tool metadata in `lib/tools/registry.dart`.
+  - Updated `PROJECT_OVERVIEW.md` and `AGENTS.md` Feature Status Tracker.
+  - Created unit test suite `test/tools/image_crop_rotate/image_crop_rotate_controller_test.dart` (9 test cases covering loading validation, rotation cycle, dimensions swap, crop bounds clamping, 10x10 floor rejection, aspect ratio lock recalculation, and background isolate execution).
+
 ## 2026-08-01 — Session 23
 - Implemented Image Blur (Selective Redaction) feature (`FEATURE_image_blur.md`):
   - Created `RedactionStyle` (`pixelate`, `blur`, `solidBlock`), `RedactionIntensity` (`small`, `medium`, `large`), `RedactionRegion` model, and `ImageBlurState` in `lib/tools/image_blur/image_blur_state.dart`.
@@ -248,11 +257,16 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | Image Resize | `docs/V2/02_Image_Resizer/FEATURE_image_resize.md` | Done | Controller, UI, background isolate worker, ratio lock, presets, unit tests passing |
 | Image Compress | `docs/V2/03_Image_Compress/FEATURE_image_compress.md` | Done | Controller, UI, background isolate worker, format-specific quality encoding, size comparison result types, unit tests passing |
 | Image Blur | `docs/V2/04_Image_Blur/FEATURE_image_blur.md` | Done | Controller, UI, interactive canvas drawing, background isolate worker, redaction styles (Pixelate, Blur, Solid Block), unit tests passing |
+| Image Crop & Rotate | `docs/V2/05_Crop_&_Rotate/FEATURE_image_crop_rotate.md` | Done | Controller, UI, interactive canvas crop overlay, 90° step rotation, background isolate worker, unit tests passing |
 
 ## 5. Decisions log
 
 
-## 2026-07-31
+## 2026-08-01
+- Decision: Rotation in Image Crop & Rotate advances 90° clockwise per tap (0° → 90° → 180° → 270° → 0°).
+- Decision: Rotation resets crop rectangle selection back to full bounds of the new orientation, displaying an inline note to the user.
+- Decision: EXIF orientation is baked in (`img.bakeOrientation`) before user rotation and crop transformations are applied.
+- Decision: Crop selection coordinates are maintained in the current rotated image's pixel space. Isolate worker applies rotation first (`img.copyRotate`), then crop (`img.copyCrop`).
 - Decision: JPEG compression levels map to concrete quality values: Low=85 (minimal reduction, high visual quality), Medium=65 (balanced), High=40 (maximum reduction).
 - Decision: PNG compression levels map to zlib compression levels: Low=level 3, Medium=level 6, High=level 9.
 - Decision: WebP inputs are rejected with a clear user message because package:image 4.x has a read-only WebP decoder with no WebP encoder support.
