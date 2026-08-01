@@ -83,4 +83,46 @@ void main() {
     // Verify preview dialog closed
     expect(find.text('Page 2 of 2'), findsNothing);
   });
+
+  testWidgets('PdfPageManagerScreen reorders pages using triangle arrow buttons',
+      (WidgetTester tester) async {
+    final pdfBytes = await createSamplePdf();
+    final container = ProviderContainer();
+    final controller = container.read(pdfPageManagerControllerProvider.notifier);
+
+    final pf = PlatformFile(name: 'test_doc.pdf', size: pdfBytes.length, bytes: pdfBytes);
+    await controller.loadDocument(pf, overrideBytes: pdfBytes);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: PdfPageManagerScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Initially page 0 is original index 0, page 1 is original index 1
+    expect(container.read(pdfPageManagerControllerProvider).pages.map((p) => p.originalIndex).toList(), [0, 1]);
+
+    // Tap "Move page right" on the first page
+    final moveRightButtons = find.byTooltip('Move page right');
+    expect(moveRightButtons, findsOneWidget);
+    await tester.tap(moveRightButtons);
+    await tester.pump();
+
+    // Verify order swapped to [1, 0]
+    expect(container.read(pdfPageManagerControllerProvider).pages.map((p) => p.originalIndex).toList(), [1, 0]);
+
+    // Tap "Move page left" on the second card (now page 0 original index 0 at list index 1)
+    final moveLeftButtons = find.byTooltip('Move page left');
+    expect(moveLeftButtons, findsOneWidget);
+    await tester.tap(moveLeftButtons);
+    await tester.pump();
+
+    // Verify order swapped back to [0, 1]
+    expect(container.read(pdfPageManagerControllerProvider).pages.map((p) => p.originalIndex).toList(), [0, 1]);
+  });
 }

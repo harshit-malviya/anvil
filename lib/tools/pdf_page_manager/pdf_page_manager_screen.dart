@@ -425,10 +425,51 @@ class _PdfPageManagerScreenState extends ConsumerState<PdfPageManagerScreen> {
                         ),
                       ),
                     ),
-                    Icon(
-                      Icons.drag_indicator_rounded,
-                      size: 18,
-                      color: AppColors.text(brightness).withValues(alpha: 0.4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (index > 0)
+                          Tooltip(
+                            message: 'Move page left',
+                            child: InkWell(
+                              onTap: () => controller.reorderPage(index, index - 1),
+                              borderRadius: BorderRadius.circular(4.0),
+                              child: Padding(
+                                padding: const EdgeInsets.all(2.0),
+                                child: Icon(
+                                  Icons.arrow_left_rounded,
+                                  size: 22,
+                                  color: AppColors.text(brightness).withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (index < state.pages.length - 1)
+                          Tooltip(
+                            message: 'Move page right',
+                            child: InkWell(
+                              onTap: () => controller.reorderPage(index, index + 2),
+                              borderRadius: BorderRadius.circular(4.0),
+                              child: Padding(
+                                padding: const EdgeInsets.all(2.0),
+                                child: Icon(
+                                  Icons.arrow_right_rounded,
+                                  size: 22,
+                                  color: AppColors.text(brightness).withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(width: 2.0),
+                        Tooltip(
+                          message: 'Drag to reorder',
+                          child: Icon(
+                            Icons.drag_indicator_rounded,
+                            size: 18,
+                            color: AppColors.text(brightness).withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
