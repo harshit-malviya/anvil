@@ -52,7 +52,17 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-08-01 — Session 23
+- Implemented Image Blur (Selective Redaction) feature (`FEATURE_image_blur.md`):
+  - Created `RedactionStyle` (`pixelate`, `blur`, `solidBlock`), `RedactionIntensity` (`small`, `medium`, `large`), `RedactionRegion` model, and `ImageBlurState` in `lib/tools/image_blur/image_blur_state.dart`.
+  - Created `ImageBlurController` and `isolateImageBlurWorker` in `lib/tools/image_blur/image_blur_controller.dart` supporting region adding/updating/removal, bounds clamping, minimum size validation (10x10px floor), preset block sizes (12/24/40px) and blur radii (10/25/50px capped at 40% shorter side), solid block fill colors, and background isolate processing.
+  - Created `ImageBlurScreen` in `lib/tools/image_blur/image_blur_screen.dart` with single image drop zone, interactive image canvas with tap-and-drag rectangle drawing, corner resize handles, body drag moving, region deletion, redaction style segment control, blur security warning banner, color swatch picker, bottom summary bar, unsaved changes guard, and completion stamp view (`REDACTED`).
+  - Registered route `/image-blur` in `lib/core/router.dart` and tool metadata in `lib/tools/registry.dart`.
+  - Updated `PROJECT_OVERVIEW.md` to reflect v2 image tool set including Image Blur.
+  - Created unit test suite `test/tools/image_blur/image_blur_controller_test.dart` (11 test cases covering loading validation, region clamping, minimum size floor, style toggles, and pixel-level redaction verification).
+
 ## 2026-08-01 — Session 22
+
 - Implemented Reactive Dimension-Reduction Fallback for Image Compress Target Size Range (`TASK_image_compress_dimension_fallback.md`):
   - Created `ImageResizeService` in `lib/core/services/image_resize_service.dart` for shared proportional image scaling and dimension stepping calculations (90% decrements, 50% min dimension floor). Refactored `ImageResizeController` to use `ImageResizeService`.
   - Updated `ImageCompressState` with `isDimensionFallbackEnabled`, `compressedWidth`, `compressedHeight`, `bothFloorsHit`, snapshot tracking for pre-resize state reversion, and getters (`isDimensionReduced`, `formattedOriginalDimensions`, `formattedCompressedDimensions`).
@@ -237,8 +247,10 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | Image Format Convert | `FEATURE_image_convert.md` | Done | Controller, UI, isolate worker, transparency flattening, unit tests passing |
 | Image Resize | `docs/V2/02_Image_Resizer/FEATURE_image_resize.md` | Done | Controller, UI, background isolate worker, ratio lock, presets, unit tests passing |
 | Image Compress | `docs/V2/03_Image_Compress/FEATURE_image_compress.md` | Done | Controller, UI, background isolate worker, format-specific quality encoding, size comparison result types, unit tests passing |
+| Image Blur | `docs/V2/04_Image_Blur/FEATURE_image_blur.md` | Done | Controller, UI, interactive canvas drawing, background isolate worker, redaction styles (Pixelate, Blur, Solid Block), unit tests passing |
 
 ## 5. Decisions log
+
 
 ## 2026-07-31
 - Decision: JPEG compression levels map to concrete quality values: Low=85 (minimal reduction, high visual quality), Medium=65 (balanced), High=40 (maximum reduction).

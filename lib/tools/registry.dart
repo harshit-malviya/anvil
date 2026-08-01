@@ -199,6 +199,27 @@ class ToolRegistry {
       ],
       category: ToolCategory.image,
     ),
+    ToolMetadata(
+      id: 'image_blur',
+      title: 'Blur / Redact Image',
+      description: 'Censor sensitive regions of an image with pixelate, blur, or solid block redaction.',
+      icon: Icons.blur_on_rounded,
+      route: '/image-blur',
+      isAvailable: true,
+      keywords: [
+        'redact',
+        'blur',
+        'pixelate',
+        'censor',
+        'hide text',
+        'black out',
+        'privacy',
+        'sensitive',
+        'mosaic',
+      ],
+      category: ToolCategory.image,
+    ),
   ];
 }
+
 

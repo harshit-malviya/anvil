@@ -12,6 +12,7 @@ import '../tools/images_to_pdf/images_to_pdf_screen.dart';
 import '../tools/image_convert/image_convert_screen.dart';
 import '../tools/image_resize/image_resize_screen.dart';
 import '../tools/image_compress/image_compress_screen.dart';
+import '../tools/image_blur/image_blur_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -68,6 +69,11 @@ final appRouter = GoRouter(
       path: '/image-compress',
       builder: (context, state) => const ImageCompressScreen(),
     ),
+    GoRoute(
+      path: '/image-blur',
+      builder: (context, state) => const ImageBlurScreen(),
+    ),
   ],
 );
+
 
