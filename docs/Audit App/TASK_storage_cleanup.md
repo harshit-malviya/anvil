@@ -1,111 +1,150 @@
 # Task: Storage Cleanup — Temp/Cache File Lifecycle (Android)
 
-> Depends on: `PROJECT_OVERVIEW.md`, `AGENTS.md` (read both first).
+> Depends on: `PROJECT_OVERVIEW.md`, `AGENTS.md` (read both first — check the Feature Status
+> Tracker in `AGENTS.md` §4 for the current full tool list before starting; it has grown since
+> this task was first scoped and this doc has been updated to match).
 > This is a standalone incremental task, not a rewrite of any shipped `FEATURE_*.md`. It touches
-> shared services and existing tool controllers — do not re-spec any tool's user-facing flow.
+> a shared core service and existing tool controllers — do not re-spec any tool's user-facing flow.
 
 ## Why this exists
 
 On Android, app storage is currently reporting roughly: App 95 MB / Data 1.77 GB (of which
-Cache is 1.66 GB) / Total 1.87 GB. The cache figure is a subset of the data figure, so the
-real story is ~1.66 GB of accumulated cache against ~110 MB of genuine persistent data. None of
-the shipped feature specs explicitly required temp-file cleanup after an operation completes,
-so this is a gap across the whole app, not a regression in any one tool.
+Cache is 1.66 GB) / Total 1.87 GB. The cache figure is a subset of the data figure, so the real
+story is ~1.66 GB of accumulated cache against ~110 MB of genuine persistent data.
 
-## Root cause hypothesis (confirm each before fixing)
+## Confirmed root cause (from prior audit — do not re-investigate)
 
-1. **`file_picker` copies picked files into app cache on Android.** Every file picked across
-   every tool (Merge, Split, Compress, Password, PDF to Image, Page Manager) likely leaves a
-   copy in `getTemporaryDirectory()` that is never deleted once the tool is done with it.
-2. **`PdfThumbnailService`** (shared by Page Manager, Split, PDF to Image) may be persisting
-   rendered page bitmaps to disk rather than holding them only in memory, with no cap or
-   eviction — every PDF ever opened potentially leaves its rendered pages behind permanently.
-3. **Intermediate/working files during processing** (e.g. draft compressed output before final
-   write, per-page renders before folder assembly in Split / PDF to Image) may land in cache or
-   app-documents directories and not be swept afterward, success or failure.
-4. Confirm/deny each hypothesis by instrumenting a debug build and inspecting
-   `getTemporaryDirectory()` / `getApplicationDocumentsDirectory()` contents after running each
-   tool once — don't guess which one is the actual culprit before fixing it.
+- `FilePicker.platform.pickFiles()` on Android copies picked files into the app's cache
+  directory (`getTemporaryDirectory()`). These copies persist indefinitely. Every tool reads
+  `platformFile.path`, which points at this cache copy. **This is the confirmed primary source
+  of the bloat.**
+- `PdfThumbnailService` was audited and is **not** a contributor — it uses `pdfx`'s native
+  rendering API, which returns `Uint8List` bytes held only in memory (in controller state),
+  garbage-collected on controller dispose/reset. No disk-side fix or LRU cache needed here.
 
-## Scope
+## Scope — full current tool list
 
-This task adds a **shared temp-file lifecycle**, not per-tool patches. Fix once in a shared
-service and have all six existing tools adopt it, per the "single source of truth" pattern
-already used for `PdfThumbnailService` and `FileService`.
+The original version of this task named only 6 PDF tools. The app has since grown; per
+`AGENTS.md` §4 Feature Status Tracker, **every** tool below picks files via `FileService` and
+must be covered by this fix:
+
+**PDF tools:** Merge, Page Manager, Split, Compress, PDF to Image, Password, Insert Pages,
+Insert Image as Page
+
+**Also PDF-adjacent:** Images to PDF
+
+**Image tools:** Format Convert, Resize, Compress, Blur, Crop & Rotate
+
+That's 13 tool controllers total. Do not scope this down to a subset — a partial fix leaves the
+same leak active in whichever tools are skipped, which defeats the point of the task.
+
+## Architectural approach — centralize in `FileService`, not per-controller
+
+Per `AGENTS.md` §2 Rule #8, **all tool screens already MUST use `FileService`
+(`lib/core/services/file_service.dart`) for picking and saving files.** This is a single choke
+point every tool already funnels through — use it instead of duplicating registration logic
+across 13 controllers.
+
+**Do not** add "read bytes → manually register path" boilerplate to each controller. Instead:
+
+- Registration happens **inside `FileService`'s pick methods themselves** (e.g.
+  `pickPdfFiles()`, `pickImageFiles()`, and any other pick method it exposes) — every path
+  returned to a caller is already registered with `TempFileManager` before the method returns.
+- This means **zero controller changes are needed for registration**, today or for any future
+  tool that adopts `FileService` — leak protection is automatic just by using the existing
+  standard pattern.
+- Controllers only need to add `cleanupSession()` calls at their existing lifecycle points
+  (success / error / reset) — see §3 below. This is a much smaller, less error-prone surface
+  than touching registration logic 13 separate times.
+
+## Proposed structure
 
 ### 1. New shared service: `lib/core/services/temp_file_manager.dart`
 
-- `registerTempFile(File file)` — tracks a file created during a tool session (e.g. a
-  `file_picker`-copied source, a per-page render, a draft output) so it can be cleaned up later
-- `cleanupSession()` — deletes all files registered in the current tool session; call this on:
-  - successful completion of an operation (after the final output is written to its
-    user-chosen, non-temp destination)
-  - operation failure/cancellation (mirrors the existing PDF Split rollback pattern — temp files
-    are not "the output," so they're always safe to delete, unlike output files which need the
-    rollback-on-partial-failure treatment already specced in `FEATURE_pdf_split.md`)
-  - app launch — sweep any orphaned temp files left behind by a previous session that crashed
-    or was killed before cleanup ran (this is the most likely source of the current 1.66 GB,
-    since a killed app never gets to run its own cleanup)
-- `cacheDirectorySize()` — returns current size of the app's temp directory, for optional
-  display in a future Settings screen (not required by this task, just don't block it)
+- `registerTempFile(File file)` / `registerTempPath(String path)` — tracks a file created or
+  copied during a tool session so it can be cleaned up later
+- `cleanupSession()` — deletes all currently registered files, silently skipping locked/missing
+  files (never throws), then clears the tracked set
+- `sweepOrphanedFiles()` — deletes everything inside `getTemporaryDirectory()` not currently
+  registered; fire-and-forget, never surfaces a UI error
+- `cacheDirectorySize()` — returns total bytes in the temp dir (hook for a future Settings
+  screen; not required by this task, just don't block it)
+- Guard: `registerTempFile` validates the path is actually inside the temp directory before
+  accepting — prevents ever registering a user's chosen output file for deletion
+- Riverpod provider: `tempFileManagerProvider` (singleton)
 
-### 2. `PdfThumbnailService` audit
+### 2. `FileService` — the actual fix point
 
-- Confirm whether rendered thumbnails are written to disk or held in memory
-- If written to disk: convert to an in-memory LRU cache with a hard size cap (define a concrete
-  number as a named constant, e.g. `maxThumbnailCacheBytes`, rather than leaving it unbounded —
-  document the chosen value as a `// ASSUMPTION:` comment since no spec pins it)
-- If held in memory already: no disk-side fix needed here, but confirm the in-memory cache is
-  actually bounded (evicted when a tool screen is disposed) and not silently growing across
-  tool sessions within a single app run
+- Every pick method (`pickPdfFiles()`, `pickImageFiles()`, and any others) registers each
+  returned file's path with `TempFileManager` before returning it to the caller
+- `FileService` takes a `TempFileManager` dependency (constructor or Riverpod-injected) so this
+  is testable in isolation
+- No change to each method's existing return signature — this is purely an added side effect at
+  the point files are already flowing through this service
 
-### 3. Per-tool adoption
+### 3. `main.dart` — startup sweep
 
-Every existing controller that currently reads a `PlatformFile` from `file_picker` or writes an
-intermediate file must call `TempFileManager.registerTempFile()` for each such file, and the
-screen/controller must call `cleanupSession()` at the appropriate lifecycle point (success,
-error, and `dispose()`/navigate-away). Tools affected: PDF Merge, PDF Page Manager, PDF Split,
-PDF Compress, PDF to Image, PDF Password.
+Add a fire-and-forget orphan sweep after the first frame, non-blocking:
+```dart
+WidgetsBinding.instance.addPostFrameCallback((_) {
+  tempFileManager.sweepOrphanedFiles();
+});
+```
+This is the safety net for the case that matters most: an app killed mid-session never runs its
+own `cleanupSession()`, so orphans accumulate until the next launch sweeps them.
 
-- This is an additive change to each controller — do not restructure their existing public API
-  or re-implement any already-shipped business logic
-- Final output files the user explicitly saves (via Save As / Open Folder) are **never** treated
-  as temp files and must never be touched by this cleanup, regardless of where they were
-  staged during processing
+### 4. Per-tool controller adoption (13 controllers)
 
-### 4. Startup sweep
+Since registration is already handled by `FileService`, each controller's change is limited to
+calling `cleanupSession()` at its existing lifecycle points:
 
-On app launch (`main.dart`, before the home screen renders), run
-`TempFileManager.sweepOrphanedFiles()` — deletes anything left in the app's temp directory from
-a previous session. This must not block the UI; run it fire-and-forget after first frame, not
-as a blocking splash step.
+- After successful completion of its operation (after the final output is written to its
+  user-chosen, non-temp destination)
+- On operation failure/error (temp files are never the output — always safe to delete, same
+  reasoning as the existing PDF Split rollback-on-failure pattern)
+- On the standardized "reset" action (per `AGENTS.md` §2 Rule #8's completion-view pattern, every
+  tool already has a reset/"process another" action button — hook cleanup there too)
+
+Apply this identically across: PDF Merge, PDF Page Manager, PDF Split, PDF Compress, PDF to
+Image, PDF Password, PDF Insert Pages, PDF Insert Image as Page, Images to PDF, Image Convert,
+Image Resize, Image Compress, Image Blur, Image Crop & Rotate.
+
+Do not restructure any controller's existing public API or re-implement already-shipped business
+logic — this is strictly additive.
+
+**Before writing controller changes:** confirm each controller's actual reset/completion method
+name (they may not all be literally named `reset()` — check each file). If any controller's
+lifecycle doesn't cleanly expose a single place for the success/error/reset hooks, note that as
+a `// ASSUMPTION:` comment rather than forcing a uniform shape that doesn't fit.
 
 ## Edge cases
 
 | Case | Required behavior |
 |---|---|
-| App is killed (not gracefully closed) mid-operation | Orphaned temp files remain until next launch's startup sweep — acceptable, this is exactly what the sweep is for |
-| Cleanup runs but a file is locked/in-use by the OS | Log and skip that file rather than throwing — cleanup failures must never surface as a user-facing error, this is invisible maintenance |
-| User picks the same file twice in one session (e.g. re-adds after removing from Merge list) | Don't double-register/double-copy if avoidable, but if the underlying `file_picker` behavior forces a fresh copy each time, registering the duplicate is fine — correctness over cleverness here |
-| Thumbnail LRU cache cap is hit mid-session (user scrolls through a 300-page PDF) | Oldest thumbnails evicted first; re-scroll re-renders them — a brief re-render is an acceptable tradeoff for a bounded cache, don't skip the cap to avoid this |
+| App is killed (not gracefully closed) mid-operation | Orphaned temp files remain until next launch's startup sweep — acceptable, that's what the sweep is for |
+| Cleanup runs but a file is locked/in-use by the OS | Log and skip that file rather than throwing — cleanup failures must never surface as a user-facing error |
+| User picks the same file twice in one session (e.g. re-adds after removing from Merge list) | Don't double-register/double-copy if avoidable, but if `file_picker` forces a fresh copy each time, registering the duplicate is fine — correctness over cleverness |
+| A tool's "reset" flow doesn't cleanly map to one method | Note as `// ASSUMPTION:` and hook cleanup at the closest equivalent point rather than forcing a mismatched shape |
 
 ## Testing
 
-- Unit test `TempFileManager`: register → cleanupSession deletes registered files; sweep deletes
-  files not registered in the current run; cleanup never touches a file outside the temp
-  directory (guard against a bad path being registered)
-- For each of the six tools, add a regression test (or extend the existing controller test file)
-  asserting that after a successful operation, no files remain in the temp directory except the
-  user's chosen output destination
-- Manual verification: run each tool once on a real Android device/emulator, check
+- Unit test `TempFileManager`: register → `cleanupSession()` deletes registered files; sweep
+  deletes unregistered files; cleanup never touches a path outside the temp directory (guard
+  test); locked/missing file during cleanup is skipped without throwing; double-registration of
+  the same file doesn't error
+- Unit test `FileService`: pick methods register returned paths with a mocked `TempFileManager`
+  (use `mocktail`, consistent with existing test patterns)
+- For each of the 13 tool controllers, extend its existing test file with one regression test
+  asserting `cleanupSession()` is called on both the success and failure paths (mock
+  `TempFileManager`)
+- Manual verification: run each of the 13 tools once on a real Android device/emulator, check
   Settings → Apps → Anvil → Storage before and after, confirm Cache no longer grows unbounded
-  across repeated use
+  across repeated use across all tool families, not just PDF tools
 
 ## Out of scope for this task
 
 - A user-facing "Clear Cache" button or Settings screen — future fast-follow if still needed
-  after this fix, not required to solve the current bloat
 - Changing where final output files are saved — this task only touches temporary/intermediate
   files, never user-chosen output locations
-- Any iOS/macOS/Linux/Web-specific temp directory handling — Android is the platform where this
-  was observed; revisit for other platforms if the same pattern shows up later
+- Any iOS/macOS/Linux/Web-specific temp directory handling — Android is where this was observed;
+  revisit for other platforms if the same pattern shows up there later
