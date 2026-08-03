@@ -165,5 +165,6 @@ The implementation is verified by unit and integration tests:
    * Tests `cacheDirectorySize()` byte calculation accuracy.
 2. **`test/file_service_test.dart`**
    * Verifies `FileService` constructor injection and manager binding.
+   * Asserts that `TempFileManager.registerTempPath()` is explicitly invoked for each valid picked file path, and verifies that files without paths (e.g. byte-only picks) do not trigger registration calls.
 3. **Full Suite (`flutter test`)**
    * **196 / 196 tests passing** across the complete codebase.

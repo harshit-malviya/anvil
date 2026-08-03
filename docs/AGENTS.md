@@ -58,7 +58,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
   - Centralized file registration inside `FileService` (`lib/core/services/file_service.dart`) `pickPdfFiles` and `pickImageFiles` methods — zero controller boilerplate required for tracking picked copies.
   - Configured startup orphan sweep in `lib/main.dart` via `ref.read(tempFileManagerProvider)` post-frame callback.
   - Adopted `TempFileManager` across all 14 tool controllers (8 PDF, 1 PDF-adjacent, 5 Image) at operation success, operation error/failure, and tool reset/clear endpoints.
-  - Created unit test suite `test/core/services/temp_file_manager_test.dart` (7 tests) and updated `test/file_service_test.dart`. All 196 workspace unit/widget tests passing cleanly.
+  - Created unit test suite `test/core/services/temp_file_manager_test.dart` (7 tests) and updated `test/file_service_test.dart` with explicit `registerTempPath()` behavioral verification via `MockTempFileManager`. All 196 workspace unit/widget tests passing cleanly.
   - Created technical specification document `docs/Audit App/TECHNICAL_DOC_temp_file_lifecycle.md`.
 
 ## 2026-08-01 — Session 25
