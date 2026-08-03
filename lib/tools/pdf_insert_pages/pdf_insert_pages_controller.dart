@@ -9,6 +9,7 @@ import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import '../../core/services/pdf_validation_service.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'pdf_insert_pages_state.dart';
 
 final pdfInsertPagesControllerProvider =
@@ -20,14 +21,17 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
   final FileService _fileService;
   final PdfThumbnailService _thumbnailService;
   final PdfValidationService _validationService;
+  final TempFileManager _tempFileManager;
 
   PdfInsertPagesController({
     FileService? fileService,
     PdfThumbnailService? thumbnailService,
     PdfValidationService? validationService,
+    TempFileManager? tempFileManager,
   })  : _fileService = fileService ?? FileService(),
         _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _validationService = validationService ?? const PdfValidationService(),
+        _tempFileManager = tempFileManager ?? TempFileManager(),
         super(const PdfInsertPagesState());
 
   /// Load and validate target PDF document into which pages will be inserted.
@@ -207,6 +211,7 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
 
   /// Clear the loaded target document and reset state.
   void clearTarget() {
+    _tempFileManager.cleanupSession();
     state = const PdfInsertPagesState();
   }
 
@@ -270,6 +275,8 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
       }
 
+      await _tempFileManager.cleanupSession();
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -278,6 +285,7 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
 
       return targetPath;
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -289,6 +297,7 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -300,6 +309,7 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
       );
       return null;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));

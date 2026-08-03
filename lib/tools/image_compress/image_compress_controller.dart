@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/services/image_resize_service.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'image_compress_state.dart';
 
 /// Provider for ImageCompressController.
@@ -334,8 +335,13 @@ _RangeSearchResult _encodeByTargetRange(
 
 class ImageCompressController extends StateNotifier<ImageCompressState> {
   final FileService _fileService;
+  final TempFileManager _tempFileManager;
 
-  ImageCompressController(this._fileService) : super(const ImageCompressState());
+  ImageCompressController(
+    this._fileService, [
+    TempFileManager? tempFileManager,
+  ])  : _tempFileManager = tempFileManager ?? TempFileManager(),
+        super(const ImageCompressState());
 
   /// Load and validate selected image file.
   Future<void> loadImage(PlatformFile platformFile) async {
@@ -621,6 +627,8 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         qOnlyH = result.outputHeight;
       }
 
+      await _tempFileManager.cleanupSession();
+
       state = state.copyWith(
         isProcessing: false,
         compressedSizeBytes: result.outputSize,
@@ -636,16 +644,21 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         qualityOnlyHeight: qOnlyH,
       );
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to compress on this device.",
       );
+      return;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      return;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final msg = e is FormatException ? e.message : "Compression failed. Please try again.";
       state = state.copyWith(
         isProcessing: false,
@@ -682,6 +695,7 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
 
   /// Reset controller back to initial state.
   void reset() {
+    _tempFileManager.cleanupSession();
     state = const ImageCompressState();
   }
 }

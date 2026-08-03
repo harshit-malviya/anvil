@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_validation_service.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'pdf_password_state.dart';
 
 final pdfPasswordControllerProvider =
@@ -16,12 +17,15 @@ final pdfPasswordControllerProvider =
 class PdfPasswordController extends StateNotifier<PdfPasswordState> {
   final FileService _fileService;
   final PdfValidationService _validationService;
+  final TempFileManager _tempFileManager;
 
   PdfPasswordController({
     FileService? fileService,
     PdfValidationService? validationService,
+    TempFileManager? tempFileManager,
   })  : _fileService = fileService ?? FileService(),
         _validationService = validationService ?? const PdfValidationService(),
+        _tempFileManager = tempFileManager ?? TempFileManager(),
         super(const PdfPasswordState());
 
   /// Load and inspect a PDF file to detect password protection.
@@ -133,6 +137,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
 
   /// Reset the controller to initial state.
   void reset() {
+    _tempFileManager.cleanupSession();
     state = const PdfPasswordState();
   }
 
@@ -181,6 +186,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
       }
+      await _tempFileManager.cleanupSession();
 
       state = state.copyWith(
         isProcessing: false,
@@ -190,6 +196,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
 
       return targetPath;
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -201,6 +208,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -212,6 +220,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       );
       return null;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -256,6 +265,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
       }
+      await _tempFileManager.cleanupSession();
 
       state = state.copyWith(
         isProcessing: false,
@@ -265,6 +275,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
 
       return targetPath;
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -276,6 +287,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -287,6 +299,7 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       );
       return null;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));

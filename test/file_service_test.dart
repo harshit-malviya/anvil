@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:anvil/core/services/file_service.dart';
+import 'package:anvil/core/services/temp_file_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -31,5 +32,12 @@ void main() {
 
       tempDir.deleteSync(recursive: true);
     });
+
+    test('FileService accepts TempFileManager instance', () {
+      final mgr = TempFileManager();
+      final service = FileService(mgr);
+      expect(service, isNotNull);
+    });
   });
 }
+

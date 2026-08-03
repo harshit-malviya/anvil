@@ -7,6 +7,7 @@ import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import '../../core/services/pdf_validation_service.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'pdf_split_state.dart';
 
 final pdfSplitControllerProvider =
@@ -18,14 +19,17 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
   final PdfThumbnailService _thumbnailService;
   final FileService _fileService;
   final PdfValidationService _validationService;
+  final TempFileManager _tempFileManager;
 
   PdfSplitController({
     PdfThumbnailService? thumbnailService,
     FileService? fileService,
     PdfValidationService? validationService,
+    TempFileManager? tempFileManager,
   })  : _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _fileService = fileService ?? FileService(),
         _validationService = validationService ?? const PdfValidationService(),
+        _tempFileManager = tempFileManager ?? TempFileManager(),
         super(const PdfSplitState());
 
   /// Load and validate a single PDF document.
@@ -246,6 +250,7 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
 
   /// Reset controller to initial state.
   void reset() {
+    _tempFileManager.cleanupSession();
     state = const PdfSplitState();
   }
 
@@ -360,6 +365,8 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
       }
 
+      await _tempFileManager.cleanupSession();
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -369,6 +376,7 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
 
       return outputDir.path;
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -380,6 +388,7 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       _rollbackOutputDir(outputDir);
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
@@ -393,6 +402,7 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       );
       return null;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       _rollbackOutputDir(outputDir);
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {

@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/services/image_resize_service.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'image_resize_state.dart';
 
 /// Provider for ImageResizeController.
@@ -96,8 +97,13 @@ Future<ImageResizeResult> isolateImageResizeWorker(ImageResizeParams params) asy
 
 class ImageResizeController extends StateNotifier<ImageResizeState> {
   final FileService _fileService;
+  final TempFileManager _tempFileManager;
 
-  ImageResizeController(this._fileService) : super(const ImageResizeState());
+  ImageResizeController(
+    this._fileService, [
+    TempFileManager? tempFileManager,
+  ])  : _tempFileManager = tempFileManager ?? TempFileManager(),
+        super(const ImageResizeState());
 
   /// Load and parse selected image file.
   Future<void> loadImage(PlatformFile platformFile) async {
@@ -378,22 +384,27 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
 
       final result = await compute(isolateImageResizeWorker, params);
 
+      await _tempFileManager.cleanupSession();
+
       state = state.copyWith(
         isProcessing: false,
         outputPath: result.outputPath,
         outputSize: result.outputSize,
       );
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to resize at this size on this device. Try a smaller target size.",
       );
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final msg = e is FormatException ? e.message : "Resize failed. Please try again.";
       state = state.copyWith(
         isProcessing: false,
@@ -425,6 +436,7 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
 
   /// Reset controller back to initial state.
   void reset() {
+    _tempFileManager.cleanupSession();
     state = const ImageResizeState();
   }
 }

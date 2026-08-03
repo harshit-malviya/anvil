@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/services/image_to_pdf_page_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'images_to_pdf_state.dart';
 
 final imagesToPdfControllerProvider =
@@ -16,12 +17,15 @@ final imagesToPdfControllerProvider =
 class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
   final FileService _fileService;
   final ImageToPdfPageService _imageService;
+  final TempFileManager _tempFileManager;
 
   ImagesToPdfController({
     FileService? fileService,
     ImageToPdfPageService? imageService,
+    TempFileManager? tempFileManager,
   })  : _fileService = fileService ?? FileService(),
         _imageService = imageService ?? ImageToPdfPageService(),
+        _tempFileManager = tempFileManager ?? TempFileManager(),
         super(const ImagesToPdfState());
 
   /// Add and validate image files to convert into PDF pages.
@@ -103,6 +107,7 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
 
   /// Clear all added images returning state to initial empty drop zone.
   void clearImages() {
+    _tempFileManager.cleanupSession();
     state = const ImagesToPdfState();
   }
 
@@ -176,6 +181,8 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
       }
 
+      await _tempFileManager.cleanupSession();
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -184,6 +191,7 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
 
       return targetPath;
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -195,6 +203,7 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -206,6 +215,7 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
       );
       return null;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));

@@ -7,6 +7,7 @@ import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import '../../core/services/pdf_validation_service.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'pdf_page_manager_state.dart';
 
 final pdfPageManagerControllerProvider =
@@ -17,12 +18,15 @@ final pdfPageManagerControllerProvider =
 class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
   final FileService _fileService;
   final PdfValidationService _validationService;
+  final TempFileManager _tempFileManager;
 
   PdfPageManagerController({
     FileService? fileService,
     PdfValidationService? validationService,
+    TempFileManager? tempFileManager,
   })  : _fileService = fileService ?? FileService(),
         _validationService = validationService ?? const PdfValidationService(),
+        _tempFileManager = tempFileManager ?? TempFileManager(),
         super(const PdfPageManagerState());
 
   /// Load and validate a single PDF document.
@@ -199,6 +203,7 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
 
   /// Reset state to initial empty file state.
   void reset() {
+    _tempFileManager.cleanupSession();
     state = const PdfPageManagerState();
   }
 
@@ -260,6 +265,8 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
       }
 
+      await _tempFileManager.cleanupSession();
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -268,6 +275,7 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
 
       return targetPath;
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -279,6 +287,7 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -290,6 +299,7 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       );
       return null;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));

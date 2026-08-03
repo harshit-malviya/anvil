@@ -8,6 +8,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import '../../core/services/pdf_validation_service.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'pdf_to_image_state.dart';
 
 typedef PageRenderer = Future<Uint8List?> Function(
@@ -27,16 +28,19 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
   final PageRenderer? _customRenderer;
   final FileService _fileService;
   final PdfValidationService _validationService;
+  final TempFileManager _tempFileManager;
 
   PdfToImageController({
     PdfThumbnailService? thumbnailService,
     PageRenderer? customRenderer,
     FileService? fileService,
     PdfValidationService? validationService,
+    TempFileManager? tempFileManager,
   })  : _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _customRenderer = customRenderer,
         _fileService = fileService ?? FileService(),
         _validationService = validationService ?? const PdfValidationService(),
+        _tempFileManager = tempFileManager ?? TempFileManager(),
         super(const PdfToImageState());
 
   /// Load and validate a single PDF document.
@@ -199,6 +203,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
 
   /// Reset state to default empty state.
   void reset() {
+    _tempFileManager.cleanupSession();
     state = const PdfToImageState();
   }
 
@@ -290,6 +295,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
           await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
         }
 
+        await _tempFileManager.cleanupSession();
+
         state = state.copyWith(
           isProcessing: false,
           resetProgressMessage: true,
@@ -376,6 +383,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
           return null;
         }
 
+        await _tempFileManager.cleanupSession();
+
         state = state.copyWith(
           isProcessing: false,
           resetProgressMessage: true,
@@ -389,6 +398,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         return targetDirPath;
       }
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -401,6 +411,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -413,6 +424,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
       );
       return null;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));

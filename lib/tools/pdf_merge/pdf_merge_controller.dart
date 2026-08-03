@@ -7,6 +7,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_validation_service.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'pdf_merge_state.dart';
 
 import 'dart:ui' as ui;
@@ -65,12 +66,15 @@ final pdfMergeControllerProvider =
 class PdfMergeController extends StateNotifier<PdfMergeState> {
   final FileService _fileService;
   final PdfValidationService _validationService;
+  final TempFileManager _tempFileManager;
 
   PdfMergeController({
     FileService? fileService,
     PdfValidationService? validationService,
+    TempFileManager? tempFileManager,
   })  : _fileService = fileService ?? FileService(),
         _validationService = validationService ?? const PdfValidationService(),
+        _tempFileManager = tempFileManager ?? TempFileManager(),
         super(const PdfMergeState());
 
   /// Validate and add PDF files to state list.
@@ -149,6 +153,7 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
 
   /// Remove all files from list.
   void removeAll() {
+    _tempFileManager.cleanupSession();
     state = const PdfMergeState();
   }
 
@@ -262,6 +267,8 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
       }
 
+      await _tempFileManager.cleanupSession();
+
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
@@ -270,6 +277,7 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
 
       return targetPath;
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -281,6 +289,7 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
       );
       return null;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));
@@ -292,6 +301,7 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
       );
       return null;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       if (elapsedMs < 600) {
         await Future.delayed(Duration(milliseconds: 600 - elapsedMs));

@@ -3,9 +3,18 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'temp_file_manager.dart';
 
 class FileService {
+  final TempFileManager? _tempFileManager;
+
+  FileService([TempFileManager? tempFileManager])
+      : _tempFileManager = tempFileManager;
   /// Open OS file picker for selecting PDF files.
+  ///
+  /// On Android, file_picker copies picked files into the app's cache directory.
+  /// Each returned file's path is automatically registered with [TempFileManager]
+  /// for cleanup at end of session — callers don't need to register manually.
   Future<List<PlatformFile>> pickPdfFiles({bool allowMultiple = true}) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -17,10 +26,15 @@ class FileService {
     if (result == null || result.files.isEmpty) {
       return [];
     }
+    await _registerPickedFiles(result.files);
     return result.files;
   }
 
   /// Open OS file picker for selecting Image files (JPEG, PNG, BMP, GIF, TIFF, WebP).
+  ///
+  /// On Android, file_picker copies picked files into the app's cache directory.
+  /// Each returned file's path is automatically registered with [TempFileManager]
+  /// for cleanup at end of session — callers don't need to register manually.
   Future<List<PlatformFile>> pickImageFiles({bool allowMultiple = false}) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -32,6 +46,7 @@ class FileService {
     if (result == null || result.files.isEmpty) {
       return [];
     }
+    await _registerPickedFiles(result.files);
     return result.files;
   }
 
@@ -148,5 +163,16 @@ class FileService {
 
     return Directory.systemTemp;
   }
-}
 
+  /// Register each picked file's path with [TempFileManager] for session cleanup.
+  /// Silently skips files without a path (e.g. web platform, or withData-only picks).
+  Future<void> _registerPickedFiles(List<PlatformFile> files) async {
+    final mgr = _tempFileManager;
+    if (mgr == null) return;
+    for (final file in files) {
+      if (file.path != null && file.path!.isNotEmpty) {
+        await mgr.registerTempPath(file.path!);
+      }
+    }
+  }
+}

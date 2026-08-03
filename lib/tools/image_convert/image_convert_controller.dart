@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'image_convert_state.dart';
 
 /// Provider for ImageConvertController.
@@ -99,8 +100,13 @@ Future<ImageConvertResult> isolateImageConvertWorker(ImageConvertParams params) 
 
 class ImageConvertController extends StateNotifier<ImageConvertState> {
   final FileService _fileService;
+  final TempFileManager _tempFileManager;
 
-  ImageConvertController(this._fileService) : super(const ImageConvertState());
+  ImageConvertController(
+    this._fileService, [
+    TempFileManager? tempFileManager,
+  ])  : _tempFileManager = tempFileManager ?? TempFileManager(),
+        super(const ImageConvertState());
 
   /// Detect format using magic bytes header, fallback to extension.
   static String detectFormat(Uint8List bytes, String fileName) {
@@ -303,22 +309,29 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
 
       final result = await compute(isolateImageConvertWorker, params);
 
+      await _tempFileManager.cleanupSession();
+
       state = state.copyWith(
         isProcessing: false,
         outputPath: result.outputPath,
         outputSize: result.outputSize,
       );
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to convert on this device.",
       );
+      return;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      return;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final msg = e is FormatException ? e.message : "Conversion failed. Please try again.";
       state = state.copyWith(
         isProcessing: false,
@@ -350,6 +363,7 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
 
   /// Reset controller back to initial state.
   void reset() {
+    _tempFileManager.cleanupSession();
     state = const ImageConvertState();
   }
 }

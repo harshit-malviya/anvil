@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
+import '../../core/services/temp_file_manager.dart';
 import 'image_blur_state.dart';
 
 /// Provider for ImageBlurController.
@@ -195,9 +196,14 @@ Future<ImageBlurResult> isolateImageBlurWorker(ImageBlurParams params) async {
 
 class ImageBlurController extends StateNotifier<ImageBlurState> {
   final FileService _fileService;
+  final TempFileManager _tempFileManager;
   int _regionCounter = 0;
 
-  ImageBlurController(this._fileService) : super(const ImageBlurState());
+  ImageBlurController(
+    this._fileService, [
+    TempFileManager? tempFileManager,
+  ])  : _tempFileManager = tempFileManager ?? TempFileManager(),
+        super(const ImageBlurState());
 
   /// Load and validate selected image file.
   Future<void> loadImage(PlatformFile platformFile) async {
@@ -436,22 +442,29 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
 
       final result = await compute(isolateImageBlurWorker, params);
 
+      await _tempFileManager.cleanupSession();
+
       state = state.copyWith(
         isProcessing: false,
         outputPath: result.outputPath,
         outputSizeBytes: result.outputSize,
       );
     } on OutOfMemoryError {
+      await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to redact on this device.",
       );
+      return;
     } on FileSystemException catch (e) {
+      await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      return;
     } catch (e) {
+      await _tempFileManager.cleanupSession();
       final msg = e is FormatException ? e.message : "Redaction failed. Please try again.";
       state = state.copyWith(
         isProcessing: false,
@@ -496,6 +509,7 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
 
   /// Reset controller back to initial state.
   void reset() {
+    _tempFileManager.cleanupSession();
     _regionCounter = 0;
     state = const ImageBlurState();
   }
