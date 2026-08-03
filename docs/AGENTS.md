@@ -52,6 +52,15 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-08-02 — Session 26
+- Implemented Storage Cleanup — Temp/Cache File Lifecycle (Android) (`TASK_storage_cleanup.md`):
+  - Created `TempFileManager` service (`lib/core/services/temp_file_manager.dart`) and Riverpod singleton provider (`tempFileManagerProvider`) featuring session path tracking, path guard validation (`getTemporaryDirectory()`), fault-tolerant `cleanupSession()`, non-blocking orphan sweep `sweepOrphanedFiles()`, and `cacheDirectorySize()` calculation hook.
+  - Centralized file registration inside `FileService` (`lib/core/services/file_service.dart`) `pickPdfFiles` and `pickImageFiles` methods — zero controller boilerplate required for tracking picked copies.
+  - Configured startup orphan sweep in `lib/main.dart` via `ref.read(tempFileManagerProvider)` post-frame callback.
+  - Adopted `TempFileManager` across all 14 tool controllers (8 PDF, 1 PDF-adjacent, 5 Image) at operation success, operation error/failure, and tool reset/clear endpoints.
+  - Created unit test suite `test/core/services/temp_file_manager_test.dart` (7 tests) and updated `test/file_service_test.dart`. All 196 workspace unit/widget tests passing cleanly.
+  - Created technical specification document `docs/Audit App/TECHNICAL_DOC_temp_file_lifecycle.md`.
+
 ## 2026-08-01 — Session 25
 - Implemented Fine-angle "Straighten" Rotation for Image Crop & Rotate (`TASK_image_crop_rotate_straighten.md`):
   - Updated `ImageCropRotateState` in `lib/tools/image_crop_rotate/image_crop_rotate_state.dart` with `fineRotationAngle` (−45° to +45°) and derived `inscribedCropBounds` getter using inscribed-rectangle geometry to eliminate empty canvas corners.
@@ -265,9 +274,16 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | Image Compress | `docs/V2/03_Image_Compress/FEATURE_image_compress.md` | Done | Controller, UI, background isolate worker, format-specific quality encoding, size comparison result types, unit tests passing |
 | Image Blur | `docs/V2/04_Image_Blur/FEATURE_image_blur.md` | Done | Controller, UI, interactive canvas drawing, background isolate worker, redaction styles (Pixelate, Blur, Solid Block), unit tests passing |
 | Image Crop & Rotate | `docs/V2/05_Crop_&_Rotate/FEATURE_image_crop_rotate.md` | Done | Controller, UI, interactive canvas crop overlay, 90° step rotation, background isolate worker, unit tests passing |
+| Storage Cleanup | `docs/Audit App/TASK_storage_cleanup.md` | Done | Shared TempFileManager service, FileService auto-registration, startup sweep, 14-controller adoption, unit tests passing |
 
 ## 5. Decisions log
 
+
+## 2026-08-02
+- Decision: Temporary file registration is centralized inside `FileService` (`pickPdfFiles()`, `pickImageFiles()`) so controllers never need manual file registration boilerplate.
+- Decision: `registerTempPath` enforces a path guard checking if the normalized path starts with `getTemporaryDirectory()`, preventing user output files saved to external storage/downloads from ever being registered or accidentally deleted.
+- Decision: `cleanupSession()` and `sweepOrphanedFiles()` execute in a non-blocking, fault-tolerant manner (try-catch per file) to ensure cleanup failures never disrupt UI workflows.
+- Decision: Startup sweep runs fire-and-forget in a post-frame callback (`WidgetsBinding.instance.addPostFrameCallback`) using `ref.read(tempFileManagerProvider)`.
 
 ## 2026-08-01
 - Decision: Rotation in Image Crop & Rotate advances 90° clockwise per tap (0° → 90° → 180° → 270° → 0°).
