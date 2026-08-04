@@ -56,7 +56,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 - Implemented App Log / Debug Log Feature (`docs/App Log Feature/FEATURE_debug_log.md`):
   - Created `AppLogService` (`lib/core/services/app_log_service.dart`) with `LogEntry` model, `LogResult` enum, JSON Lines file persistence (`debug_log.jsonl`), 500-entry retention cap, and `ChangeNotifierProvider` (`appLogServiceProvider`).
   - Created hidden developer UI `DebugLogScreen` (`lib/core/debug/debug_log_screen.dart`) featuring reverse-chronological list in monospace, color-coded result badges, expandable error detail panels, clipboard copy, file sharing (`share_plus`), and log clearing dialog.
-  - Registered `/debug-log` route in `lib/core/router.dart` and wired hidden 7-tap-within-3-seconds trigger on "OFFLINE WORKSHOP" in `lib/home/home_screen.dart`.
+  - Registered `/debug-log` route in `lib/core/router.dart` and wired hidden long press trigger on "OFFLINE WORKSHOP" in `lib/home/home_screen.dart`.
   - Retrofitted all 14 tool controllers (8 PDF, 1 PDF-adjacent, 5 Image) with `started`, `success`, and `error` instrumentation across lifecycle methods (`loadDocument`, `apply`, `merge`, `split`, `compress`, `convert`, `resize`, `export`, etc.).
   - Used `ref.read(appLogServiceProvider)` in all 14 controller Riverpod providers to prevent StateNotifier re-disposal on log emission while enabling real-time UI updates via `ref.watch(appLogServiceProvider)` on `DebugLogScreen`.
   - Enforced security rule: `pdf_password_controller.dart` never logs password values (logs generic `'incorrect password provided'`).
@@ -285,7 +285,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | Image Blur | `docs/V2/04_Image_Blur/FEATURE_image_blur.md` | Done | Controller, UI, interactive canvas drawing, background isolate worker, redaction styles (Pixelate, Blur, Solid Block), unit tests passing |
 | Image Crop & Rotate | `docs/V2/05_Crop_&_Rotate/FEATURE_image_crop_rotate.md` | Done | Controller, UI, interactive canvas crop overlay, 90° step rotation, background isolate worker, unit tests passing |
 | Storage Cleanup | `docs/Audit App/TASK_storage_cleanup.md` | Done | Shared TempFileManager service, FileService auto-registration, startup sweep, 14-controller adoption, unit tests passing |
-| Debug Log | `docs/App Log Feature/FEATURE_debug_log.md` | Done | AppLogService, hidden DebugLogScreen, 7-tap trigger, 14-controller retrofit, security guard, zero analyzer errors |
+| Debug Log | `docs/App Log Feature/FEATURE_debug_log.md` | Done | AppLogService, hidden DebugLogScreen, long press trigger, 14-controller retrofit, security guard, zero analyzer errors |
 
 ## 5. Decisions log
 

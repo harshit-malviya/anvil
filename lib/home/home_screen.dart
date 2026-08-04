@@ -19,9 +19,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
 
-  // Hidden debug log trigger — 7 taps within 3 seconds on "OFFLINE WORKSHOP"
-  int _debugTapCount = 0;
-  DateTime? _debugFirstTap;
+  // Hidden debug log trigger — long press on "OFFLINE WORKSHOP"
+  void _onDebugLongPress() {
+    context.push('/debug-log');
+  }
 
   @override
   void initState() {
@@ -47,23 +48,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _clearQuery() {
     _controller.clear();
     ref.read(searchQueryProvider.notifier).state = '';
-  }
-
-  void _onDebugTap() {
-    final now = DateTime.now();
-    if (_debugFirstTap == null ||
-        now.difference(_debugFirstTap!).inMilliseconds > 3000) {
-      // Reset — too long since first tap
-      _debugTapCount = 1;
-      _debugFirstTap = now;
-      return;
-    }
-    _debugTapCount++;
-    if (_debugTapCount >= 7) {
-      _debugTapCount = 0;
-      _debugFirstTap = null;
-      context.push('/debug-log');
-    }
   }
 
   @override
@@ -109,7 +93,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Row(
                     children: [
                       GestureDetector(
-                        onTap: _onDebugTap,
+                        onLongPress: _onDebugLongPress,
                         behavior: HitTestBehavior.opaque,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
