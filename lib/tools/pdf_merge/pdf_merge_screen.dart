@@ -219,15 +219,20 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: ReorderableListView.builder(
-            buildDefaultDragHandles: false,
-            onReorderItem: (oldIndex, newIndex) {
-              controller.reorderFiles(oldIndex, newIndex);
-            },
+          child: ListView.builder(
             itemCount: state.files.length,
             itemBuilder: (context, index) {
               final item = state.files[index];
-              return _buildFileRow(context, item, index, controller, brightness, familyAccent, key: ValueKey(item.id));
+              return _buildFileRow(
+                context,
+                item,
+                index,
+                state.files.length,
+                controller,
+                brightness,
+                familyAccent,
+                key: ValueKey(item.id),
+              );
             },
           ),
         ),
@@ -469,99 +474,148 @@ class _PdfMergeScreenState extends ConsumerState<PdfMergeScreen> {
     BuildContext context,
     PdfMergeItem item,
     int index,
+    int totalCount,
     PdfMergeController controller,
     Brightness brightness,
     Color familyAccent, {
     required Key key,
   }) {
-    return Container(
+    return DragTarget<int>(
       key: key,
-      margin: const EdgeInsets.only(bottom: 8.0),
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground(brightness),
-        borderRadius: BorderRadius.circular(6.0),
-        border: Border.all(
-          color: AppColors.pegGrey.withValues(alpha: 0.4),
-        ),
-      ),
-      child: Row(
-        children: [
-          ReorderableDragStartListener(
-            index: index,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.grab,
-              child: Tooltip(
-                message: 'Drag to reorder',
-                child: Icon(
-                  Icons.drag_indicator_rounded,
-                  color: AppColors.text(brightness).withValues(alpha: 0.4),
-                ),
-              ),
+      onWillAcceptWithDetails: (details) => details.data != index,
+      onAcceptWithDetails: (details) {
+        final oldIndex = details.data;
+        final newIndex = index > oldIndex ? index + 1 : index;
+        controller.reorderFiles(oldIndex, newIndex);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isTargeting = candidateData.isNotEmpty;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+          decoration: BoxDecoration(
+            color: isTargeting
+                ? familyAccent.withValues(alpha: 0.12)
+                : AppColors.cardBackground(brightness),
+            borderRadius: BorderRadius.circular(6.0),
+            border: Border.all(
+              color: isTargeting ? familyAccent : AppColors.pegGrey.withValues(alpha: 0.4),
+              width: isTargeting ? 2.0 : 1.0,
             ),
           ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: familyAccent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4.0),
-            ),
-            child: Icon(
-              Icons.picture_as_pdf_rounded,
-              color: familyAccent,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  style: AppTypography.bodyMedium(brightness).copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${item.pageCount} ${item.pageCount == 1 ? 'page' : 'pages'} • ${item.formattedSize}',
-                  style: AppTypography.mono(brightness).copyWith(
-                    color: AppColors.text(brightness).withValues(alpha: 0.6),
-                    fontSize: 12,
+          child: Row(
+            children: [
+              Draggable<int>(
+                data: index,
+                feedback: Material(
+                  elevation: 6,
+                  borderRadius: BorderRadius.circular(6.0),
+                  child: Container(
+                    width: 320,
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground(brightness),
+                      borderRadius: BorderRadius.circular(6.0),
+                      border: Border.all(color: familyAccent, width: 1.5),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.drag_indicator_rounded, color: familyAccent, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            item.name,
+                            style: AppTypography.bodyMedium(brightness).copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close_rounded, size: 20),
-            onPressed: () => controller.removeFile(item.id),
-            tooltip: 'Remove file',
-          ),
-          const SizedBox(width: 8),
-          ReorderableDragStartListener(
-            index: index,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.grab,
-              child: Tooltip(
-                message: 'Drag to reorder',
-                child: Padding(
-                  padding: const EdgeInsets.all(4.0),
+                childWhenDragging: Opacity(
+                  opacity: 0.3,
                   child: Icon(
-                    Icons.reorder_rounded,
-                    size: 20,
-                    color: AppColors.text(brightness).withValues(alpha: 0.5),
+                    Icons.drag_indicator_rounded,
+                    color: AppColors.text(brightness).withValues(alpha: 0.4),
+                  ),
+                ),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.grab,
+                  child: Tooltip(
+                    message: 'Drag to reorder',
+                    child: Padding(
+                      padding: const EdgeInsets.all(4.0),
+                      child: Icon(
+                        Icons.drag_indicator_rounded,
+                        color: AppColors.text(brightness).withValues(alpha: 0.5),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: familyAccent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4.0),
+                ),
+                child: Icon(
+                  Icons.picture_as_pdf_rounded,
+                  color: familyAccent,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      style: AppTypography.bodyMedium(brightness).copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${item.pageCount} ${item.pageCount == 1 ? 'page' : 'pages'} • ${item.formattedSize}',
+                      style: AppTypography.mono(brightness).copyWith(
+                        color: AppColors.text(brightness).withValues(alpha: 0.6),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (index > 0)
+                IconButton(
+                  icon: const Icon(Icons.keyboard_arrow_up_rounded, size: 20),
+                  onPressed: () => controller.reorderFiles(index, index - 1),
+                  tooltip: 'Move up',
+                ),
+              if (index < totalCount - 1)
+                IconButton(
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+                  onPressed: () => controller.reorderFiles(index, index + 2),
+                  tooltip: 'Move down',
+                ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 20),
+                onPressed: () => controller.removeFile(item.id),
+                tooltip: 'Remove file',
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

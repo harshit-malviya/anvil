@@ -85,7 +85,11 @@ class AppLogService extends ChangeNotifier {
   }
 
   Future<void> _init() async {
-    await _getLogFile();
+    try {
+      await _getLogFile();
+    } catch (_) {
+      // Fail silently if platform channels are unavailable (e.g. unit tests)
+    }
   }
 
   /// Log a "started" event.
