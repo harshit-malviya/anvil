@@ -8,6 +8,7 @@ import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_validation_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'pdf_merge_state.dart';
 
 import 'dart:ui' as ui;
@@ -60,21 +61,26 @@ Future<Uint8List> renderDividerImage({
 
 final pdfMergeControllerProvider =
     StateNotifierProvider<PdfMergeController, PdfMergeState>((ref) {
-  return PdfMergeController();
+  return PdfMergeController(
+    logService: ref.read(appLogServiceProvider),
+  );
 });
 
 class PdfMergeController extends StateNotifier<PdfMergeState> {
   final FileService _fileService;
   final PdfValidationService _validationService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   PdfMergeController({
     FileService? fileService,
     PdfValidationService? validationService,
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   })  : _fileService = fileService ?? FileService(),
         _validationService = validationService ?? const PdfValidationService(),
         _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const PdfMergeState());
 
   /// Validate and add PDF files to state list.
@@ -91,6 +97,8 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
             bytes = await f.readAsBytes();
           } catch (e) {
             firstError ??= "Could not read '${pf.name}': permission denied or file unreadable.";
+            _logService.logError('pdf_merge', 'load_document',
+                message: "Could not read '${pf.name}'");
             continue;
           }
         }
@@ -98,6 +106,8 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
 
       if (bytes == null || bytes.isEmpty) {
         firstError ??= "File '${pf.name}' is empty or unreadable.";
+        _logService.logError('pdf_merge', 'load_document',
+            message: "File '${pf.name}' is empty or unreadable");
         continue;
       }
 
@@ -114,8 +124,12 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         newValidItems.add(item);
       } else if (valInfo.isPasswordProtected) {
         firstError ??= "This file is password-protected and can't be merged. Remove the password first.";
+        _logService.logError('pdf_merge', 'load_document',
+            message: "Password-protected file rejected: ${pf.name}");
       } else {
         firstError ??= "File '${pf.name}' appears corrupted or unreadable.";
+        _logService.logError('pdf_merge', 'load_document',
+            message: "Corrupted/unreadable file rejected: ${pf.name}");
       }
     }
 
@@ -192,6 +206,9 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
       resetError: true,
       resetOutput: true,
     );
+
+    _logService.logStarted('pdf_merge', 'merge',
+        message: 'merge started, ${state.files.length} files');
 
     try {
       // Run heavy PDF work on a background isolate
@@ -275,6 +292,9 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         outputPath: targetPath,
       );
 
+      _logService.logSuccess('pdf_merge', 'merge',
+          message: 'output: ${p.basename(targetPath)}');
+
       return targetPath;
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
@@ -287,6 +307,8 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         resetProgressMessage: true,
         errorMessage: "This merge is too large to process on this device. Try merging fewer files at once.",
       );
+      _logService.logError('pdf_merge', 'merge',
+          message: 'out of memory');
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -299,6 +321,8 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('pdf_merge', 'merge',
+          message: "file system error", errorDetail: e.toString());
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -320,6 +344,8 @@ class PdfMergeController extends StateNotifier<PdfMergeState> {
           errorMessage: "This merge couldn't be completed — the file may be damaged or too complex. Try removing problem files and merging again.",
         );
       }
+      _logService.logError('pdf_merge', 'merge',
+          message: 'merge failed', errorDetail: e.toString());
       return null;
     }
   }

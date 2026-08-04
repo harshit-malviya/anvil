@@ -7,25 +7,31 @@ import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_validation_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'pdf_password_state.dart';
 
 final pdfPasswordControllerProvider =
     StateNotifierProvider<PdfPasswordController, PdfPasswordState>((ref) {
-  return PdfPasswordController();
+  return PdfPasswordController(
+    logService: ref.read(appLogServiceProvider),
+  );
 });
 
 class PdfPasswordController extends StateNotifier<PdfPasswordState> {
   final FileService _fileService;
   final PdfValidationService _validationService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   PdfPasswordController({
     FileService? fileService,
     PdfValidationService? validationService,
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   })  : _fileService = fileService ?? FileService(),
         _validationService = validationService ?? const PdfValidationService(),
         _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const PdfPasswordState());
 
   /// Load and inspect a PDF file to detect password protection.
@@ -53,6 +59,8 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
             errorMessage:
                 "Could not read '${platformFile.name}': permission denied or unreadable file.",
           );
+          _logService.logError('pdf_password', 'load_document',
+              message: "Could not read '${platformFile.name}'");
           return;
         }
       }
@@ -64,6 +72,8 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' is empty or unreadable.",
       );
+      _logService.logError('pdf_password', 'load_document',
+          message: "File '${platformFile.name}' is empty or unreadable");
       return;
     }
 
@@ -78,6 +88,8 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         errorMessage:
             "File '${platformFile.name}' appears corrupted or unreadable.",
       );
+      _logService.logError('pdf_password', 'load_document',
+          message: "corrupted/unreadable: ${platformFile.name}");
       return;
     }
 
@@ -167,6 +179,9 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       resetOutput: true,
     );
 
+    _logService.logStarted('pdf_password', 'add_password',
+        message: 'add password started');
+
     try {
       // Run heavy PDF work on a background isolate
       final Uint8List protectedBytes = await compute(
@@ -194,6 +209,9 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         outputPath: targetPath,
       );
 
+      _logService.logSuccess('pdf_password', 'add_password',
+          message: 'output: ${p.basename(targetPath)}');
+
       return targetPath;
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
@@ -206,6 +224,8 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         resetProgressMessage: true,
         errorMessage: "This operation is too large to process on this device.",
       );
+      _logService.logError('pdf_password', 'add_password',
+          message: 'out of memory');
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -218,6 +238,8 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('pdf_password', 'add_password',
+          message: 'file system error', errorDetail: e.toString());
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -230,6 +252,8 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't add password protection — the file may be damaged. Try a different PDF.",
       );
+      _logService.logError('pdf_password', 'add_password',
+          message: 'add password failed', errorDetail: e.toString());
       return null;
     }
   }
@@ -245,6 +269,9 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
       resetError: true,
       resetOutput: true,
     );
+
+    _logService.logStarted('pdf_password', 'remove_password',
+        message: 'remove password started');
 
     try {
       // Run heavy PDF work on a background isolate
@@ -273,6 +300,9 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         outputPath: targetPath,
       );
 
+      _logService.logSuccess('pdf_password', 'remove_password',
+          message: 'output: ${p.basename(targetPath)}');
+
       return targetPath;
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
@@ -285,6 +315,8 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         resetProgressMessage: true,
         errorMessage: "This operation is too large to process on this device.",
       );
+      _logService.logError('pdf_password', 'remove_password',
+          message: 'out of memory');
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -297,6 +329,8 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('pdf_password', 'remove_password',
+          message: 'file system error', errorDetail: e.toString());
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -318,6 +352,11 @@ class PdfPasswordController extends StateNotifier<PdfPasswordState> {
             ? "Incorrect password — the file wasn't changed."
             : "Couldn't remove password protection. Make sure the password is correct and the file isn't damaged.",
       );
+      // SECURITY: Never log the password value itself
+      _logService.logError('pdf_password', 'remove_password',
+          message: isWrongPassword
+              ? 'incorrect password provided'
+              : 'remove password failed');
       return null;
     }
   }

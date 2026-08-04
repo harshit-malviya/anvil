@@ -9,6 +9,7 @@ import '../../core/services/file_service.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import '../../core/services/pdf_validation_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'pdf_to_image_state.dart';
 
 typedef PageRenderer = Future<Uint8List?> Function(
@@ -20,7 +21,9 @@ typedef PageRenderer = Future<Uint8List?> Function(
 
 final pdfToImageControllerProvider =
     StateNotifierProvider<PdfToImageController, PdfToImageState>((ref) {
-  return PdfToImageController();
+  return PdfToImageController(
+    logService: ref.read(appLogServiceProvider),
+  );
 });
 
 class PdfToImageController extends StateNotifier<PdfToImageState> {
@@ -29,6 +32,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
   final FileService _fileService;
   final PdfValidationService _validationService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   PdfToImageController({
     PdfThumbnailService? thumbnailService,
@@ -36,11 +40,13 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
     FileService? fileService,
     PdfValidationService? validationService,
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   })  : _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _customRenderer = customRenderer,
         _fileService = fileService ?? FileService(),
         _validationService = validationService ?? const PdfValidationService(),
         _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const PdfToImageState());
 
   /// Load and validate a single PDF document.
@@ -64,6 +70,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
             resetProgressMessage: true,
             errorMessage: "Could not read '${platformFile.name}': permission denied or file unreadable.",
           );
+          _logService.logError('pdf_to_image', 'load_document',
+              message: "Could not read '${platformFile.name}'");
           return;
         }
       }
@@ -75,6 +83,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' is empty or unreadable.",
       );
+      _logService.logError('pdf_to_image', 'load_document',
+          message: "File '${platformFile.name}' is empty or unreadable");
       return;
     }
 
@@ -88,6 +98,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressMessage: true,
         errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
       );
+      _logService.logError('pdf_to_image', 'load_document',
+          message: 'password-protected file rejected');
       return;
     } else if (valInfo.isCorrupted) {
       state = state.copyWith(
@@ -95,6 +107,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' appears corrupted or unreadable.",
       );
+      _logService.logError('pdf_to_image', 'load_document',
+          message: "corrupted/unreadable: ${platformFile.name}");
       return;
     }
 
@@ -114,6 +128,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' contains no pages.",
       );
+      _logService.logError('pdf_to_image', 'load_document',
+          message: 'file contains no pages');
       return;
     }
 
@@ -232,6 +248,9 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
     final sortedPages = state.selectedPages.toList()..sort();
     final bool isSingle = sortedPages.length == 1;
 
+    _logService.logStarted('pdf_to_image', 'export',
+        message: '${sortedPages.length} pages, ${state.format.name}, ${state.resolution.dpi}dpi');
+
     try {
       final ext = state.format.fileExtension;
       final dpi = state.resolution.dpi;
@@ -306,6 +325,9 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
           skippedPages: const [],
           isSingleFileExport: true,
         );
+
+        _logService.logSuccess('pdf_to_image', 'export',
+            message: 'single page exported');
 
         return targetFilePath;
       } else {
@@ -395,6 +417,9 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
           isSingleFileExport: false,
         );
 
+        _logService.logSuccess('pdf_to_image', 'export',
+            message: '$exported pages exported${skipped.isNotEmpty ? ', ${skipped.length} skipped' : ''}');
+
         return targetDirPath;
       }
     } on OutOfMemoryError {
@@ -409,6 +434,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressPercent: true,
         errorMessage: "This operation is too large to process on this device.",
       );
+      _logService.logError('pdf_to_image', 'export',
+          message: 'out of memory');
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -422,6 +449,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressPercent: true,
         errorMessage: "Couldn't save image files — ${e.message}. Try a different location.",
       );
+      _logService.logError('pdf_to_image', 'export',
+          message: 'file system error', errorDetail: e.toString());
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -435,6 +464,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressPercent: true,
         errorMessage: "Image export couldn't be completed — the PDF may be damaged or use unsupported content.",
       );
+      _logService.logError('pdf_to_image', 'export',
+          message: 'export failed', errorDetail: e.toString());
       return null;
     }
   }

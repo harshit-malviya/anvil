@@ -12,11 +12,14 @@ import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import '../../core/services/pdf_validation_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'pdf_insert_image_as_page_state.dart';
 
 final pdfInsertImageAsPageControllerProvider =
     StateNotifierProvider<PdfInsertImageAsPageController, PdfInsertImageAsPageState>((ref) {
-  return PdfInsertImageAsPageController();
+  return PdfInsertImageAsPageController(
+    logService: ref.read(appLogServiceProvider),
+  );
 });
 
 class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageState> {
@@ -25,6 +28,7 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
   final ImageToPdfPageService _imageService;
   final PdfValidationService _validationService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   PdfInsertImageAsPageController({
     FileService? fileService,
@@ -32,11 +36,13 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
     ImageToPdfPageService? imageService,
     PdfValidationService? validationService,
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   })  : _fileService = fileService ?? FileService(),
         _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _imageService = imageService ?? ImageToPdfPageService(),
         _validationService = validationService ?? const PdfValidationService(),
         _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const PdfInsertImageAsPageState());
 
   /// Load and validate target PDF document into which image pages will be inserted.
@@ -258,6 +264,9 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
       resetOutput: true,
     );
 
+    _logService.logStarted('pdf_insert_image_page', 'insert',
+        message: '${state.images.length} images, fit: ${state.fitMode.name}');
+
     try {
       // 1. Batch-level neighbor page resolution (resolved once for the whole batch)
       Size? neighborSize;
@@ -347,6 +356,9 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
         outputPath: targetPath,
       );
 
+      _logService.logSuccess('pdf_insert_image_page', 'insert',
+          message: 'output: ${p.basename(targetPath)}');
+
       return targetPath;
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
@@ -359,6 +371,8 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
         resetProgressMessage: true,
         errorMessage: "This insertion is too large to process on this device.",
       );
+      _logService.logError('pdf_insert_image_page', 'insert',
+          message: 'out of memory');
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -371,6 +385,8 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
         resetProgressMessage: true,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('pdf_insert_image_page', 'insert',
+          message: 'file system error', errorDetail: e.toString());
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -383,6 +399,8 @@ class PdfInsertImageAsPageController extends StateNotifier<PdfInsertImageAsPageS
         resetProgressMessage: true,
         errorMessage: "Couldn't insert image as a page — the target PDF or image may be damaged. Try different files.",
       );
+      _logService.logError('pdf_insert_image_page', 'insert',
+          message: 'insert failed', errorDetail: e.toString());
       return null;
     }
   }

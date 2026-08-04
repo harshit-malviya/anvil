@@ -8,12 +8,17 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'image_blur_state.dart';
 
 /// Provider for ImageBlurController.
 final imageBlurControllerProvider =
     StateNotifierProvider.autoDispose<ImageBlurController, ImageBlurState>(
-  (ref) => ImageBlurController(FileService()),
+  (ref) => ImageBlurController(
+    FileService(),
+    null,
+    ref.read(appLogServiceProvider),
+  ),
 );
 
 /// Parameters passed to background isolate worker for image redaction/blur.
@@ -197,12 +202,15 @@ Future<ImageBlurResult> isolateImageBlurWorker(ImageBlurParams params) async {
 class ImageBlurController extends StateNotifier<ImageBlurState> {
   final FileService _fileService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
   int _regionCounter = 0;
 
   ImageBlurController(
     this._fileService, [
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   ])  : _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const ImageBlurState());
 
   /// Load and validate selected image file.
@@ -408,6 +416,9 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
 
     state = state.copyWith(isProcessing: true, clearError: true, clearOutput: true);
 
+    _logService.logStarted('image_blur', 'apply',
+        message: '${state.regions.length} regions, style: ${state.style.name}');
+
     try {
       Uint8List? inputBytes = state.file!.bytes;
       if (inputBytes == null && state.file!.path != null) {
@@ -449,12 +460,17 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
         outputPath: result.outputPath,
         outputSizeBytes: result.outputSize,
       );
+
+      _logService.logSuccess('image_blur', 'apply',
+          message: 'output: ${p.basename(result.outputPath)}');
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to redact on this device.",
       );
+      _logService.logError('image_blur', 'apply',
+          message: 'out of memory');
       return;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -462,6 +478,8 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('image_blur', 'apply',
+          message: 'file system error', errorDetail: e.toString());
       return;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -470,6 +488,8 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
         isProcessing: false,
         errorMessage: msg,
       );
+      _logService.logError('image_blur', 'apply',
+          message: 'redaction failed', errorDetail: e.toString());
     }
   }
 

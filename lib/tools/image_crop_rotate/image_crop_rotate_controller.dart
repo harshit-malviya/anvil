@@ -8,12 +8,17 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'image_crop_rotate_state.dart';
 
 /// Provider for ImageCropRotateController.
 final imageCropRotateControllerProvider = StateNotifierProvider.autoDispose<
     ImageCropRotateController, ImageCropRotateState>(
-  (ref) => ImageCropRotateController(FileService()),
+  (ref) => ImageCropRotateController(
+    FileService(),
+    null,
+    ref.read(appLogServiceProvider),
+  ),
 );
 
 /// Parameters passed to background isolate worker for crop and rotate.
@@ -138,11 +143,14 @@ Future<ImageCropRotateResult> isolateImageCropRotateWorker(
 class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
   final FileService _fileService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   ImageCropRotateController(
     this._fileService, [
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   ])  : _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const ImageCropRotateState());
 
   /// Load and validate selected image file.
@@ -491,6 +499,9 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
       clearOutput: true,
     );
 
+    _logService.logStarted('image_crop_rotate', 'apply',
+        message: 'rotation: ${state.rotation}°, fine: ${state.fineRotationAngle}°');
+
     try {
       Uint8List? inputBytes = state.file!.bytes;
       if (inputBytes == null && state.file!.path != null) {
@@ -532,12 +543,17 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
         outputPath: result.outputPath,
         outputSizeBytes: result.outputSize,
       );
+
+      _logService.logSuccess('image_crop_rotate', 'apply',
+          message: 'output: ${p.basename(result.outputPath)}');
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to crop on this device.",
       );
+      _logService.logError('image_crop_rotate', 'apply',
+          message: 'out of memory');
       return;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -546,6 +562,8 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
         errorMessage:
             "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('image_crop_rotate', 'apply',
+          message: 'file system error', errorDetail: e.toString());
       return;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -556,6 +574,8 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
         isProcessing: false,
         errorMessage: msg,
       );
+      _logService.logError('image_crop_rotate', 'apply',
+          message: 'crop/rotate failed', errorDetail: e.toString());
     }
   }
 

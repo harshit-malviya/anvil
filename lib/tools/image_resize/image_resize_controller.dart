@@ -7,12 +7,17 @@ import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/services/image_resize_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'image_resize_state.dart';
 
 /// Provider for ImageResizeController.
 final imageResizeControllerProvider =
     StateNotifierProvider.autoDispose<ImageResizeController, ImageResizeState>(
-  (ref) => ImageResizeController(FileService()),
+  (ref) => ImageResizeController(
+    FileService(),
+    null,
+    ref.read(appLogServiceProvider),
+  ),
 );
 
 /// Parameters passed to background isolate worker for image resizing.
@@ -98,11 +103,14 @@ Future<ImageResizeResult> isolateImageResizeWorker(ImageResizeParams params) asy
 class ImageResizeController extends StateNotifier<ImageResizeState> {
   final FileService _fileService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   ImageResizeController(
     this._fileService, [
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   ])  : _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const ImageResizeState());
 
   /// Load and parse selected image file.
@@ -116,6 +124,8 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
         isProcessing: false,
         errorMessage: "This file type isn't supported. Supported formats: PNG, JPEG, BMP, GIF, TIFF, WebP.",
       );
+      _logService.logError('image_resize', 'load_image',
+          message: 'unsupported file type');
       return;
     }
 
@@ -347,6 +357,9 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
 
     state = state.copyWith(isProcessing: true, clearError: true);
 
+    _logService.logStarted('image_resize', 'resize',
+        message: '${state.targetWidth}×${state.targetHeight}');
+
     try {
       Uint8List? inputBytes = state.file!.bytes;
       if (inputBytes == null && state.file!.path != null) {
@@ -391,18 +404,25 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
         outputPath: result.outputPath,
         outputSize: result.outputSize,
       );
+
+      _logService.logSuccess('image_resize', 'resize',
+          message: 'output: ${p.basename(result.outputPath)}');
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to resize at this size on this device. Try a smaller target size.",
       );
+      _logService.logError('image_resize', 'resize',
+          message: 'out of memory');
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('image_resize', 'resize',
+          message: 'file system error', errorDetail: e.toString());
     } catch (e) {
       await _tempFileManager.cleanupSession();
       final msg = e is FormatException ? e.message : "Resize failed. Please try again.";
@@ -410,6 +430,8 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
         isProcessing: false,
         errorMessage: msg,
       );
+      _logService.logError('image_resize', 'resize',
+          message: 'resize failed', errorDetail: e.toString());
     }
   }
 

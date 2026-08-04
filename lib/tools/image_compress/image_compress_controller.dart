@@ -7,12 +7,17 @@ import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/services/image_resize_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'image_compress_state.dart';
 
 /// Provider for ImageCompressController.
 final imageCompressControllerProvider =
     StateNotifierProvider.autoDispose<ImageCompressController, ImageCompressState>(
-  (ref) => ImageCompressController(FileService()),
+  (ref) => ImageCompressController(
+    FileService(),
+    null,
+    ref.read(appLogServiceProvider),
+  ),
 );
 
 /// Parameters passed to background isolate worker for image compression.
@@ -336,11 +341,14 @@ _RangeSearchResult _encodeByTargetRange(
 class ImageCompressController extends StateNotifier<ImageCompressState> {
   final FileService _fileService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   ImageCompressController(
     this._fileService, [
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   ])  : _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const ImageCompressState());
 
   /// Load and validate selected image file.
@@ -514,6 +522,9 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
 
     state = state.copyWith(isProcessing: true, clearError: true, clearOutput: true, clearResultType: true);
 
+    _logService.logStarted('image_compress', 'compress',
+        message: 'mode: ${state.mode.name}');
+
     try {
       Uint8List? inputBytes = state.file!.bytes;
       if (inputBytes == null && state.file!.path != null) {
@@ -643,12 +654,17 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         qualityOnlyWidth: qOnlyW,
         qualityOnlyHeight: qOnlyH,
       );
+
+      _logService.logSuccess('image_compress', 'compress',
+          message: 'result: ${resultType.name}, output: ${p.basename(result.outputPath)}');
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to compress on this device.",
       );
+      _logService.logError('image_compress', 'compress',
+          message: 'out of memory');
       return;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -656,6 +672,8 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('image_compress', 'compress',
+          message: 'file system error', errorDetail: e.toString());
       return;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -664,6 +682,8 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         isProcessing: false,
         errorMessage: msg,
       );
+      _logService.logError('image_compress', 'compress',
+          message: 'compress failed', errorDetail: e.toString());
     }
   }
 

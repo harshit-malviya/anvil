@@ -6,12 +6,17 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import '../../core/services/file_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'image_convert_state.dart';
 
 /// Provider for ImageConvertController.
 final imageConvertControllerProvider =
     StateNotifierProvider.autoDispose<ImageConvertController, ImageConvertState>(
-  (ref) => ImageConvertController(FileService()),
+  (ref) => ImageConvertController(
+    FileService(),
+    null,
+    ref.read(appLogServiceProvider),
+  ),
 );
 
 /// Parameters passed to isolate worker for background image conversion.
@@ -101,11 +106,14 @@ Future<ImageConvertResult> isolateImageConvertWorker(ImageConvertParams params) 
 class ImageConvertController extends StateNotifier<ImageConvertState> {
   final FileService _fileService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   ImageConvertController(
     this._fileService, [
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   ])  : _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const ImageConvertState());
 
   /// Detect format using magic bytes header, fallback to extension.
@@ -171,6 +179,8 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
         isProcessing: false,
         errorMessage: "This file type isn't supported for conversion.",
       );
+      _logService.logError('image_convert', 'load_image',
+          message: 'unsupported file type');
       return;
     }
 
@@ -185,6 +195,8 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
             isProcessing: false,
             errorMessage: "Could not read '${platformFile.name}': permission denied.",
           );
+          _logService.logError('image_convert', 'load_image',
+              message: "Could not read '${platformFile.name}'");
           return;
         }
       }
@@ -195,6 +207,8 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
         isProcessing: false,
         errorMessage: "This file couldn't be read as an image.",
       );
+      _logService.logError('image_convert', 'load_image',
+          message: 'file unreadable or empty');
       return;
     }
 
@@ -276,6 +290,9 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
 
     state = state.copyWith(isProcessing: true, clearError: true);
 
+    _logService.logStarted('image_convert', 'convert',
+        message: '${state.detectedFormat} → ${state.targetFormat.displayName}');
+
     try {
       Uint8List? inputBytes = state.file!.bytes;
       if (inputBytes == null && state.file!.path != null) {
@@ -316,12 +333,17 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
         outputPath: result.outputPath,
         outputSize: result.outputSize,
       );
+
+      _logService.logSuccess('image_convert', 'convert',
+          message: 'output: ${p.basename(result.outputPath)}');
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to convert on this device.",
       );
+      _logService.logError('image_convert', 'convert',
+          message: 'out of memory');
       return;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -329,6 +351,8 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('image_convert', 'convert',
+          message: 'file system error', errorDetail: e.toString());
       return;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -337,6 +361,8 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
         isProcessing: false,
         errorMessage: msg,
       );
+      _logService.logError('image_convert', 'convert',
+          message: 'convert failed', errorDetail: e.toString());
     }
   }
 

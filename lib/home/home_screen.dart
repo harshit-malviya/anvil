@@ -19,6 +19,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
 
+  // Hidden debug log trigger — 7 taps within 3 seconds on "OFFLINE WORKSHOP"
+  int _debugTapCount = 0;
+  DateTime? _debugFirstTap;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +47,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _clearQuery() {
     _controller.clear();
     ref.read(searchQueryProvider.notifier).state = '';
+  }
+
+  void _onDebugTap() {
+    final now = DateTime.now();
+    if (_debugFirstTap == null ||
+        now.difference(_debugFirstTap!).inMilliseconds > 3000) {
+      // Reset — too long since first tap
+      _debugTapCount = 1;
+      _debugFirstTap = now;
+      return;
+    }
+    _debugTapCount++;
+    if (_debugTapCount >= 7) {
+      _debugTapCount = 0;
+      _debugFirstTap = null;
+      context.push('/debug-log');
+    }
   }
 
   @override
@@ -87,24 +108,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.secondary(brightness).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6.0),
-                          border: Border.all(
-                            color: AppColors.secondary(brightness).withValues(alpha: 0.3),
+                      GestureDetector(
+                        onTap: _onDebugTap,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
                           ),
-                        ),
-                        child: Text(
-                          'OFFLINE WORKSHOP',
-                          style: AppTypography.labelSmall(brightness).copyWith(
-                            color: AppColors.secondary(brightness),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 10,
+                          decoration: BoxDecoration(
+                            color: AppColors.secondary(brightness).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6.0),
+                            border: Border.all(
+                              color: AppColors.secondary(brightness).withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Text(
+                            'OFFLINE WORKSHOP',
+                            style: AppTypography.labelSmall(brightness).copyWith(
+                              color: AppColors.secondary(brightness),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
+                            ),
                           ),
                         ),
                       ),

@@ -7,25 +7,31 @@ import '../../core/services/file_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_validation_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'pdf_compress_state.dart';
 
 final pdfCompressControllerProvider =
     StateNotifierProvider<PdfCompressController, PdfCompressState>((ref) {
-  return PdfCompressController();
+  return PdfCompressController(
+    logService: ref.read(appLogServiceProvider),
+  );
 });
 
 class PdfCompressController extends StateNotifier<PdfCompressState> {
   final FileService _fileService;
   final PdfValidationService _validationService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   PdfCompressController({
     FileService? fileService,
     PdfValidationService? validationService,
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   })  : _fileService = fileService ?? FileService(),
         _validationService = validationService ?? const PdfValidationService(),
         _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const PdfCompressState());
 
   /// Load and validate a single PDF document.
@@ -52,6 +58,8 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
             errorMessage:
                 "Could not read '${platformFile.name}': permission denied or file unreadable.",
           );
+          _logService.logError('pdf_compress', 'load_document',
+              message: "Could not read '${platformFile.name}'");
           return;
         }
       }
@@ -63,6 +71,8 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' is empty or unreadable.",
       );
+      _logService.logError('pdf_compress', 'load_document',
+          message: "File '${platformFile.name}' is empty or unreadable");
       return;
     }
 
@@ -74,6 +84,8 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
         errorMessage:
             "This file is password-protected and can't be modified. Remove the password first.",
       );
+      _logService.logError('pdf_compress', 'load_document',
+          message: 'password-protected file rejected');
       return;
     } else if (valInfo.isCorrupted) {
       state = state.copyWith(
@@ -82,6 +94,8 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
         errorMessage:
             "File '${platformFile.name}' appears corrupted or unreadable.",
       );
+      _logService.logError('pdf_compress', 'load_document',
+          message: "corrupted/unreadable: ${platformFile.name}");
       return;
     }
 
@@ -93,6 +107,8 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' contains no pages.",
       );
+      _logService.logError('pdf_compress', 'load_document',
+          message: 'file contains no pages');
       return;
     }
 
@@ -141,6 +157,9 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
       resetOutput: true,
       resetResultType: true,
     );
+
+    _logService.logStarted('pdf_compress', 'compress',
+        message: 'level: ${state.level.name}');
 
     try {
       // Map compression level to index for isolate
@@ -216,6 +235,10 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
         resultType: resultType,
       );
 
+      final reductionPct = ((state.originalSizeBytes - outputLength) / state.originalSizeBytes * 100).toStringAsFixed(1);
+      _logService.logSuccess('pdf_compress', 'compress',
+          message: 'output: ${p.basename(targetPath)}, reduction: $reductionPct%');
+
       return targetPath;
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
@@ -228,6 +251,8 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
         resetProgressMessage: true,
         errorMessage: "This operation is too large to process on this device.",
       );
+      _logService.logError('pdf_compress', 'compress',
+          message: 'out of memory');
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -240,6 +265,8 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't save compressed file — ${e.message}.",
       );
+      _logService.logError('pdf_compress', 'compress',
+          message: 'file system error', errorDetail: e.toString());
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -252,6 +279,8 @@ class PdfCompressController extends StateNotifier<PdfCompressState> {
         resetProgressMessage: true,
         errorMessage: "This file couldn't be compressed. It may be damaged or use an unsupported format.",
       );
+      _logService.logError('pdf_compress', 'compress',
+          message: 'compress failed', errorDetail: e.toString());
       return null;
     }
   }

@@ -7,25 +7,31 @@ import '../../core/services/file_service.dart';
 import '../../core/services/image_to_pdf_page_service.dart';
 import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'images_to_pdf_state.dart';
 
 final imagesToPdfControllerProvider =
     StateNotifierProvider<ImagesToPdfController, ImagesToPdfState>((ref) {
-  return ImagesToPdfController();
+  return ImagesToPdfController(
+    logService: ref.read(appLogServiceProvider),
+  );
 });
 
 class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
   final FileService _fileService;
   final ImageToPdfPageService _imageService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   ImagesToPdfController({
     FileService? fileService,
     ImageToPdfPageService? imageService,
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   })  : _fileService = fileService ?? FileService(),
         _imageService = imageService ?? ImageToPdfPageService(),
         _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const ImagesToPdfState());
 
   /// Add and validate image files to convert into PDF pages.
@@ -138,6 +144,9 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
       resetOutput: true,
     );
 
+    _logService.logStarted('images_to_pdf', 'create',
+        message: '$imageCount images');
+
     try {
       // 1. Build image specs for isolate
       final imageSpecs = <ImagePageSpec>[];
@@ -189,6 +198,9 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         outputPath: targetPath,
       );
 
+      _logService.logSuccess('images_to_pdf', 'create',
+          message: 'output: ${p.basename(targetPath)}');
+
       return targetPath;
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
@@ -201,6 +213,8 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         resetProgressMessage: true,
         errorMessage: "This operation is too large to process on this device.",
       );
+      _logService.logError('images_to_pdf', 'create',
+          message: 'out of memory');
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -213,6 +227,8 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('images_to_pdf', 'create',
+          message: 'file system error', errorDetail: e.toString());
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -225,6 +241,8 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't create PDF from images. One or more image files may be damaged.",
       );
+      _logService.logError('images_to_pdf', 'create',
+          message: 'create failed', errorDetail: e.toString());
       return null;
     }
   }

@@ -8,11 +8,14 @@ import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import '../../core/services/pdf_validation_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'pdf_split_state.dart';
 
 final pdfSplitControllerProvider =
     StateNotifierProvider<PdfSplitController, PdfSplitState>((ref) {
-  return PdfSplitController();
+  return PdfSplitController(
+    logService: ref.read(appLogServiceProvider),
+  );
 });
 
 class PdfSplitController extends StateNotifier<PdfSplitState> {
@@ -20,16 +23,19 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
   final FileService _fileService;
   final PdfValidationService _validationService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   PdfSplitController({
     PdfThumbnailService? thumbnailService,
     FileService? fileService,
     PdfValidationService? validationService,
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   })  : _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _fileService = fileService ?? FileService(),
         _validationService = validationService ?? const PdfValidationService(),
         _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const PdfSplitState());
 
   /// Load and validate a single PDF document.
@@ -55,6 +61,8 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
             errorMessage:
                 "Could not read '${platformFile.name}': permission denied or file unreadable.",
           );
+          _logService.logError('pdf_split', 'load_document',
+              message: "Could not read '${platformFile.name}'");
           return;
         }
       }
@@ -66,6 +74,8 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' is empty or unreadable.",
       );
+      _logService.logError('pdf_split', 'load_document',
+          message: "File '${platformFile.name}' is empty or unreadable");
       return;
     }
 
@@ -77,6 +87,8 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         errorMessage:
             "This file is password-protected and can't be modified. Remove the password first.",
       );
+      _logService.logError('pdf_split', 'load_document',
+          message: 'password-protected file rejected');
       return;
     } else if (valInfo.isCorrupted) {
       state = state.copyWith(
@@ -85,6 +97,8 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         errorMessage:
             "File '${platformFile.name}' appears corrupted or unreadable.",
       );
+      _logService.logError('pdf_split', 'load_document',
+          message: "corrupted/unreadable: ${platformFile.name}");
       return;
     }
 
@@ -96,6 +110,8 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' contains no pages.",
       );
+      _logService.logError('pdf_split', 'load_document',
+          message: 'file contains no pages');
       return;
     }
 
@@ -304,6 +320,9 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
       resetOutput: true,
     );
 
+    _logService.logStarted('pdf_split', 'split',
+        message: 'splitting into ${ranges.length} files');
+
     // Prepare target directory
     late Directory outputDir;
     if (customOutputDir != null && customOutputDir.isNotEmpty) {
@@ -374,6 +393,9 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         outputCreatedFileCount: createdFilePaths.length,
       );
 
+      _logService.logSuccess('pdf_split', 'split',
+          message: '${createdFilePaths.length} files created');
+
       return outputDir.path;
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
@@ -386,6 +408,8 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         resetProgressMessage: true,
         errorMessage: "This operation is too large to process on this device.",
       );
+      _logService.logError('pdf_split', 'split',
+          message: 'out of memory');
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -400,6 +424,8 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         errorMessage:
             "Split failed partway through and was rolled back — no partial files were kept. Couldn't save split files — ${e.message}.",
       );
+      _logService.logError('pdf_split', 'split',
+          message: 'file system error', errorDetail: e.toString());
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -415,6 +441,8 @@ class PdfSplitController extends StateNotifier<PdfSplitState> {
         errorMessage:
             "Split failed — the PDF may be damaged or too complex. Try a different PDF.",
       );
+      _logService.logError('pdf_split', 'split',
+          message: 'split failed', errorDetail: e.toString());
       return null;
     }
   }

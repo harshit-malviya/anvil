@@ -10,11 +10,14 @@ import '../../core/services/pdf_isolate_worker.dart';
 import '../../core/services/pdf_thumbnail_service.dart';
 import '../../core/services/pdf_validation_service.dart';
 import '../../core/services/temp_file_manager.dart';
+import '../../core/services/app_log_service.dart';
 import 'pdf_insert_pages_state.dart';
 
 final pdfInsertPagesControllerProvider =
     StateNotifierProvider<PdfInsertPagesController, PdfInsertPagesState>((ref) {
-  return PdfInsertPagesController();
+  return PdfInsertPagesController(
+    logService: ref.read(appLogServiceProvider),
+  );
 });
 
 class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
@@ -22,16 +25,19 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
   final PdfThumbnailService _thumbnailService;
   final PdfValidationService _validationService;
   final TempFileManager _tempFileManager;
+  final AppLogService _logService;
 
   PdfInsertPagesController({
     FileService? fileService,
     PdfThumbnailService? thumbnailService,
     PdfValidationService? validationService,
     TempFileManager? tempFileManager,
+    AppLogService? logService,
   })  : _fileService = fileService ?? FileService(),
         _thumbnailService = thumbnailService ?? PdfThumbnailService(),
         _validationService = validationService ?? const PdfValidationService(),
         _tempFileManager = tempFileManager ?? TempFileManager(),
+        _logService = logService ?? AppLogService(),
         super(const PdfInsertPagesState());
 
   /// Load and validate target PDF document into which pages will be inserted.
@@ -242,6 +248,9 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
       resetOutput: true,
     );
 
+    _logService.logStarted('pdf_insert_pages', 'insert',
+        message: '${state.selectedSourceCount} pages');
+
     try {
       // Run heavy PDF work on a background isolate
       final Uint8List resultBytes = await compute(
@@ -283,6 +292,9 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
         outputPath: targetPath,
       );
 
+      _logService.logSuccess('pdf_insert_pages', 'insert',
+          message: 'output: ${p.basename(targetPath)}');
+
       return targetPath;
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
@@ -295,6 +307,8 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
         resetProgressMessage: true,
         errorMessage: "This insertion is too large to process on this device. Try inserting fewer pages.",
       );
+      _logService.logError('pdf_insert_pages', 'insert',
+          message: 'out of memory');
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -307,6 +321,8 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
+      _logService.logError('pdf_insert_pages', 'insert',
+          message: 'file system error', errorDetail: e.toString());
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -319,6 +335,8 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
         resetProgressMessage: true,
         errorMessage: "Page insertion couldn't be completed — one of the files may be damaged. Try different source files.",
       );
+      _logService.logError('pdf_insert_pages', 'insert',
+          message: 'insert failed', errorDetail: e.toString());
       return null;
     }
   }
