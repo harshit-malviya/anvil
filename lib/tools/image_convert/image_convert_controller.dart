@@ -63,7 +63,6 @@ Future<ImageConvertResult> isolateImageConvertWorker(ImageConvertParams params) 
 
   // Flatten transparency onto white background if target is JPEG and source has alpha
   if (params.targetFormat == ImageOutputFormat.jpeg && decoded.hasAlpha) {
-    // // ASSUMPTION: Transparent pixels are flattened onto a solid white background when converting to JPEG.
     final whiteBg = img.Image(
       width: decoded.width,
       height: decoded.height,
@@ -107,6 +106,7 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
   final FileService _fileService;
   final TempFileManager _tempFileManager;
   final AppLogService _logService;
+  int? _pickerLoadTimeMs;
 
   ImageConvertController(
     this._fileService, [
@@ -170,17 +170,18 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
 
   /// Load and parse selected image file.
   Future<void> loadImage(PlatformFile platformFile) async {
+    final stopwatch = Stopwatch()..start();
     state = state.copyWith(isProcessing: true, clearError: true, clearResult: true);
 
     final ext = p.extension(platformFile.name).toLowerCase();
     final allowedExts = ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.webp'];
     if (!allowedExts.contains(ext)) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This file type isn't supported for conversion.",
       );
-      _logService.logError('image_convert', 'load_image',
-          message: 'unsupported file type');
       return;
     }
 
@@ -191,24 +192,24 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
         try {
           bytes = await f.readAsBytes();
         } catch (_) {
+          stopwatch.stop();
+          _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
           state = state.copyWith(
             isProcessing: false,
             errorMessage: "Could not read '${platformFile.name}': permission denied.",
           );
-          _logService.logError('image_convert', 'load_image',
-              message: "Could not read '${platformFile.name}'");
           return;
         }
       }
     }
 
     if (bytes == null || bytes.isEmpty) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This file couldn't be read as an image.",
       );
-      _logService.logError('image_convert', 'load_image',
-          message: 'file unreadable or empty');
       return;
     }
 
@@ -218,6 +219,9 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
     } catch (_) {
       decoded = null;
     }
+
+    stopwatch.stop();
+    _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
 
     if (decoded == null) {
       state = state.copyWith(
@@ -231,13 +235,11 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
     final hasAlpha = decoded.hasAlpha;
     final isAnimated = decoded.numFrames > 1;
 
-    // Pick default target format so it doesn't match detected source format
     ImageOutputFormat defaultTarget = ImageOutputFormat.jpeg;
     if (formatName.toUpperCase() == 'JPEG' || formatName.toUpperCase() == 'JPG') {
       defaultTarget = ImageOutputFormat.png;
     }
 
-    // Generate UI thumbnail
     img.Image thumbImg = decoded;
     if (thumbImg.numFrames > 1) {
       thumbImg = thumbImg.frames.first;
@@ -267,7 +269,7 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
   void setTargetFormat(ImageOutputFormat format) {
     if (state.detectedFormat != null &&
         state.detectedFormat!.toUpperCase() == format.displayName.toUpperCase()) {
-      return; // Can't select same format as source
+      return;
     }
     state = state.copyWith(targetFormat: format, clearError: true);
   }
@@ -290,8 +292,19 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
 
     state = state.copyWith(isProcessing: true, clearError: true);
 
-    _logService.logStarted('image_convert', 'convert',
-        message: '${state.detectedFormat} → ${state.targetFormat.displayName}');
+    final logId = _logService.logStarted(
+      'image_convert',
+      'Image Format Convert',
+      'convert',
+      inputFileCount: 1,
+      inputFilesCombinedSizeBytes: state.fileSize,
+      filePickerLoadTimeMs: _pickerLoadTimeMs,
+      parameters: {
+        'targetFormat': state.targetFormat.displayName,
+        'sourceFormat': state.detectedFormat,
+        'quality': state.jpegQuality,
+      },
+    );
 
     try {
       Uint8List? inputBytes = state.file!.bytes;
@@ -304,10 +317,14 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
           isProcessing: false,
           errorMessage: "This file couldn't be read as an image.",
         );
+        _logService.logFailed(
+          logId,
+          stage: LogFailureStage.validation,
+          errorMessage: "Image file empty or unreadable",
+        );
         return;
       }
 
-      // Generate default output path
       final defaultDir =
           await _fileService.getDefaultOutputDirectory(sourceFilePath: state.file!.path);
       final outputDir = defaultDir.path;
@@ -334,16 +351,23 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
         outputSize: result.outputSize,
       );
 
-      _logService.logSuccess('image_convert', 'convert',
-          message: 'output: ${p.basename(result.outputPath)}');
+      _logService.logCompleted(
+        logId,
+        outputFileCount: 1,
+        outputFilesCombinedSizeBytes: result.outputSize,
+        message: 'output: ${p.basename(result.outputPath)}',
+      );
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to convert on this device.",
       );
-      _logService.logError('image_convert', 'convert',
-          message: 'out of memory');
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.isolateExecution,
+        errorMessage: "Out of memory during image format conversion",
+      );
       return;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -351,8 +375,12 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
-      _logService.logError('image_convert', 'convert',
-          message: 'file system error', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.fileWrite,
+        errorMessage: "File system error: ${e.message}",
+        errorDetail: e.toString(),
+      );
       return;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -361,8 +389,12 @@ class ImageConvertController extends StateNotifier<ImageConvertState> {
         isProcessing: false,
         errorMessage: msg,
       );
-      _logService.logError('image_convert', 'convert',
-          message: 'convert failed', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.processing,
+        errorMessage: msg,
+        errorDetail: e.toString(),
+      );
     }
   }
 

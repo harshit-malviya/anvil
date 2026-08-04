@@ -69,10 +69,8 @@ Future<ImageCompressResult> isolateImageCompressWorker(ImageCompressParams param
     throw const FormatException("This image couldn't be read. File may be corrupt.");
   }
 
-  // Bake EXIF orientation so output is correctly oriented
   decoded = img.bakeOrientation(decoded);
 
-  // Animated sources: extract first frame
   if (decoded.numFrames > 1) {
     decoded = decoded.frames.first;
   }
@@ -89,10 +87,8 @@ Future<ImageCompressResult> isolateImageCompressWorker(ImageCompressParams param
   int outputH = origH;
 
   if (params.mode == CompressionMode.qualityLevel) {
-    // Quality Level Mode
     encodedBytes = _encodeByQualityLevel(decoded, ext, params.level);
   } else {
-    // Target Size Range Mode
     var currentImg = decoded;
     var searchResult = _encodeByTargetRange(
       currentImg,
@@ -105,7 +101,6 @@ Future<ImageCompressResult> isolateImageCompressWorker(ImageCompressParams param
     outputW = currentImg.width;
     outputH = currentImg.height;
 
-    // Dimension Fallback Step-down if initial quality-only pass missed range and fallback is enabled
     if (!landedInRange && params.allowDimensionFallback) {
       Uint8List bestBytes = searchResult.bytes;
       int bestW = currentImg.width;
@@ -123,7 +118,6 @@ Future<ImageCompressResult> isolateImageCompressWorker(ImageCompressParams param
         );
 
         if (nextDim == null) {
-          // Reached 50% dimension floor without landing in range
           bothFloorsHit = true;
           break;
         }
@@ -149,7 +143,7 @@ Future<ImageCompressResult> isolateImageCompressWorker(ImageCompressParams param
           outputW = stepImg.width;
           outputH = stepImg.height;
           bothFloorsHit = false;
-          break; // Stop immediately upon landing in range
+          break;
         }
 
         if (stepResult.distance < bestDistance) {
@@ -244,7 +238,6 @@ _RangeSearchResult _encodeByTargetRange(
   int maxSizeBytes,
 ) {
   if (ext == '.jpg' || ext == '.jpeg') {
-    // Binary search over JPEG quality [30..100], max 8 iterations
     int low = jpegQualityFloor;
     int high = 100;
     Uint8List? bestBytes;
@@ -264,14 +257,13 @@ _RangeSearchResult _encodeByTargetRange(
         break;
       }
 
-      // Calculate distance to closest target bound
       int dist;
       if (size < minSizeBytes) {
         dist = minSizeBytes - size;
-        low = mid + 1; // Needs higher quality for larger size
+        low = mid + 1;
       } else {
         dist = size - maxSizeBytes;
-        high = mid - 1; // Needs lower quality for smaller size
+        high = mid - 1;
       }
 
       if (bestBytes == null || dist < bestDistance) {
@@ -283,7 +275,6 @@ _RangeSearchResult _encodeByTargetRange(
     bestBytes ??= Uint8List.fromList(img.encodeJpg(decoded, quality: 50));
     return _RangeSearchResult(bestBytes, foundInRange, bestDistance);
   } else if (ext == '.png') {
-    // PNG search: palette quantization down to pngPaletteFloor (64) + Floyd-Steinberg dithering
     final colorCounts = [256, 128, 64];
     Uint8List? bestBytes;
     int bestDistance = 999999999;
@@ -294,7 +285,6 @@ _RangeSearchResult _encodeByTargetRange(
       if (attempts >= 8) break;
       attempts++;
 
-      // Quantize image to reduced color palette with dithering
       final quantized = img.quantize(
         decoded,
         numberOfColors: numColors,
@@ -326,7 +316,6 @@ _RangeSearchResult _encodeByTargetRange(
     bestBytes ??= Uint8List.fromList(img.encodePng(decoded, level: 9));
     return _RangeSearchResult(bestBytes, foundInRange, bestDistance);
   } else {
-    // Default fallback for BMP/GIF/TIFF
     final bytes = _encodeByQualityLevel(decoded, ext, CompressionLevel.medium);
     final size = bytes.length;
     final inRange = size >= minSizeBytes && size <= maxSizeBytes;
@@ -342,6 +331,7 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
   final FileService _fileService;
   final TempFileManager _tempFileManager;
   final AppLogService _logService;
+  int? _pickerLoadTimeMs;
 
   ImageCompressController(
     this._fileService, [
@@ -353,10 +343,13 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
 
   /// Load and validate selected image file.
   Future<void> loadImage(PlatformFile platformFile) async {
+    final stopwatch = Stopwatch()..start();
     state = state.copyWith(isProcessing: true, clearError: true, clearOutput: true, clearResultType: true);
 
     final ext = p.extension(platformFile.name).toLowerCase();
     if (ext == '.webp') {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "WebP format compression is not supported. Supported formats: PNG, JPEG, BMP, GIF, TIFF.",
@@ -366,6 +359,8 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
 
     final allowedExts = ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff'];
     if (!allowedExts.contains(ext)) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This file type isn't supported. Supported formats: PNG, JPEG, BMP, GIF, TIFF.",
@@ -380,6 +375,8 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         try {
           bytes = await f.readAsBytes();
         } catch (_) {
+          stopwatch.stop();
+          _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
           state = state.copyWith(
             isProcessing: false,
             errorMessage: "Could not read '${platformFile.name}': permission denied.",
@@ -390,6 +387,8 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
     }
 
     if (bytes == null || bytes.isEmpty) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image couldn't be read. File may be corrupt.",
@@ -404,6 +403,9 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
       decoded = null;
     }
 
+    stopwatch.stop();
+    _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
+
     if (decoded == null) {
       state = state.copyWith(
         isProcessing: false,
@@ -412,12 +414,10 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
       return;
     }
 
-    // Bake EXIF orientation for consistent preview & dimension readings
     decoded = img.bakeOrientation(decoded);
 
     final formatName = ext.replaceAll('.', '').toUpperCase();
 
-    // Create thumbnail
     img.Image thumbImg = decoded;
     if (thumbImg.numFrames > 1) {
       thumbImg = thumbImg.frames.first;
@@ -491,7 +491,6 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
     if (state.isDimensionFallbackEnabled == enabled) return;
 
     if (!enabled && state.qualityOnlyResultType != null && state.isDimensionReduced) {
-      // Revert displayed result back to original (pre-resize) closest-effort state
       state = state.copyWith(
         isDimensionFallbackEnabled: false,
         compressedSizeBytes: state.qualityOnlyCompressedSizeBytes,
@@ -522,8 +521,24 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
 
     state = state.copyWith(isProcessing: true, clearError: true, clearOutput: true, clearResultType: true);
 
-    _logService.logStarted('image_compress', 'compress',
-        message: 'mode: ${state.mode.name}');
+    final Map<String, dynamic> compParams = state.mode == CompressionMode.qualityLevel
+        ? {'mode': 'qualityLevel', 'level': state.level.name}
+        : {
+            'mode': 'targetSizeRange',
+            'minKb': (state.minSizeBytes / 1024).round(),
+            'maxKb': (state.maxSizeBytes / 1024).round(),
+            'dimensionFallback': state.isDimensionFallbackEnabled,
+          };
+
+    final logId = _logService.logStarted(
+      'image_compress',
+      'Image Compress',
+      'compress',
+      inputFileCount: 1,
+      inputFilesCombinedSizeBytes: state.originalSizeBytes,
+      filePickerLoadTimeMs: _pickerLoadTimeMs,
+      parameters: compParams,
+    );
 
     try {
       Uint8List? inputBytes = state.file!.bytes;
@@ -536,38 +551,54 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
           isProcessing: false,
           errorMessage: "This image couldn't be read. File may be corrupt.",
         );
+        _logService.logFailed(
+          logId,
+          stage: LogFailureStage.validation,
+          errorMessage: "Image file empty or unreadable",
+        );
         return;
       }
 
       if (state.mode == CompressionMode.targetSizeRange) {
-        // Validation 1: Min size below hard floor
         if (state.minSizeBytes < ImageCompressState.minFloorBytes) {
           state = state.copyWith(
             isProcessing: false,
             errorMessage: "Minimum can't be set below 5 KB",
           );
+          _logService.logFailed(
+            logId,
+            stage: LogFailureStage.validation,
+            errorMessage: "Minimum size below 5 KB floor",
+          );
           return;
         }
 
-        // Validation 2: Max <= Min
         if (!state.isRangeValid) {
           state = state.copyWith(
             isProcessing: false,
             errorMessage: "Maximum must be greater than minimum",
           );
+          _logService.logFailed(
+            logId,
+            stage: LogFailureStage.validation,
+            errorMessage: "Maximum size less than minimum size",
+          );
           return;
         }
 
-        // Validation 3: Original file size is smaller than target minimum
         if (state.originalSizeBytes < state.minSizeBytes) {
           state = state.copyWith(
             isProcessing: false,
             resultType: CompressionResultType.smallerThanMin,
           );
+          _logService.logFailed(
+            logId,
+            stage: LogFailureStage.validation,
+            errorMessage: "Original size smaller than target minimum",
+          );
           return;
         }
 
-        // Validation 4: Original file size is already inside target range
         if (state.originalSizeBytes >= state.minSizeBytes &&
             state.originalSizeBytes <= state.maxSizeBytes) {
           state = state.copyWith(
@@ -576,6 +607,12 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
             compressedWidth: state.originalWidth,
             compressedHeight: state.originalHeight,
             resultType: CompressionResultType.alreadyInRange,
+          );
+          _logService.logCompleted(
+            logId,
+            outputFileCount: 1,
+            outputFilesCombinedSizeBytes: state.originalSizeBytes,
+            message: "Original file already in target range",
           );
           return;
         }
@@ -602,7 +639,6 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
 
       final result = await compute(isolateImageCompressWorker, params);
 
-      // Determine result type
       CompressionResultType resultType;
       if (state.mode == CompressionMode.targetSizeRange) {
         if (result.landedInRange) {
@@ -655,16 +691,23 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         qualityOnlyHeight: qOnlyH,
       );
 
-      _logService.logSuccess('image_compress', 'compress',
-          message: 'result: ${resultType.name}, output: ${p.basename(result.outputPath)}');
+      _logService.logCompleted(
+        logId,
+        outputFileCount: 1,
+        outputFilesCombinedSizeBytes: result.outputSize,
+        message: 'result: ${resultType.name}, output: ${p.basename(result.outputPath)}',
+      );
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to compress on this device.",
       );
-      _logService.logError('image_compress', 'compress',
-          message: 'out of memory');
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.isolateExecution,
+        errorMessage: "Out of memory during image compression",
+      );
       return;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -672,8 +715,12 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
-      _logService.logError('image_compress', 'compress',
-          message: 'file system error', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.fileWrite,
+        errorMessage: "File system error: ${e.message}",
+        errorDetail: e.toString(),
+      );
       return;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -682,8 +729,12 @@ class ImageCompressController extends StateNotifier<ImageCompressState> {
         isProcessing: false,
         errorMessage: msg,
       );
-      _logService.logError('image_compress', 'compress',
-          message: 'compress failed', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.processing,
+        errorMessage: msg,
+        errorDetail: e.toString(),
+      );
     }
   }
 

@@ -59,15 +59,12 @@ Future<ImageCropRotateResult> isolateImageCropRotateWorker(
     throw const FormatException("This image couldn't be read. File may be corrupt.");
   }
 
-  // Bake EXIF orientation first so baseline orientation is upright
   decoded = img.bakeOrientation(decoded);
 
-  // Animated sources: extract first frame
   if (decoded.numFrames > 1) {
     decoded = decoded.frames.first;
   }
 
-  // Step 1: User rotation (90 degree steps clockwise)
   if (params.rotation != 0) {
     decoded = img.copyRotate(decoded, angle: params.rotation);
   }
@@ -75,7 +72,6 @@ Future<ImageCropRotateResult> isolateImageCropRotateWorker(
   final origW = decoded.width;
   final origH = decoded.height;
 
-  // Step 2: Fine-angle rotation (Straighten) with cubic interpolation
   if (params.fineRotationAngle != 0.0) {
     decoded = img.copyRotate(
       decoded,
@@ -87,11 +83,9 @@ Future<ImageCropRotateResult> isolateImageCropRotateWorker(
   final bboxW = decoded.width;
   final bboxH = decoded.height;
 
-  // Coordinate shift between original 90°-rotated space and fine-rotated bounding box
   final shiftX = (bboxW - origW) / 2.0;
   final shiftY = (bboxH - origH) / 2.0;
 
-  // Step 3: Crop selection in fine-rotated coordinate space
   final clampX = (params.cropRect.left + shiftX).round().clamp(0, bboxW - 1);
   final clampY = (params.cropRect.top + shiftY).round().clamp(0, bboxH - 1);
   final clampW = params.cropRect.width.round().clamp(1, bboxW - clampX);
@@ -144,6 +138,7 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
   final FileService _fileService;
   final TempFileManager _tempFileManager;
   final AppLogService _logService;
+  int? _pickerLoadTimeMs;
 
   ImageCropRotateController(
     this._fileService, [
@@ -155,6 +150,7 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
 
   /// Load and validate selected image file.
   Future<void> loadImage(PlatformFile platformFile) async {
+    final stopwatch = Stopwatch()..start();
     state = state.copyWith(
       isProcessing: true,
       clearError: true,
@@ -172,6 +168,8 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
       '.webp'
     ];
     if (!allowedExts.contains(ext)) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage:
@@ -187,6 +185,8 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
         try {
           bytes = await f.readAsBytes();
         } catch (_) {
+          stopwatch.stop();
+          _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
           state = state.copyWith(
             isProcessing: false,
             errorMessage:
@@ -198,6 +198,8 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     }
 
     if (bytes == null || bytes.isEmpty) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image couldn't be read. File may be corrupt.",
@@ -212,6 +214,9 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
       decoded = null;
     }
 
+    stopwatch.stop();
+    _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
+
     if (decoded == null) {
       state = state.copyWith(
         isProcessing: false,
@@ -220,12 +225,10 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
       return;
     }
 
-    // Bake EXIF orientation for consistent preview & baseline dimension readings
     decoded = img.bakeOrientation(decoded);
 
     final formatName = ext.replaceAll('.', '').toUpperCase();
 
-    // Create thumbnail
     img.Image thumbImg = decoded;
     if (thumbImg.numFrames > 1) {
       thumbImg = thumbImg.frames.first;
@@ -259,17 +262,12 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
   }
 
   /// Set fine-angle Straighten rotation (−45° to +45°).
-  /// Automatically shrinks/recenters crop selection to fit inside new inscribed bounds.
   void setFineRotationAngle(double degrees) {
     if (!state.isLoaded) return;
 
     final clampedAngle = degrees.clamp(-45.0, 45.0);
     final newState = state.copyWith(fineRotationAngle: clampedAngle);
 
-    // Straighten is typically many small incremental slider drags, not one discrete action;
-    // resetting the crop on every tick would make fine adjustment unusable.
-    // This is why Straighten shrinks/recenters the crop rect to stay within inscribed bounds
-    // rather than resetting it like 90° rotation does.
     final bounds = newState.inscribedCropBounds;
     final adjustedCrop = _adjustCropRectForInscribedBounds(
       state.cropRect,
@@ -292,7 +290,6 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
   }
 
   /// Advance rotation 90° clockwise (0° → 90° → 180° → 270° → 0°).
-  /// Resets crop selection to full inscribed bounds of the new orientation.
   void rotate() {
     if (!state.isLoaded) return;
 
@@ -313,7 +310,6 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
 
     var newCrop = bounds;
 
-    // If an aspect ratio lock is active, recalculate full-fit crop for new orientation
     final targetRatio = state.aspectRatioPreset.getRatio(
       newCurrentW.toDouble(),
       newCurrentH.toDouble(),
@@ -335,7 +331,6 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
   }
 
   /// Update crop selection rect in current rotated image pixel space.
-  /// Validates minimum size (10×10px floor) and clamps to current inscribed bounds.
   bool setCropRect(Rect rectInPixelSpace) {
     if (!state.isLoaded) return false;
 
@@ -387,7 +382,6 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     state = state.copyWith(rotationResetNoticeVisible: false);
   }
 
-  /// Recalculate crop rect of `targetRatio` centered at `center` inside `bounds`.
   Rect _recalculateCropForRatio(
     double targetRatio,
     Offset center,
@@ -407,7 +401,6 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     double left = center.dx - rectW / 2;
     double top = center.dy - rectH / 2;
 
-    // Clamp to bounds
     if (left < bounds.left) left = bounds.left;
     if (top < bounds.top) top = bounds.top;
     if (left + rectW > bounds.right) left = bounds.right - rectW;
@@ -416,7 +409,6 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     return Rect.fromLTWH(left, top, rectW, rectH);
   }
 
-  /// Helper to shrink/recenter crop rect to fit inside new inscribed bounds.
   Rect _adjustCropRectForInscribedBounds(
     Rect currentRect,
     AspectRatioPreset preset,
@@ -437,7 +429,6 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
       }
     }
 
-    // Clamp size to bounds
     if (width > bounds.width) {
       width = bounds.width;
       if (targetRatio != null) {
@@ -465,7 +456,6 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     return Rect.fromLTWH(left, top, width, height);
   }
 
-  /// Helper to clamp rect within current inscribed bounds and enforce 10×10px floor.
   Rect? _clampAndValidateRect(Rect rect) {
     final bounds = state.inscribedCropBounds;
 
@@ -499,8 +489,19 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
       clearOutput: true,
     );
 
-    _logService.logStarted('image_crop_rotate', 'apply',
-        message: 'rotation: ${state.rotation}°, fine: ${state.fineRotationAngle}°');
+    final logId = _logService.logStarted(
+      'image_crop_rotate',
+      'Image Crop & Rotate',
+      'apply',
+      inputFileCount: 1,
+      inputFilesCombinedSizeBytes: state.originalSizeBytes,
+      filePickerLoadTimeMs: _pickerLoadTimeMs,
+      parameters: {
+        'rotationDegrees': state.rotation,
+        'fineStraightenAngle': state.fineRotationAngle,
+        'cropApplied': true,
+      },
+    );
 
     try {
       Uint8List? inputBytes = state.file!.bytes;
@@ -512,6 +513,11 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
         state = state.copyWith(
           isProcessing: false,
           errorMessage: "This image couldn't be read. File may be corrupt.",
+        );
+        _logService.logFailed(
+          logId,
+          stage: LogFailureStage.validation,
+          errorMessage: "Image file empty or unreadable",
         );
         return;
       }
@@ -544,16 +550,23 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
         outputSizeBytes: result.outputSize,
       );
 
-      _logService.logSuccess('image_crop_rotate', 'apply',
-          message: 'output: ${p.basename(result.outputPath)}');
+      _logService.logCompleted(
+        logId,
+        outputFileCount: 1,
+        outputFilesCombinedSizeBytes: result.outputSize,
+        message: 'output: ${p.basename(result.outputPath)}',
+      );
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to crop on this device.",
       );
-      _logService.logError('image_crop_rotate', 'apply',
-          message: 'out of memory');
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.isolateExecution,
+        errorMessage: "Out of memory during crop & rotate",
+      );
       return;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -562,8 +575,12 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
         errorMessage:
             "Couldn't save the file — ${e.message}. Try a different location.",
       );
-      _logService.logError('image_crop_rotate', 'apply',
-          message: 'file system error', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.fileWrite,
+        errorMessage: "File system error: ${e.message}",
+        errorDetail: e.toString(),
+      );
       return;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -574,8 +591,12 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
         isProcessing: false,
         errorMessage: msg,
       );
-      _logService.logError('image_crop_rotate', 'apply',
-          message: 'crop/rotate failed', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.processing,
+        errorMessage: msg,
+        errorDetail: e.toString(),
+      );
     }
   }
 
@@ -618,4 +639,3 @@ class ImageCropRotateController extends StateNotifier<ImageCropRotateState> {
     state = const ImageCropRotateState();
   }
 }
-

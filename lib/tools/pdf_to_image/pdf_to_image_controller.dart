@@ -33,6 +33,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
   final PdfValidationService _validationService;
   final TempFileManager _tempFileManager;
   final AppLogService _logService;
+  int? _pickerLoadTimeMs;
 
   PdfToImageController({
     PdfThumbnailService? thumbnailService,
@@ -51,6 +52,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
 
   /// Load and validate a single PDF document.
   Future<void> loadDocument(PlatformFile platformFile, {Uint8List? overrideBytes}) async {
+    final stopwatch = Stopwatch()..start();
     state = state.copyWith(
       isProcessing: true,
       progressMessage: "Loading PDF…",
@@ -65,26 +67,26 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         try {
           bytes = await f.readAsBytes();
         } catch (e) {
+          stopwatch.stop();
+          _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
           state = state.copyWith(
             isProcessing: false,
             resetProgressMessage: true,
             errorMessage: "Could not read '${platformFile.name}': permission denied or file unreadable.",
           );
-          _logService.logError('pdf_to_image', 'load_document',
-              message: "Could not read '${platformFile.name}'");
           return;
         }
       }
     }
 
     if (bytes == null || bytes.isEmpty) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' is empty or unreadable.",
       );
-      _logService.logError('pdf_to_image', 'load_document',
-          message: "File '${platformFile.name}' is empty or unreadable");
       return;
     }
 
@@ -92,14 +94,15 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
     double firstWidth = 612.0;
     double firstHeight = 792.0;
     final valInfo = _validationService.validate(bytes);
+    stopwatch.stop();
+    _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
+
     if (valInfo.isPasswordProtected) {
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
         errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
       );
-      _logService.logError('pdf_to_image', 'load_document',
-          message: 'password-protected file rejected');
       return;
     } else if (valInfo.isCorrupted) {
       state = state.copyWith(
@@ -107,8 +110,6 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' appears corrupted or unreadable.",
       );
-      _logService.logError('pdf_to_image', 'load_document',
-          message: "corrupted/unreadable: ${platformFile.name}");
       return;
     }
 
@@ -128,12 +129,9 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' contains no pages.",
       );
-      _logService.logError('pdf_to_image', 'load_document',
-          message: 'file contains no pages');
       return;
     }
 
-    // All pages selected by default
     final initialSelected = Set<int>.from(List.generate(pageCount, (i) => i));
 
     state = state.copyWith(
@@ -149,7 +147,6 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
       resetError: true,
     );
 
-    // Asynchronously generate page thumbnails
     _generateThumbnails(bytes);
   }
 
@@ -244,12 +241,24 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
       skippedPages: const [],
     );
 
-    // Selected page indices in document order (0-indexed)
     final sortedPages = state.selectedPages.toList()..sort();
     final bool isSingle = sortedPages.length == 1;
 
-    _logService.logStarted('pdf_to_image', 'export',
-        message: '${sortedPages.length} pages, ${state.format.name}, ${state.resolution.dpi}dpi');
+    final logId = _logService.logStarted(
+      'pdf_to_image',
+      'PDF to Image',
+      'export',
+      inputFileCount: 1,
+      inputFilesCombinedSizeBytes: state.fileBytes!.length,
+      filePickerLoadTimeMs: _pickerLoadTimeMs,
+      parameters: {
+        'format': state.format.name,
+        'resolution': state.resolution.name,
+        'dpi': state.resolution.dpi,
+        'pagesSelected': sortedPages.length,
+        'pagesTotal': state.totalPageCount,
+      },
+    );
 
     try {
       final ext = state.format.fileExtension;
@@ -258,7 +267,6 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
           ? pdfx.PdfPageImageFormat.png
           : pdfx.PdfPageImageFormat.jpeg;
 
-      // Extract source base name (without extension)
       final sourceName = state.file?.name ?? 'document.pdf';
       final baseName = p.basenameWithoutExtension(sourceName);
 
@@ -293,6 +301,11 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
             resetProgressPercent: true,
             errorMessage: "Page ${pageIdx + 1} couldn't be rendered.",
           );
+          _logService.logFailed(
+            logId,
+            stage: LogFailureStage.processing,
+            errorMessage: "Page ${pageIdx + 1} couldn't be rendered",
+          );
           return null;
         }
 
@@ -326,12 +339,15 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
           isSingleFileExport: true,
         );
 
-        _logService.logSuccess('pdf_to_image', 'export',
-            message: 'single page exported');
+        _logService.logCompleted(
+          logId,
+          outputFileCount: 1,
+          outputFilesCombinedSizeBytes: imageBytes.length,
+          message: 'single page exported',
+        );
 
         return targetFilePath;
       } else {
-        // Multi-page export into folder
         String baseDirName = '${baseName}_images';
         String targetDirPath;
 
@@ -349,6 +365,7 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         await outDir.create(recursive: true);
 
         int exported = 0;
+        int totalOutputBytes = 0;
         final List<int> skipped = [];
 
         for (int i = 0; i < sortedPages.length; i++) {
@@ -377,8 +394,8 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
             final imgFile = File(p.join(targetDirPath, imgFileName));
             await imgFile.writeAsBytes(imageBytes, flush: true);
             exported++;
+            totalOutputBytes += imageBytes.length;
           } else {
-            // Record 1-indexed skipped page
             skipped.add(pageIdx + 1);
           }
         }
@@ -389,7 +406,6 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         }
 
         if (exported == 0) {
-          // Cleanup empty directory
           try {
             if (outDir.existsSync()) {
               outDir.deleteSync(recursive: true);
@@ -401,6 +417,11 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
             resetProgressMessage: true,
             resetProgressPercent: true,
             errorMessage: "Failed to render selected pages.",
+          );
+          _logService.logFailed(
+            logId,
+            stage: LogFailureStage.processing,
+            errorMessage: "Failed to render any selected page",
           );
           return null;
         }
@@ -417,8 +438,12 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
           isSingleFileExport: false,
         );
 
-        _logService.logSuccess('pdf_to_image', 'export',
-            message: '$exported pages exported${skipped.isNotEmpty ? ', ${skipped.length} skipped' : ''}');
+        _logService.logCompleted(
+          logId,
+          outputFileCount: exported,
+          outputFilesCombinedSizeBytes: totalOutputBytes,
+          message: '$exported pages exported',
+        );
 
         return targetDirPath;
       }
@@ -434,8 +459,11 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressPercent: true,
         errorMessage: "This operation is too large to process on this device.",
       );
-      _logService.logError('pdf_to_image', 'export',
-          message: 'out of memory');
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.isolateExecution,
+        errorMessage: "Out of memory during PDF to image export",
+      );
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -449,8 +477,12 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressPercent: true,
         errorMessage: "Couldn't save image files — ${e.message}. Try a different location.",
       );
-      _logService.logError('pdf_to_image', 'export',
-          message: 'file system error', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.fileWrite,
+        errorMessage: "File system error: ${e.message}",
+        errorDetail: e.toString(),
+      );
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -464,8 +496,12 @@ class PdfToImageController extends StateNotifier<PdfToImageState> {
         resetProgressPercent: true,
         errorMessage: "Image export couldn't be completed — the PDF may be damaged or use unsupported content.",
       );
-      _logService.logError('pdf_to_image', 'export',
-          message: 'export failed', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.processing,
+        errorMessage: "Export failed",
+        errorDetail: e.toString(),
+      );
       return null;
     }
   }

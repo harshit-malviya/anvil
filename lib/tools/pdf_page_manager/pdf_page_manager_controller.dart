@@ -23,6 +23,7 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
   final PdfValidationService _validationService;
   final TempFileManager _tempFileManager;
   final AppLogService _logService;
+  int? _pickerLoadTimeMs;
 
   PdfPageManagerController({
     FileService? fileService,
@@ -37,6 +38,7 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
 
   /// Load and validate a single PDF document.
   Future<void> loadDocument(PlatformFile platformFile, {Uint8List? overrideBytes}) async {
+    final stopwatch = Stopwatch()..start();
     state = state.copyWith(
       isProcessing: true,
       progressMessage: "Loading PDF…",
@@ -51,38 +53,39 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
         try {
           bytes = await f.readAsBytes();
         } catch (e) {
+          stopwatch.stop();
+          _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
           state = state.copyWith(
             isProcessing: false,
             resetProgressMessage: true,
             errorMessage: "Could not read '${platformFile.name}': permission denied or file unreadable.",
           );
-          _logService.logError('pdf_page_manager', 'load_document',
-              message: "Could not read '${platformFile.name}'");
           return;
         }
       }
     }
 
     if (bytes == null || bytes.isEmpty) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' is empty or unreadable.",
       );
-      _logService.logError('pdf_page_manager', 'load_document',
-          message: "File '${platformFile.name}' is empty or unreadable");
       return;
     }
 
     final valInfo = _validationService.validate(bytes);
+    stopwatch.stop();
+    _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
+
     if (valInfo.isPasswordProtected) {
       state = state.copyWith(
         isProcessing: false,
         resetProgressMessage: true,
         errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
       );
-      _logService.logError('pdf_page_manager', 'load_document',
-          message: 'password-protected file rejected');
       return;
     } else if (valInfo.isCorrupted) {
       state = state.copyWith(
@@ -90,8 +93,6 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' appears corrupted or unreadable.",
       );
-      _logService.logError('pdf_page_manager', 'load_document',
-          message: "corrupted/unreadable: ${platformFile.name}");
       return;
     }
 
@@ -103,8 +104,6 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
         resetProgressMessage: true,
         errorMessage: "File '${platformFile.name}' contains no pages.",
       );
-      _logService.logError('pdf_page_manager', 'load_document',
-          message: 'file contains no pages');
       return;
     }
 
@@ -246,8 +245,30 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
       resetOutput: true,
     );
 
-    _logService.logStarted('pdf_page_manager', 'apply_changes',
-        message: '${state.activePageCount} pages');
+    final deletedCount = state.pages.length - state.activePageCount;
+    final rotatedCount = state.pages.where((p) => p.rotation != 0).length;
+    bool isReordered = false;
+    final active = state.activePages;
+    for (int i = 0; i < active.length; i++) {
+      if (active[i].originalIndex != i) {
+        isReordered = true;
+        break;
+      }
+    }
+
+    final logId = _logService.logStarted(
+      'pdf_page_manager',
+      'PDF Page Manager',
+      'apply_changes',
+      inputFileCount: 1,
+      inputFilesCombinedSizeBytes: state.fileBytes!.length,
+      filePickerLoadTimeMs: _pickerLoadTimeMs,
+      parameters: {
+        'pagesDeleted': deletedCount,
+        'pagesRotated': rotatedCount,
+        'reordered': isReordered,
+      },
+    );
 
     try {
       // Build isolate-compatible page arrangement list
@@ -292,8 +313,12 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
         outputPath: targetPath,
       );
 
-      _logService.logSuccess('pdf_page_manager', 'apply_changes',
-          message: 'output: ${p.basename(targetPath)}');
+      _logService.logCompleted(
+        logId,
+        outputFileCount: 1,
+        outputFilesCombinedSizeBytes: outputFile.lengthSync(),
+        message: 'output: ${p.basename(targetPath)}',
+      );
 
       return targetPath;
     } on OutOfMemoryError {
@@ -307,8 +332,11 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
         resetProgressMessage: true,
         errorMessage: "This operation is too large to process on this device.",
       );
-      _logService.logError('pdf_page_manager', 'apply_changes',
-          message: 'out of memory');
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.isolateExecution,
+        errorMessage: "Out of memory during PDF page management",
+      );
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -321,8 +349,12 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
-      _logService.logError('pdf_page_manager', 'apply_changes',
-          message: 'file system error', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.fileWrite,
+        errorMessage: "File system error: ${e.message}",
+        errorDetail: e.toString(),
+      );
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -335,8 +367,12 @@ class PdfPageManagerController extends StateNotifier<PdfPageManagerState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't apply page changes — the file may be damaged. Try a different PDF.",
       );
-      _logService.logError('pdf_page_manager', 'apply_changes',
-          message: 'apply failed', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.processing,
+        errorMessage: "Failed to apply page changes",
+        errorDetail: e.toString(),
+      );
       return null;
     }
   }

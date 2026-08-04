@@ -26,6 +26,7 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
   final PdfValidationService _validationService;
   final TempFileManager _tempFileManager;
   final AppLogService _logService;
+  int? _pickerLoadTimeMs;
 
   PdfInsertPagesController({
     FileService? fileService,
@@ -42,6 +43,7 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
 
   /// Load and validate target PDF document into which pages will be inserted.
   Future<void> loadTargetDocument(PlatformFile platformFile) async {
+    final stopwatch = Stopwatch()..start();
     Uint8List? bytes = platformFile.bytes;
     if (bytes == null && platformFile.path != null) {
       final f = File(platformFile.path!);
@@ -49,6 +51,8 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
         try {
           bytes = await f.readAsBytes();
         } catch (_) {
+          stopwatch.stop();
+          _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
           state = state.copyWith(
             errorMessage: "Could not read '${platformFile.name}': permission denied or file unreadable.",
             resetError: false,
@@ -59,6 +63,8 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
     }
 
     if (bytes == null || bytes.isEmpty) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         errorMessage: "File '${platformFile.name}' is empty or unreadable.",
         resetError: false,
@@ -67,6 +73,9 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
     }
 
     final valInfo = _validationService.validate(bytes);
+    stopwatch.stop();
+    _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
+
     if (valInfo.isPasswordProtected) {
       state = state.copyWith(
         errorMessage: "This file is password-protected and can't be modified. Remove the password first.",
@@ -91,8 +100,6 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
     }
 
     final thumbnails = await _thumbnailService.generateThumbnails(bytes);
-
-    // ASSUMPTION: Insertion point defaults to 'at the end' (after the last target page) once target file is loaded.
     final defaultInsertionPoint = pageCount - 1;
 
     state = state.copyWith(
@@ -171,7 +178,6 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
   }
 
   /// Toggle selection of a page in the source document.
-  /// Preserves tap selection order when manually selecting pages.
   void togglePageSelected(int sourcePageIndex) {
     if (sourcePageIndex < 0 || sourcePageIndex >= state.sourcePageCount) return;
 
@@ -199,8 +205,6 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
   }
 
   /// Set the insertion point index in the target PDF.
-  /// `-1` means at start, `i` (0 <= i < targetPageCount) means after target page index `i`.
-  /// ASSUMPTION: Single insertion point operation per session for v1 scope.
   void setInsertionPoint(int afterTargetPageIndex) {
     if (afterTargetPageIndex < -1 || afterTargetPageIndex >= state.targetPageCount) return;
     state = state.copyWith(insertionPoint: afterTargetPageIndex);
@@ -248,11 +252,22 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
       resetOutput: true,
     );
 
-    _logService.logStarted('pdf_insert_pages', 'insert',
-        message: '${state.selectedSourceCount} pages');
+    final totalInputBytes = (state.targetBytes?.length ?? 0) + (state.sourceBytes?.length ?? 0);
+
+    final logId = _logService.logStarted(
+      'pdf_insert_pages',
+      'PDF Insert Pages',
+      'insert',
+      inputFileCount: 2,
+      inputFilesCombinedSizeBytes: totalInputBytes,
+      filePickerLoadTimeMs: _pickerLoadTimeMs,
+      parameters: {
+        'insertAfterPage': state.insertionPoint,
+        'pagesInserted': state.selectedSourceCount,
+      },
+    );
 
     try {
-      // Run heavy PDF work on a background isolate
       final Uint8List resultBytes = await compute(
         isolateInsertPages,
         InsertPagesParams(
@@ -292,8 +307,12 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
         outputPath: targetPath,
       );
 
-      _logService.logSuccess('pdf_insert_pages', 'insert',
-          message: 'output: ${p.basename(targetPath)}');
+      _logService.logCompleted(
+        logId,
+        outputFileCount: 1,
+        outputFilesCombinedSizeBytes: outputFile.lengthSync(),
+        message: 'output: ${p.basename(targetPath)}',
+      );
 
       return targetPath;
     } on OutOfMemoryError {
@@ -307,8 +326,11 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
         resetProgressMessage: true,
         errorMessage: "This insertion is too large to process on this device. Try inserting fewer pages.",
       );
-      _logService.logError('pdf_insert_pages', 'insert',
-          message: 'out of memory');
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.isolateExecution,
+        errorMessage: "Out of memory during page insertion",
+      );
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -321,8 +343,12 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
-      _logService.logError('pdf_insert_pages', 'insert',
-          message: 'file system error', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.fileWrite,
+        errorMessage: "File system error: ${e.message}",
+        errorDetail: e.toString(),
+      );
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -335,21 +361,22 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
         resetProgressMessage: true,
         errorMessage: "Page insertion couldn't be completed — one of the files may be damaged. Try different source files.",
       );
-      _logService.logError('pdf_insert_pages', 'insert',
-          message: 'insert failed', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.processing,
+        errorMessage: "Insert pages failed",
+        errorDetail: e.toString(),
+      );
       return null;
     }
   }
 
-  /// Splice pages from [sourceBytes] (indices in [selectedSourceIndices]) into [targetBytes]
-  /// after target page index [insertionPoint] (`-1` means at start).
   static Future<Uint8List> splicePages({
     required Uint8List targetBytes,
     required Uint8List sourceBytes,
     required List<int> selectedSourceIndices,
     required int insertionPoint,
   }) async {
-    // Delegate to isolate worker for consistency
     return compute(
       isolateInsertPages,
       InsertPagesParams(
@@ -361,7 +388,6 @@ class PdfInsertPagesController extends StateNotifier<PdfInsertPagesState> {
     );
   }
 
-  /// Helper to copy page with preserved dimensions, zero margins, and explicit orientation.
   static void copyPageToDestination(PdfPage page, PdfDocument destinationDoc) {
     final section = destinationDoc.sections!.add();
     section.pageSettings.size = page.size;

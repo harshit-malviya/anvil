@@ -55,7 +55,6 @@ Future<ImageResizeResult> isolateImageResizeWorker(ImageResizeParams params) asy
     throw const FormatException("This image couldn't be read. File may be corrupt.");
   }
 
-  // // ASSUMPTION: img.Interpolation.cubic used for high-quality cubic interpolation resize via ImageResizeService.
   final resized = ImageResizeService.resize(
     decoded,
     targetWidth: params.targetWidth,
@@ -86,7 +85,6 @@ Future<ImageResizeResult> isolateImageResizeWorker(ImageResizeParams params) asy
       encodedBytes = Uint8List.fromList(img.encodeTiff(resized));
       break;
     default:
-      // Default fallback for formats like WebP without encoder support
       encodedBytes = Uint8List.fromList(img.encodePng(resized));
       break;
   }
@@ -104,6 +102,7 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
   final FileService _fileService;
   final TempFileManager _tempFileManager;
   final AppLogService _logService;
+  int? _pickerLoadTimeMs;
 
   ImageResizeController(
     this._fileService, [
@@ -115,17 +114,18 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
 
   /// Load and parse selected image file.
   Future<void> loadImage(PlatformFile platformFile) async {
+    final stopwatch = Stopwatch()..start();
     state = state.copyWith(isProcessing: true, clearError: true, clearResult: true);
 
     final ext = p.extension(platformFile.name).toLowerCase();
     final allowedExts = ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.webp'];
     if (!allowedExts.contains(ext)) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This file type isn't supported. Supported formats: PNG, JPEG, BMP, GIF, TIFF, WebP.",
       );
-      _logService.logError('image_resize', 'load_image',
-          message: 'unsupported file type');
       return;
     }
 
@@ -136,6 +136,8 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
         try {
           bytes = await f.readAsBytes();
         } catch (_) {
+          stopwatch.stop();
+          _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
           state = state.copyWith(
             isProcessing: false,
             errorMessage: "Could not read '${platformFile.name}': permission denied.",
@@ -146,6 +148,8 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
     }
 
     if (bytes == null || bytes.isEmpty) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image couldn't be read. File may be corrupt.",
@@ -160,6 +164,9 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
       decoded = null;
     }
 
+    stopwatch.stop();
+    _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
+
     if (decoded == null) {
       state = state.copyWith(
         isProcessing: false,
@@ -168,12 +175,10 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
       return;
     }
 
-    // Bake EXIF orientation for consistent preview & dimension readings
     decoded = img.bakeOrientation(decoded);
 
     final formatName = ext.replaceAll('.', '').toUpperCase();
 
-    // Create thumbnail
     img.Image thumbImg = decoded;
     if (thumbImg.numFrames > 1) {
       thumbImg = thumbImg.frames.first;
@@ -214,7 +219,6 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
       final pct = (state.targetWidth / state.sourceWidth! * 100.0);
       state = newState.copyWith(percentage: double.parse(pct.toStringAsFixed(1)));
     } else if (mode == ResizeMode.preset) {
-      // Pick default preset if none selected yet
       final preset = state.selectedPreset ?? ImagePreset.fullHd;
       selectPreset(preset, overrideMode: mode);
     } else {
@@ -284,8 +288,6 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
   }
 
   /// Select a preset size.
-  /// Spec requirement: Presets are a starting width when aspect ratio lock is ON.
-  /// If unlocked, exact preset height applies.
   void selectPreset(ImagePreset preset, {ResizeMode? overrideMode}) {
     if (!state.isSourceLoaded) return;
 
@@ -320,7 +322,6 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
     }
 
     if (newLock && state.aspectRatio > 0) {
-      // Re-align height to width based on original aspect ratio when locking
       int newH = (state.targetWidth / state.aspectRatio).round().clamp(1, 100000);
       if (state.mode == ResizeMode.preset && state.selectedPreset != null) {
         newH = (state.selectedPreset!.width / state.aspectRatio).round().clamp(1, 100000);
@@ -331,7 +332,6 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
         clearError: true,
       );
     } else {
-      // When unlocking, if a preset was active, apply the preset's exact height
       int newH = state.targetHeight;
       if (state.mode == ResizeMode.preset && state.selectedPreset != null) {
         newH = state.selectedPreset!.height;
@@ -357,8 +357,21 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
 
     state = state.copyWith(isProcessing: true, clearError: true);
 
-    _logService.logStarted('image_resize', 'resize',
-        message: '${state.targetWidth}×${state.targetHeight}');
+    final logId = _logService.logStarted(
+      'image_resize',
+      'Image Resize',
+      'resize',
+      inputFileCount: 1,
+      inputFilesCombinedSizeBytes: state.sourceFileSize,
+      filePickerLoadTimeMs: _pickerLoadTimeMs,
+      parameters: {
+        'mode': state.mode.name,
+        'targetWidth': state.targetWidth,
+        'targetHeight': state.targetHeight,
+        'percentage': state.percentage,
+        'lockAspectRatio': state.aspectRatioLocked,
+      },
+    );
 
     try {
       Uint8List? inputBytes = state.file!.bytes;
@@ -371,6 +384,11 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
           isProcessing: false,
           errorMessage: "This image couldn't be read. File may be corrupt.",
         );
+        _logService.logFailed(
+          logId,
+          stage: LogFailureStage.validation,
+          errorMessage: "Image file empty or unreadable",
+        );
         return;
       }
 
@@ -381,7 +399,6 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
       final baseName = p.basenameWithoutExtension(state.file!.name);
       var ext = p.extension(state.file!.name).toLowerCase();
       if (ext == '.webp') {
-        // Fallback for WebP read-only support in image package
         ext = '.png';
       }
 
@@ -405,24 +422,35 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
         outputSize: result.outputSize,
       );
 
-      _logService.logSuccess('image_resize', 'resize',
-          message: 'output: ${p.basename(result.outputPath)}');
+      _logService.logCompleted(
+        logId,
+        outputFileCount: 1,
+        outputFilesCombinedSizeBytes: result.outputSize,
+        message: 'output: ${p.basename(result.outputPath)}',
+      );
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to resize at this size on this device. Try a smaller target size.",
       );
-      _logService.logError('image_resize', 'resize',
-          message: 'out of memory');
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.isolateExecution,
+        errorMessage: "Out of memory during image resize",
+      );
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
-      _logService.logError('image_resize', 'resize',
-          message: 'file system error', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.fileWrite,
+        errorMessage: "File system error: ${e.message}",
+        errorDetail: e.toString(),
+      );
     } catch (e) {
       await _tempFileManager.cleanupSession();
       final msg = e is FormatException ? e.message : "Resize failed. Please try again.";
@@ -430,8 +458,12 @@ class ImageResizeController extends StateNotifier<ImageResizeState> {
         isProcessing: false,
         errorMessage: msg,
       );
-      _logService.logError('image_resize', 'resize',
-          message: 'resize failed', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.processing,
+        errorMessage: msg,
+        errorDetail: e.toString(),
+      );
     }
   }
 

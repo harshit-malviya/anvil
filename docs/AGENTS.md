@@ -52,6 +52,14 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-08-04 — Session 28
+- Implemented Debug Log Enrichment — Rich Data + Modern Browsing UI (`docs/App Log Feature/TASK_debug_log_enrichment.md`):
+  - Upgraded `LogEntry` data model with single-operation lifecycle, ID correlation (`logStarted` -> `logCompleted` / `logFailed`), duration calculation, file picker load timing (`filePickerLoadTimeMs`), input/output file counts and combined byte sizes, per-tool `parameters` Map, failure stage classification (`LogFailureStage`: `filePicker`, `validation`, `processing`, `isolateExecution`, `fileWrite`, `unknown`), and platform context.
+  - Upgraded retention cap from 500 to **2,000 entries** with backward-compatible JSON Lines migration safety.
+  - Redesigned hidden `DebugLogScreen` developer console with top metric stat strip (Total Ops, Success Rate %, Avg Duration, Most Failures), filter & search bar (tool dropdown, status chips, free text), single-row per operation list view, expandable detail panel with pretty-printed parameters, monospace metrics, and "Copy entry as JSON" action.
+  - Retrofitted all 14 tool controllers with started, completed, and failed lifecycle instrumentation, timing, combined file size measurements, and rich per-tool parameters map.
+  - Created unit test suite `test/core/services/app_log_service_test.dart` (7 unit tests passing cleanly).
+
 ## 2026-08-04 — Session 27
 - Implemented App Log / Debug Log Feature (`docs/App Log Feature/FEATURE_debug_log.md`):
   - Created `AppLogService` (`lib/core/services/app_log_service.dart`) with `LogEntry` model, `LogResult` enum, JSON Lines file persistence (`debug_log.jsonl`), 500-entry retention cap, and `ChangeNotifierProvider` (`appLogServiceProvider`).
@@ -285,7 +293,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 | Image Blur | `docs/V2/04_Image_Blur/FEATURE_image_blur.md` | Done | Controller, UI, interactive canvas drawing, background isolate worker, redaction styles (Pixelate, Blur, Solid Block), unit tests passing |
 | Image Crop & Rotate | `docs/V2/05_Crop_&_Rotate/FEATURE_image_crop_rotate.md` | Done | Controller, UI, interactive canvas crop overlay, 90° step rotation, background isolate worker, unit tests passing |
 | Storage Cleanup | `docs/Audit App/TASK_storage_cleanup.md` | Done | Shared TempFileManager service, FileService auto-registration, startup sweep, 14-controller adoption, unit tests passing |
-| Debug Log | `docs/App Log Feature/FEATURE_debug_log.md` | Done | AppLogService, hidden DebugLogScreen, long press trigger, 14-controller retrofit, security guard, zero analyzer errors |
+| Debug Log | `docs/App Log Feature/FEATURE_debug_log.md` | Done | Upgraded to rich single-operation model, failure stage classification, 2000-entry cap, developer console UI, 14-controller retrofit |
 
 ## 5. Decisions log
 

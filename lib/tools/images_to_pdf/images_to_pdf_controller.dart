@@ -22,6 +22,7 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
   final ImageToPdfPageService _imageService;
   final TempFileManager _tempFileManager;
   final AppLogService _logService;
+  int? _pickerLoadTimeMs;
 
   ImagesToPdfController({
     FileService? fileService,
@@ -37,6 +38,7 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
   /// Add and validate image files to convert into PDF pages.
   Future<void> addImages(List<PlatformFile> platformFiles) async {
     if (platformFiles.isEmpty) return;
+    final stopwatch = Stopwatch()..start();
 
     final newImages = List<ImageFileItem>.from(state.images);
     final errors = <String>[];
@@ -73,6 +75,9 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         }
       }
     }
+
+    stopwatch.stop();
+    _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
 
     state = state.copyWith(
       images: newImages,
@@ -144,11 +149,19 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
       resetOutput: true,
     );
 
-    _logService.logStarted('images_to_pdf', 'create',
-        message: '$imageCount images');
+    final inputCombinedBytes = state.images.fold<int>(0, (sum, img) => sum + img.bytes.length);
+
+    final logId = _logService.logStarted(
+      'images_to_pdf',
+      'Images to PDF',
+      'create',
+      inputFileCount: imageCount,
+      inputFilesCombinedSizeBytes: inputCombinedBytes,
+      filePickerLoadTimeMs: _pickerLoadTimeMs,
+      parameters: {'imageCount': imageCount},
+    );
 
     try {
-      // 1. Build image specs for isolate
       final imageSpecs = <ImagePageSpec>[];
       for (final imgItem in state.images) {
         final width = imgItem.width.toDouble();
@@ -164,13 +177,11 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         ));
       }
 
-      // 2. Compute PDF construction in background isolate
       final Uint8List resultBytes = await compute(
         isolateImagesToPdf,
         ImagesToPdfParams(imageSpecs: imageSpecs),
       );
 
-      // 3. Determine output file path
       String targetPath;
       if (customOutputPath != null && customOutputPath.isNotEmpty) {
         targetPath = customOutputPath;
@@ -198,8 +209,12 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         outputPath: targetPath,
       );
 
-      _logService.logSuccess('images_to_pdf', 'create',
-          message: 'output: ${p.basename(targetPath)}');
+      _logService.logCompleted(
+        logId,
+        outputFileCount: 1,
+        outputFilesCombinedSizeBytes: outputFile.lengthSync(),
+        message: 'output: ${p.basename(targetPath)}',
+      );
 
       return targetPath;
     } on OutOfMemoryError {
@@ -213,8 +228,11 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         resetProgressMessage: true,
         errorMessage: "This operation is too large to process on this device.",
       );
-      _logService.logError('images_to_pdf', 'create',
-          message: 'out of memory');
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.isolateExecution,
+        errorMessage: "Out of memory during images to PDF creation",
+      );
       return null;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -227,8 +245,12 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
-      _logService.logError('images_to_pdf', 'create',
-          message: 'file system error', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.fileWrite,
+        errorMessage: "File system error: ${e.message}",
+        errorDetail: e.toString(),
+      );
       return null;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -241,8 +263,12 @@ class ImagesToPdfController extends StateNotifier<ImagesToPdfState> {
         resetProgressMessage: true,
         errorMessage: "Couldn't create PDF from images. One or more image files may be damaged.",
       );
-      _logService.logError('images_to_pdf', 'create',
-          message: 'create failed', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.processing,
+        errorMessage: "Create PDF failed",
+        errorDetail: e.toString(),
+      );
       return null;
     }
   }

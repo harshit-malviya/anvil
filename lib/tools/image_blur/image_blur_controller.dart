@@ -60,10 +60,8 @@ Future<ImageBlurResult> isolateImageBlurWorker(ImageBlurParams params) async {
     throw const FormatException("This image couldn't be read. File may be corrupt.");
   }
 
-  // Bake EXIF orientation so output is correctly oriented
   decoded = img.bakeOrientation(decoded);
 
-  // Animated sources: extract first frame
   if (decoded.numFrames > 1) {
     decoded = decoded.frames.first;
   }
@@ -72,7 +70,6 @@ Future<ImageBlurResult> isolateImageBlurWorker(ImageBlurParams params) async {
   final imgH = decoded.height;
 
   for (final rect in params.regions) {
-    // Clamp rect to image bounds
     final clampedLeft = rect.left.clamp(0.0, imgW.toDouble()).toInt();
     final clampedTop = rect.top.clamp(0.0, imgH.toDouble()).toInt();
     final clampedRight = rect.right.clamp(0.0, imgW.toDouble()).toInt();
@@ -85,7 +82,6 @@ Future<ImageBlurResult> isolateImageBlurWorker(ImageBlurParams params) async {
 
     switch (params.style) {
       case RedactionStyle.pixelate:
-        // ASSUMPTION: Pixelate block sizes: Small = 12px, Medium = 24px, Large = 40px
         int blockSize = 24;
         if (params.intensity == RedactionIntensity.small) {
           blockSize = 12;
@@ -119,7 +115,6 @@ Future<ImageBlurResult> isolateImageBlurWorker(ImageBlurParams params) async {
         break;
 
       case RedactionStyle.blur:
-        // ASSUMPTION: Blur radius presets: Light = 10px, Medium = 25px, Strong = 50px
         int radius = 25;
         if (params.intensity == RedactionIntensity.small) {
           radius = 10;
@@ -127,7 +122,6 @@ Future<ImageBlurResult> isolateImageBlurWorker(ImageBlurParams params) async {
           radius = 50;
         }
 
-        // ASSUMPTION: Blur radius capped to <= 40% of the region's shorter side
         final shorterSide = min(rw, rh);
         final maxAllowedRadius = max(1, (shorterSide * 0.40).toInt());
         final effectiveRadius = min(radius, maxAllowedRadius);
@@ -152,7 +146,6 @@ Future<ImageBlurResult> isolateImageBlurWorker(ImageBlurParams params) async {
         );
 
         img.fillRect(
-
           decoded,
           x1: clampedLeft,
           y1: clampedTop,
@@ -204,6 +197,7 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
   final TempFileManager _tempFileManager;
   final AppLogService _logService;
   int _regionCounter = 0;
+  int? _pickerLoadTimeMs;
 
   ImageBlurController(
     this._fileService, [
@@ -215,6 +209,7 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
 
   /// Load and validate selected image file.
   Future<void> loadImage(PlatformFile platformFile) async {
+    final stopwatch = Stopwatch()..start();
     state = state.copyWith(
       isProcessing: true,
       clearError: true,
@@ -226,6 +221,8 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
     final ext = p.extension(platformFile.name).toLowerCase();
     final allowedExts = ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.webp'];
     if (!allowedExts.contains(ext)) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This file type isn't supported. Supported formats: PNG, JPEG, BMP, GIF, TIFF, WebP.",
@@ -240,6 +237,8 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
         try {
           bytes = await f.readAsBytes();
         } catch (_) {
+          stopwatch.stop();
+          _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
           state = state.copyWith(
             isProcessing: false,
             errorMessage: "Could not read '${platformFile.name}': permission denied.",
@@ -250,6 +249,8 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
     }
 
     if (bytes == null || bytes.isEmpty) {
+      stopwatch.stop();
+      _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image couldn't be read. File may be corrupt.",
@@ -264,6 +265,9 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
       decoded = null;
     }
 
+    stopwatch.stop();
+    _pickerLoadTimeMs = stopwatch.elapsedMilliseconds;
+
     if (decoded == null) {
       state = state.copyWith(
         isProcessing: false,
@@ -272,12 +276,10 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
       return;
     }
 
-    // Bake EXIF orientation for consistent preview & dimension readings
     decoded = img.bakeOrientation(decoded);
 
     final formatName = ext.replaceAll('.', '').toUpperCase();
 
-    // Create thumbnail
     img.Image thumbImg = decoded;
     if (thumbImg.numFrames > 1) {
       thumbImg = thumbImg.frames.first;
@@ -301,7 +303,6 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
   }
 
   /// Add a new redaction region in source pixel space coordinates.
-  /// Validates minimum size (10x10px floor) and clamps to image bounds.
   bool addRegion(Rect regionInSourcePixelSpace) {
     if (!state.isLoaded) return false;
 
@@ -416,8 +417,19 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
 
     state = state.copyWith(isProcessing: true, clearError: true, clearOutput: true);
 
-    _logService.logStarted('image_blur', 'apply',
-        message: '${state.regions.length} regions, style: ${state.style.name}');
+    final logId = _logService.logStarted(
+      'image_blur',
+      'Image Blur',
+      'apply',
+      inputFileCount: 1,
+      inputFilesCombinedSizeBytes: state.originalSizeBytes,
+      filePickerLoadTimeMs: _pickerLoadTimeMs,
+      parameters: {
+        'regionCount': state.regions.length,
+        'style': state.style.name,
+        'intensity': state.intensity.name,
+      },
+    );
 
     try {
       Uint8List? inputBytes = state.file!.bytes;
@@ -429,6 +441,11 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
         state = state.copyWith(
           isProcessing: false,
           errorMessage: "This image couldn't be read. File may be corrupt.",
+        );
+        _logService.logFailed(
+          logId,
+          stage: LogFailureStage.validation,
+          errorMessage: "Image file empty or unreadable",
         );
         return;
       }
@@ -461,16 +478,23 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
         outputSizeBytes: result.outputSize,
       );
 
-      _logService.logSuccess('image_blur', 'apply',
-          message: 'output: ${p.basename(result.outputPath)}');
+      _logService.logCompleted(
+        logId,
+        outputFileCount: 1,
+        outputFilesCombinedSizeBytes: result.outputSize,
+        message: 'output: ${p.basename(result.outputPath)}',
+      );
     } on OutOfMemoryError {
       await _tempFileManager.cleanupSession();
       state = state.copyWith(
         isProcessing: false,
         errorMessage: "This image is too large to redact on this device.",
       );
-      _logService.logError('image_blur', 'apply',
-          message: 'out of memory');
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.isolateExecution,
+        errorMessage: "Out of memory during image blur",
+      );
       return;
     } on FileSystemException catch (e) {
       await _tempFileManager.cleanupSession();
@@ -478,8 +502,12 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
         isProcessing: false,
         errorMessage: "Couldn't save the file — ${e.message}. Try a different location.",
       );
-      _logService.logError('image_blur', 'apply',
-          message: 'file system error', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.fileWrite,
+        errorMessage: "File system error: ${e.message}",
+        errorDetail: e.toString(),
+      );
       return;
     } catch (e) {
       await _tempFileManager.cleanupSession();
@@ -488,8 +516,12 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
         isProcessing: false,
         errorMessage: msg,
       );
-      _logService.logError('image_blur', 'apply',
-          message: 'redaction failed', errorDetail: e.toString());
+      _logService.logFailed(
+        logId,
+        stage: LogFailureStage.processing,
+        errorMessage: msg,
+        errorDetail: e.toString(),
+      );
     }
   }
 
@@ -520,7 +552,6 @@ class ImageBlurController extends StateNotifier<ImageBlurState> {
       await _fileService.shareFile(state.outputPath!);
     }
   }
-
 
   /// Clear active error message.
   void clearError() {
