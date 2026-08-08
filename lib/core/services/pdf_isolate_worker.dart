@@ -151,7 +151,7 @@ Future<Uint8List> isolateMergePdfs(MergeParams params) async {
     sourceDoc.dispose();
   }
 
-  _deduplicateResources(destinationDoc);
+  // _deduplicateResources(destinationDoc);
 
   final List<int> mergedBytes = await destinationDoc.save();
   destinationDoc.dispose();
@@ -214,11 +214,13 @@ void _deduplicateResources(PdfDocument doc) {
       if (stream == null) return;
 
       final pdfName = key is PdfName ? key : PdfName(key.toString());
-      allStreams.add(_StreamInfo(
-        stream: stream,
-        parentDict: xoDict!,
-        name: pdfName,
-      ));
+      if (_isImageStream(stream)) {
+        allStreams.add(_StreamInfo(
+          stream: stream,
+          parentDict: xoDict!,
+          name: pdfName,
+        ));
+      }
 
       final id = identityHashCode(stream);
       if (!visited.contains(id)) {
@@ -291,6 +293,16 @@ String _getPrimitiveValueString(dynamic prim) {
     return deref.elements.map(_getPrimitiveValueString).join(',');
   }
   return deref.toString();
+}
+
+bool _isImageStream(PdfStream stream) {
+  if (stream.containsKey('Subtype')) {
+    final subtype = PdfCrossTable.dereference(stream['Subtype']);
+    if (subtype is PdfName) {
+      return subtype.name == 'Image';
+    }
+  }
+  return false;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

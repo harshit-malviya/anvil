@@ -209,5 +209,39 @@ void main() {
       expect(resultDoc.pages.count, equals(3));
       resultDoc.dispose();
     });
+
+    test('Form XObjects are NEVER deduplicated or skipped even if content streams are byte-identical', () async {
+      final doc = PdfDocument();
+      doc.pageSettings.margins.all = 0;
+      doc.compressionLevel = PdfCompressionLevel.best;
+
+      final img1Bytes = _createValidPng(80, 80, 100);
+      final img2Bytes = _createValidPng(80, 80, 200);
+      final img3Bytes = _createValidPng(80, 80, 300);
+
+      doc.pages.add().graphics.drawImage(PdfBitmap(img1Bytes), const Rect.fromLTWH(10, 10, 300, 300));
+      doc.pages.add().graphics.drawImage(PdfBitmap(img2Bytes), const Rect.fromLTWH(10, 10, 300, 300));
+      doc.pages.add().graphics.drawImage(PdfBitmap(img3Bytes), const Rect.fromLTWH(10, 10, 300, 300));
+
+      final sourceBytes = Uint8List.fromList(await doc.save());
+      doc.dispose();
+
+      final mergedBytes = await isolateMergePdfs(MergeParams(
+        fileBytesList: [sourceBytes],
+      ));
+
+      final resultDoc = PdfDocument(inputBytes: mergedBytes);
+      expect(resultDoc.pages.count, equals(3));
+
+      for (int i = 0; i < resultDoc.pages.count; i++) {
+        final pageDict = PdfPageHelper.getHelper(resultDoc.pages[i]).dictionary!;
+        expect(pageDict.containsKey('Resources'), isTrue);
+      }
+
+      expect(mergedBytes.length, greaterThanOrEqualTo((sourceBytes.length * 0.9).toInt()),
+          reason: 'Merged output size (${mergedBytes.length}) must not collapse when merging distinct image pages (${sourceBytes.length})');
+
+      resultDoc.dispose();
+    });
   });
 }

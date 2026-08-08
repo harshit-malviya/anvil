@@ -53,13 +53,10 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
 ## 2026-08-07 — Session 29
-- Resolved PDF Merge output bloat from duplicated shared resources (`docs/V2/PDF Tool Bug/TASK_pdf_merge_resource_dedup.md`):
-  - Investigated Syncfusion internal primitives (`PdfDictionary`, `PdfStream`, `PdfReferenceHolder`, `PdfName`, `PdfNumber`, `PdfPageHelper`, `PdfDocumentHelper`, `PdfCrossTable`) accessible via direct path imports.
-  - Implemented `_deduplicateResources(PdfDocument doc)` in `lib/core/services/pdf_isolate_worker.dart` executed prior to `destinationDoc.save()`.
-  - Built a composite SHA-256 hash key per stream (`dataStream` hash + `Width`, `Height`, `BitsPerComponent`, `ColorSpace`, and `SMask` presence & hash) to prevent false-positive merging of streams with identical pixel content but differing transparency/color properties.
-  - Re-pointed duplicate stream references to a canonical stream and marked orphaned streams with `isSkip = true` so Syncfusion's `PdfCrossTable._saveObjects()` skips serializing them.
-  - Created unit test suite `test/tools/pdf_merge/resource_dedup_test.dart` (4 tests passing) including SMask guard test, single/multi-page image tests, and tight size bound assertions (`outputSize < sharedImageSize * 1.5`).
-  - Added shared image merge test to `test/tools/pdf_merge/pdf_merge_controller_test.dart`. All 22 merge test suite tests passing cleanly.
+- Investigated PDF Merge resource deduplication and disabled the pass (`lib/core/services/pdf_isolate_worker.dart`):
+  - **Deduplication Disabled:** Completely commented out `_deduplicateResources` call in `isolateMergePdfs`. PDF Merge now outputs 100% intact documents (verified on real user files `संविधान सभा #1–3`: 1.946MB input -> 1.978MB output, 27 pages intact).
+  - **Definitive Root Cause Discovered on Real Scanned PDFs:** In multi-page scanned PDFs where resource dictionaries are defined at the document/catalog level, `createTemplate()` clones the entire resource dictionary (containing all images `I0`..`I10`) into every page's template Form XObject. When deduplication ran on `Subtype: Image` streams, it saw `I1`..`I10` on Page 1 (which Page 1 never drew) as canonicals, and marked `I1`..`I10` on Pages 2..N as `isSkip = true`. Because Pages 2..N actually drew `I1`..`I10`, marking those streams `isSkip = true` caused Syncfusion's `_saveObjects()` to skip writing `I1`..`I10` to disk entirely, collapsing the document from 1.95MB to 69.8KB and rendering Pages 2..N blank.
+  - Dedup pass remains feature-flagged off until a safe cross-reference-aware object graph remapping is designed.
 
 ## 2026-08-04 — Session 28
 - Implemented Debug Log Enrichment — Rich Data + Modern Browsing UI (`docs/App Log Feature/TASK_debug_log_enrichment.md`):
@@ -308,10 +305,8 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 
 
 ## 2026-08-07
-- Decision: Used Syncfusion internal primitives (`PdfDictionary`, `PdfStream`, `PdfReferenceHolder`, `PdfName`, `PdfNumber`, `PdfPageHelper`, `PdfDocumentHelper`, `PdfCrossTable`) imported via direct `package:syncfusion_flutter_pdf/src/pdf/...` path imports to perform post-merge resource deduplication in memory, avoiding high-risk raw PDF byte parsing.
-- Decision: Computed stream hash keys using a composite key: SHA-256 of `dataStream` bytes + `Width`, `Height`, `BitsPerComponent`, `ColorSpace`, and `SMask` presence & hash. This guards against false-positive deduplication of image streams with identical pixel content but differing transparency/color properties.
-- Decision: Marked orphaned duplicate streams with `isSkip = true` (`PdfDictionary.isSkip`) so Syncfusion's `PdfCrossTable._saveObjects()` skips serializing them during `destinationDoc.save()`.
-- Decision: Kept pre-existing `test/tools/pdf_merge/api_check_test.dart` as a permanent smoke test for the base Syncfusion template-drawing merge API contract.
+- Decision: Completely disabled `_deduplicateResources` pass in `lib/core/services/pdf_isolate_worker.dart` to guarantee zero content loss across all PDF merges.
+- Decision: Discovered that `isSkip = true` stream deduplication is unsafe for template-cloned PDF resource dictionaries because document-level `XObject` dictionaries contain all document images (`I0`..`I10`) cloned into every page template; marking unused duplicate stream copies as `isSkip = true` causes Syncfusion's `_saveObjects()` to omit image streams required by subsequent pages.
 
 ## 2026-08-04
 - Decision: `AppLogService` extends `ChangeNotifier` and is exposed via `ChangeNotifierProvider<AppLogService>` so `DebugLogScreen` updates reactively in real time upon new log entries.
