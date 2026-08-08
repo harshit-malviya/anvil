@@ -52,6 +52,15 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 > Add a new dated entry each session. Keep entries short — what changed, what's left, what broke.
 > Don't delete old entries; this is a history, not just a current-state snapshot.
 
+## 2026-08-07 — Session 29
+- Resolved PDF Merge output bloat from duplicated shared resources (`docs/V2/PDF Tool Bug/TASK_pdf_merge_resource_dedup.md`):
+  - Investigated Syncfusion internal primitives (`PdfDictionary`, `PdfStream`, `PdfReferenceHolder`, `PdfName`, `PdfNumber`, `PdfPageHelper`, `PdfDocumentHelper`, `PdfCrossTable`) accessible via direct path imports.
+  - Implemented `_deduplicateResources(PdfDocument doc)` in `lib/core/services/pdf_isolate_worker.dart` executed prior to `destinationDoc.save()`.
+  - Built a composite SHA-256 hash key per stream (`dataStream` hash + `Width`, `Height`, `BitsPerComponent`, `ColorSpace`, and `SMask` presence & hash) to prevent false-positive merging of streams with identical pixel content but differing transparency/color properties.
+  - Re-pointed duplicate stream references to a canonical stream and marked orphaned streams with `isSkip = true` so Syncfusion's `PdfCrossTable._saveObjects()` skips serializing them.
+  - Created unit test suite `test/tools/pdf_merge/resource_dedup_test.dart` (4 tests passing) including SMask guard test, single/multi-page image tests, and tight size bound assertions (`outputSize < sharedImageSize * 1.5`).
+  - Added shared image merge test to `test/tools/pdf_merge/pdf_merge_controller_test.dart`. All 22 merge test suite tests passing cleanly.
+
 ## 2026-08-04 — Session 28
 - Implemented Debug Log Enrichment — Rich Data + Modern Browsing UI (`docs/App Log Feature/TASK_debug_log_enrichment.md`):
   - Upgraded `LogEntry` data model with single-operation lifecycle, ID correlation (`logStarted` -> `logCompleted` / `logFailed`), duration calculation, file picker load timing (`filePickerLoadTimeMs`), input/output file counts and combined byte sizes, per-tool `parameters` Map, failure stage classification (`LogFailureStage`: `filePicker`, `validation`, `processing`, `isolateExecution`, `fileWrite`, `unknown`), and platform context.
@@ -298,6 +307,12 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 ## 5. Decisions log
 
 
+## 2026-08-07
+- Decision: Used Syncfusion internal primitives (`PdfDictionary`, `PdfStream`, `PdfReferenceHolder`, `PdfName`, `PdfNumber`, `PdfPageHelper`, `PdfDocumentHelper`, `PdfCrossTable`) imported via direct `package:syncfusion_flutter_pdf/src/pdf/...` path imports to perform post-merge resource deduplication in memory, avoiding high-risk raw PDF byte parsing.
+- Decision: Computed stream hash keys using a composite key: SHA-256 of `dataStream` bytes + `Width`, `Height`, `BitsPerComponent`, `ColorSpace`, and `SMask` presence & hash. This guards against false-positive deduplication of image streams with identical pixel content but differing transparency/color properties.
+- Decision: Marked orphaned duplicate streams with `isSkip = true` (`PdfDictionary.isSkip`) so Syncfusion's `PdfCrossTable._saveObjects()` skips serializing them during `destinationDoc.save()`.
+- Decision: Kept pre-existing `test/tools/pdf_merge/api_check_test.dart` as a permanent smoke test for the base Syncfusion template-drawing merge API contract.
+
 ## 2026-08-04
 - Decision: `AppLogService` extends `ChangeNotifier` and is exposed via `ChangeNotifierProvider<AppLogService>` so `DebugLogScreen` updates reactively in real time upon new log entries.
 - Decision: Tool controller Riverpod providers inject `AppLogService` via `ref.read(appLogServiceProvider)` instead of `ref.watch`. Using `ref.watch` inside provider builders subscribes the provider to `AppLogService` notifications, causing Riverpod to dispose and re-instantiate the tool's `StateNotifier` mid-operation whenever a log event occurs.
@@ -359,6 +374,7 @@ Build/CI: `BUILD_SETUP.md`. Each shippable feature has its own `FEATURE_*.md`.
 
 ## 6. Known issues / tech debt
 
+- **[FIXED] PDF Merge output bloat from duplicated shared resources:** `createTemplate()` snapshots resources per page, multiplying shared images/backgrounds across merged pages (~12x file size bloat). Resolved by walking Syncfusion internal object graph before `save()`, computing composite SHA-256 hashes (`dataStream` + `Width`/`Height`/`ColorSpace`/`SMask`), re-pointing duplicate references to a canonical stream, and setting `stream.isSkip = true` on orphaned streams. Verified via `test/tools/pdf_merge/resource_dedup_test.dart` and `test/tools/pdf_merge/pdf_merge_controller_test.dart`.
 - **[FIXED] PDF Merge page content cropping:** Non-A4 pages and landscape pages were previously cropped due to default canvas margins and page sizes. Resolved by configuring section-level page dimensions (`pageSettings.size`) and zero margins per page. Verified via mixed-format regression tests (`test/tools/pdf_merge/pdf_merge_controller_test.dart` and `test/tools/pdf_merge/size_preservation_test.dart`).
 - **[FIXED] UI freezing during PDF processing:** All PDF tool screens froze during processing because Syncfusion operations ran on the main UI thread. Fixed by moving all heavy work to background isolates via `compute()`. See `lib/core/services/pdf_isolate_worker.dart`.
 

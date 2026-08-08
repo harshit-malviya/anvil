@@ -323,5 +323,107 @@ void main() {
       mergedDoc.dispose();
       tempDir.deleteSync(recursive: true);
     });
+
+    test('Merging PDF with shared images does not multiply image size by page count', () async {
+      final sharedPdf = await createPdfWithSharedImage(2);
+      final pf1 = PlatformFile(name: 'shared_images.pdf', size: sharedPdf.length, bytes: sharedPdf);
+
+      await controller.addFiles([pf1, pf1]); // Merge 2 copies of 2-page PDF = 4 pages total
+
+      final tempDir = Directory.systemTemp.createTempSync('anvil_merge_dedup_test');
+      final targetPath = '${tempDir.path}${Platform.pathSeparator}dedup_merged.pdf';
+      final resultPath = await controller.merge(customOutputPath: targetPath);
+
+      expect(resultPath, isNotNull);
+      final outputFile = File(targetPath);
+      final outputBytes = outputFile.readAsBytesSync();
+
+      const rawImageStreamSize = 18670;
+      final upperBound = (rawImageStreamSize * 1.5).toInt();
+      expect(outputBytes.length, lessThan(upperBound),
+          reason: 'Deduplicated output size (${outputBytes.length}) should be less than 1.5x raw image stream size ($upperBound)');
+
+      final mergedDoc = PdfDocument(inputBytes: outputBytes);
+      expect(mergedDoc.pages.count, equals(4));
+      mergedDoc.dispose();
+      tempDir.deleteSync(recursive: true);
+    });
   });
+}
+
+Uint8List _createTestPng(int w, int h, int seed) {
+  final rawLines = BytesBuilder();
+  int v = seed;
+  for (int y = 0; y < h; y++) {
+    rawLines.addByte(0);
+    for (int x = 0; x < w; x++) {
+      rawLines.addByte((v * 17 + x) & 0xFF);
+      rawLines.addByte((v * 31 + y) & 0xFF);
+      rawLines.addByte((v * 53 + x + y) & 0xFF);
+      rawLines.addByte(0xFF);
+      v = (v * 1103515245 + 12345) & 0x7FFFFFFF;
+    }
+  }
+  final compressed = ZLibCodec(level: 6).encode(rawLines.toBytes());
+  final png = BytesBuilder();
+  png.add([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+  _writePngChunk(
+    png,
+    'IHDR',
+    (ByteData(13)
+          ..setUint32(0, w)
+          ..setUint32(4, h)
+          ..setUint8(8, 8)
+          ..setUint8(9, 6)
+          ..setUint8(10, 0)
+          ..setUint8(11, 0)
+          ..setUint8(12, 0))
+        .buffer
+        .asUint8List(),
+  );
+  _writePngChunk(png, 'IDAT', Uint8List.fromList(compressed));
+  _writePngChunk(png, 'IEND', Uint8List(0));
+  return png.toBytes();
+}
+
+void _writePngChunk(BytesBuilder b, String type, Uint8List data) {
+  b.add((ByteData(4)..setUint32(0, data.length)).buffer.asUint8List());
+  final t = Uint8List.fromList(type.codeUnits);
+  b.add(t);
+  b.add(data);
+  final cd = BytesBuilder()..add(t)..add(data);
+  b.add((ByteData(4)..setUint32(0, _crc32(cd.toBytes()))).buffer.asUint8List());
+}
+
+int _crc32(Uint8List data) {
+  int crc = 0xFFFFFFFF;
+  for (final b in data) {
+    crc ^= b;
+    for (int i = 0; i < 8; i++) {
+      crc = (crc & 1 != 0) ? (crc >> 1) ^ 0xEDB88320 : crc >> 1;
+    }
+  }
+  return crc ^ 0xFFFFFFFF;
+}
+
+Future<Uint8List> createPdfWithSharedImage(int pageCount) async {
+  final pngBytes = _createTestPng(80, 80, 42);
+  final doc = PdfDocument();
+  doc.pageSettings.margins.all = 0;
+  doc.compressionLevel = PdfCompressionLevel.best;
+  final pdfImg = PdfBitmap(pngBytes);
+
+  for (int i = 0; i < pageCount; i++) {
+    final page = doc.pages.add();
+    page.graphics.drawImage(pdfImg, const Rect.fromLTWH(10, 10, 300, 300));
+    page.graphics.drawString(
+      'Page ${i + 1}',
+      PdfStandardFont(PdfFontFamily.helvetica, 14),
+      bounds: const Rect.fromLTWH(10, 320, 300, 30),
+    );
+  }
+
+  final bytes = Uint8List.fromList(await doc.save());
+  doc.dispose();
+  return bytes;
 }

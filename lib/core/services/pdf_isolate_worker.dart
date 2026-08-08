@@ -1,7 +1,17 @@
 import 'dart:ui';
 import 'package:characters/characters.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'package:syncfusion_flutter_pdf/src/pdf/implementation/graphics/pdf_resources.dart';
+import 'package:syncfusion_flutter_pdf/src/pdf/implementation/io/pdf_cross_table.dart';
+import 'package:syncfusion_flutter_pdf/src/pdf/implementation/pages/pdf_page.dart';
+import 'package:syncfusion_flutter_pdf/src/pdf/implementation/primitives/pdf_array.dart';
+import 'package:syncfusion_flutter_pdf/src/pdf/implementation/primitives/pdf_dictionary.dart';
+import 'package:syncfusion_flutter_pdf/src/pdf/implementation/primitives/pdf_name.dart';
+import 'package:syncfusion_flutter_pdf/src/pdf/implementation/primitives/pdf_number.dart';
+import 'package:syncfusion_flutter_pdf/src/pdf/implementation/primitives/pdf_reference_holder.dart';
+import 'package:syncfusion_flutter_pdf/src/pdf/implementation/primitives/pdf_stream.dart';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // MERGE
@@ -141,9 +151,146 @@ Future<Uint8List> isolateMergePdfs(MergeParams params) async {
     sourceDoc.dispose();
   }
 
+  _deduplicateResources(destinationDoc);
+
   final List<int> mergedBytes = await destinationDoc.save();
   destinationDoc.dispose();
   return Uint8List.fromList(mergedBytes);
+}
+
+// ASSUMPTION: Syncfusion Flutter PDF lacks a native importPage API, so pages are merged via createTemplate().
+// createTemplate() snapshots resources per page, creating duplicate PdfStream objects for shared images/resources.
+// To prevent severe PDF size bloat without raw byte parsing, we walk the internal object model (via internal primitives),
+// compute a composite SHA-256 hash key (stream content + Width, Height, BitsPerComponent, ColorSpace, SMask),
+// re-point duplicate references to a canonical stream, and set stream.isSkip = true so Syncfusion's save() skips orphaned streams.
+
+class _StreamInfo {
+  final PdfStream stream;
+  final PdfDictionary parentDict;
+  final PdfName name;
+
+  _StreamInfo({
+    required this.stream,
+    required this.parentDict,
+    required this.name,
+  });
+}
+
+void _deduplicateResources(PdfDocument doc) {
+  final allStreams = <_StreamInfo>[];
+
+  void collectXObjectStreams(PdfDictionary dict, Set<int> visited) {
+    PdfDictionary? resDict;
+    if (dict.containsKey('Resources')) {
+      final rp = dict['Resources'];
+      if (rp is PdfResources) {
+        resDict = rp;
+      } else if (rp is PdfDictionary) {
+        resDict = rp;
+      } else if (rp is PdfReferenceHolder) {
+        resDict = PdfCrossTable.dereference(rp) as PdfDictionary?;
+      }
+    }
+    if (resDict == null || !resDict.containsKey('XObject')) return;
+
+    PdfDictionary? xoDict;
+    final xop = resDict['XObject'];
+    if (xop is PdfDictionary) {
+      xoDict = xop;
+    } else if (xop is PdfReferenceHolder) {
+      xoDict = PdfCrossTable.dereference(xop) as PdfDictionary?;
+    }
+    if (xoDict == null) return;
+
+    xoDict.items!.forEach((key, value) {
+      if (key == null || value == null) return;
+      PdfStream? stream;
+      if (value is PdfReferenceHolder) {
+        final obj = PdfCrossTable.dereference(value);
+        if (obj is PdfStream) stream = obj;
+      } else if (value is PdfStream) {
+        stream = value;
+      }
+      if (stream == null) return;
+
+      final pdfName = key is PdfName ? key : PdfName(key.toString());
+      allStreams.add(_StreamInfo(
+        stream: stream,
+        parentDict: xoDict!,
+        name: pdfName,
+      ));
+
+      final id = identityHashCode(stream);
+      if (!visited.contains(id)) {
+        visited.add(id);
+        collectXObjectStreams(stream, visited);
+      }
+    });
+  }
+
+  for (int i = 0; i < doc.pages.count; i++) {
+    final pageHelper = PdfPageHelper.getHelper(doc.pages[i]);
+    if (pageHelper.dictionary != null) {
+      collectXObjectStreams(pageHelper.dictionary!, <int>{});
+    }
+  }
+
+  if (allStreams.isEmpty) return;
+
+  final hashGroups = <String, List<_StreamInfo>>{};
+
+  for (final info in allStreams) {
+    final data = info.stream.dataStream;
+    if (data == null || data.isEmpty) continue;
+
+    final dataHash = sha256.convert(data).toString();
+
+    final width = _getPrimitiveValueString(info.stream['Width']);
+    final height = _getPrimitiveValueString(info.stream['Height']);
+    final bpc = _getPrimitiveValueString(info.stream['BitsPerComponent']);
+    final colorSpace = _getPrimitiveValueString(info.stream['ColorSpace']);
+
+    String sMaskDetail = 'none';
+    if (info.stream.containsKey('SMask')) {
+      final sMaskPrim = PdfCrossTable.dereference(info.stream['SMask']);
+      if (sMaskPrim is PdfStream) {
+        final sMaskData = sMaskPrim.dataStream;
+        if (sMaskData != null && sMaskData.isNotEmpty) {
+          sMaskDetail = 'stream:${sha256.convert(sMaskData)}';
+        } else {
+          sMaskDetail = 'stream:empty';
+        }
+      } else if (sMaskPrim is PdfName) {
+        sMaskDetail = 'name:${sMaskPrim.name}';
+      } else {
+        sMaskDetail = 'present:${sMaskPrim.runtimeType}';
+      }
+    }
+
+    final compositeKey = '$dataHash|W:$width|H:$height|BPC:$bpc|CS:$colorSpace|SMask:$sMaskDetail';
+    hashGroups.putIfAbsent(compositeKey, () => []).add(info);
+  }
+
+  for (final group in hashGroups.values) {
+    if (group.length <= 1) continue;
+    final canonical = group.first.stream;
+    for (int i = 1; i < group.length; i++) {
+      final dup = group[i];
+      dup.parentDict[dup.name] = PdfReferenceHolder(canonical);
+      dup.stream.isSkip = true;
+    }
+  }
+}
+
+String _getPrimitiveValueString(dynamic prim) {
+  final deref = PdfCrossTable.dereference(prim);
+  if (deref == null) return 'null';
+  if (deref is PdfNumber) return deref.value.toString();
+  if (deref is PdfName) return deref.name ?? 'null';
+  if (deref is PdfArray) {
+    return deref.elements.map(_getPrimitiveValueString).join(',');
+  }
+  return deref.toString();
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
