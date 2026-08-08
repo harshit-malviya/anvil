@@ -151,7 +151,7 @@ Future<Uint8List> isolateMergePdfs(MergeParams params) async {
     sourceDoc.dispose();
   }
 
-  // _deduplicateResources(destinationDoc);
+  _deduplicateResources(destinationDoc);
 
   final List<int> mergedBytes = await destinationDoc.save();
   destinationDoc.dispose();
@@ -278,6 +278,9 @@ void _deduplicateResources(PdfDocument doc) {
     final canonical = group.first.stream;
     for (int i = 1; i < group.length; i++) {
       final dup = group[i];
+      // UNCONDITIONAL HARD GUARD: Never repoint or set isSkip=true if dup.stream
+      // is the identical Dart object instance in memory as canonical.
+      if (identical(canonical, dup.stream)) continue;
       dup.parentDict[dup.name] = PdfReferenceHolder(canonical);
       dup.stream.isSkip = true;
     }

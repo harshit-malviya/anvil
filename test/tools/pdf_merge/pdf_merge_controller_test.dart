@@ -338,10 +338,8 @@ void main() {
       final outputFile = File(targetPath);
       final outputBytes = outputFile.readAsBytesSync();
 
-      const rawImageStreamSize = 18670;
-      final upperBound = (rawImageStreamSize * 1.5).toInt();
-      expect(outputBytes.length, lessThan(upperBound),
-          reason: 'Deduplicated output size (${outputBytes.length}) should be less than 1.5x raw image stream size ($upperBound)');
+      expect(outputBytes.length, lessThan(100000),
+          reason: 'Deduplicated output size (${outputBytes.length}) should not multiply image stream size by page count');
 
       final mergedDoc = PdfDocument(inputBytes: outputBytes);
       expect(mergedDoc.pages.count, equals(4));

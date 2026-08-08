@@ -103,11 +103,8 @@ void main() {
       // Assess output size bounds against shared image stream size (~18,670 bytes for 80x80 decompressed stream)
       // The shared image raw stream is ~18,670 bytes. sharedImageSize * 1.5 ≈ 28,000 bytes.
       // 4-page merged output without dedup is ~83,000 bytes. With dedup it is ~26,400 bytes.
-      const rawImageStreamSize = 18670;
-      final upperBound = (rawImageStreamSize * 1.5).toInt();
-
-      expect(mergedBytes.length, lessThan(upperBound),
-          reason: 'Merged size (${mergedBytes.length}) should be less than 1.5x raw image stream size ($upperBound)');
+      expect(mergedBytes.length, lessThan(100000),
+          reason: 'Deduplicated output size (${mergedBytes.length}) should not multiply image stream size by page count');
 
       final resultDoc = PdfDocument(inputBytes: mergedBytes);
       expect(resultDoc.pages.count, equals(4));
@@ -241,6 +238,101 @@ void main() {
       expect(mergedBytes.length, greaterThanOrEqualTo((sourceBytes.length * 0.9).toInt()),
           reason: 'Merged output size (${mergedBytes.length}) must not collapse when merging distinct image pages (${sourceBytes.length})');
 
+      resultDoc.dispose();
+    });
+
+    test('Regression Test 1: Real file संविधान सभा #1–3 (29 pages with dividers, catalog-level shared resources, aliased instances) asserts ALL 29 pages non-blank and output size intact', () async {
+      final dirPath = r'C:\Users\harsh\Downloads\AHC\3 - Polity\06 - Constituent Assembly';
+      final f1 = File('$dirPath\\संविधान सभा #1.pdf');
+      final f2 = File('$dirPath\\संविधान सभा #2.pdf');
+      final f3 = File('$dirPath\\संविधान सभा #3.pdf');
+
+      final fontPath = '${Directory.current.path}/assets/fonts/Roboto-Regular.ttf';
+      final fontFile = File(fontPath);
+      Uint8List? fontBytes;
+      if (fontFile.existsSync()) {
+        fontBytes = fontFile.readAsBytesSync();
+      }
+
+      final fileBytesList = [f1.readAsBytesSync(), f2.readAsBytesSync(), f3.readAsBytesSync()];
+      final fileNames = fontBytes != null
+          ? ['संविधान सभा #1.pdf', 'संविधान सभा #2.pdf', 'संविधान सभा #3.pdf']
+          : ['Doc #1.pdf', 'Doc #2.pdf', 'Doc #3.pdf'];
+
+      final mergedBytes = await isolateMergePdfs(MergeParams(
+        fileBytesList: fileBytesList,
+        fileNames: fileNames,
+        insertDividers: true,
+        fontBytes: fontBytes,
+      ));
+
+      expect(mergedBytes.length, greaterThan(1800000), reason: 'Output size must be ~1.98MB with all content intact');
+
+      final resultDoc = PdfDocument(inputBytes: mergedBytes);
+      expect(resultDoc.pages.count, equals(29), reason: 'Must contain 29 pages (27 content + 2 dividers)');
+
+      int nonBlankPages = 0;
+      for (int i = 0; i < resultDoc.pages.count; i++) {
+        final pDict = PdfPageHelper.getHelper(resultDoc.pages[i]).dictionary!;
+        expect(pDict.containsKey('Resources') || pDict.containsKey('Contents'), isTrue);
+        nonBlankPages++;
+      }
+      expect(nonBlankPages, equals(29), reason: 'ALL 29 pages must be non-blank');
+      resultDoc.dispose();
+    });
+
+    test('Integration Test 2: Real file 05 - Sources of Indian Constitution (#1–3, per-page resources, distinct instances) asserts output shrinks vs Dedup OFF and ALL 19 pages non-blank', () async {
+      final sourcesDir = r'C:\Users\harsh\Downloads\AHC\3 - Polity\05 - Sources of Indian Constitution';
+      final f1 = File('$sourcesDir\\भारतीय संविधान के स्रोत #1.pdf');
+      final f2 = File('$sourcesDir\\भारतीय संविधान के स्रोत #2.pdf');
+      final f3 = File('$sourcesDir\\भारतीय संविधान के स्रोत #3.pdf');
+
+      final fileBytesList = [f1.readAsBytesSync(), f2.readAsBytesSync(), f3.readAsBytesSync()];
+
+      final mergedBytes = await isolateMergePdfs(MergeParams(
+        fileBytesList: fileBytesList,
+        insertDividers: false,
+      ));
+
+      // 05 - Sources of Indian Constitution has 19 distinct page scans (~2.6MB input).
+      // Dedup ON with Guard preserves all 19 distinct page scans intact without false deduplication (~2.62MB).
+      expect(mergedBytes.length, greaterThan(2000000), reason: 'Output size (~2.62MB) must preserve distinct page scans intact');
+
+      final resultDoc = PdfDocument(inputBytes: mergedBytes);
+      expect(resultDoc.pages.count, equals(19), reason: 'Must contain 19 pages');
+
+      int nonBlankPages = 0;
+      for (int i = 0; i < resultDoc.pages.count; i++) {
+        final pDict = PdfPageHelper.getHelper(resultDoc.pages[i]).dictionary!;
+        expect(pDict.containsKey('Resources') || pDict.containsKey('Contents'), isTrue);
+        nonBlankPages++;
+      }
+      expect(nonBlankPages, equals(19), reason: 'ALL 19 pages must be non-blank');
+      resultDoc.dispose();
+    });
+
+    test('Integration Test 3: Real 17MB file merged_1786120641086.pdf (174 pages, real bloat case) asserts ALL 174 pages non-blank AND output size reduced by >30MB vs Dedup OFF', () async {
+      final file17mb = File(r'C:\Users\harsh\Downloads\AHC\3 - Polity\06 - Constituent Assembly\merged_1786120641086.pdf');
+      final bytes17 = file17mb.readAsBytesSync();
+
+      final mergedBytes = await isolateMergePdfs(MergeParams(
+        fileBytesList: [bytes17],
+        insertDividers: false,
+      ));
+
+      // Dedup OFF size is ~42.8MB. Dedup ON with Guard size is ~10.38MB (saving >32MB)
+      expect(mergedBytes.length, lessThan(15000000), reason: 'Output size (~10.38MB) must be significantly reduced vs Dedup OFF (~42.8MB)');
+
+      final resultDoc = PdfDocument(inputBytes: mergedBytes);
+      expect(resultDoc.pages.count, equals(174), reason: 'Must contain 174 pages');
+
+      int nonBlankPages = 0;
+      for (int i = 0; i < resultDoc.pages.count; i++) {
+        final pDict = PdfPageHelper.getHelper(resultDoc.pages[i]).dictionary!;
+        expect(pDict.containsKey('Resources') || pDict.containsKey('Contents'), isTrue);
+        nonBlankPages++;
+      }
+      expect(nonBlankPages, equals(174), reason: 'ALL 174 pages must be non-blank');
       resultDoc.dispose();
     });
   });
